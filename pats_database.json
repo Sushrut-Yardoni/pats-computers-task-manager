@@ -1,0 +1,10 @@
+{
+  "employees": [],
+  "tasks": [],
+  "nextTaskId": 1001,
+  "settings": {
+    "petrol_price": 100
+  },
+  "offline_travels": [],
+  "nextOfflineTravelId": 1
+}

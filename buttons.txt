@@ -1,0 +1,257 @@
+src/components/AdminDashboard.tsx-        {/* Dynamic section tabs selector */}
+src/components/AdminDashboard.tsx-        <div className="flex items-center gap-1.5 p-1 bg-slate-200 border border-slate-300 rounded-2xl w-full sm:w-auto overflow-x-auto">
+src/components/AdminDashboard.tsx:          <button
+src/components/AdminDashboard.tsx-            onClick={() => setActiveTab("tasks")}
+src/components/AdminDashboard.tsx-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs transition-all shrink-0 cursor-pointer ${
+--
+src/components/AdminDashboard.tsx-          </button>
+src/components/AdminDashboard.tsx-
+src/components/AdminDashboard.tsx:          <button
+src/components/AdminDashboard.tsx-            onClick={() => setActiveTab("employees")}
+src/components/AdminDashboard.tsx-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs transition-all shrink-0 cursor-pointer ${
+--
+src/components/AdminDashboard.tsx-          </button>
+src/components/AdminDashboard.tsx-
+src/components/AdminDashboard.tsx:          <button
+src/components/AdminDashboard.tsx-            onClick={() => setActiveTab("reports")}
+src/components/AdminDashboard.tsx-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs transition-all shrink-0 cursor-pointer ${
+--
+src/components/EmployeeDashboard.tsx-              </h2>
+src/components/EmployeeDashboard.tsx-              {onUpdatePassword && (
+src/components/EmployeeDashboard.tsx:                <button
+src/components/EmployeeDashboard.tsx-                  type="button"
+src/components/EmployeeDashboard.tsx-                  onClick={() => {
+--
+src/components/EmployeeDashboard.tsx-
+src/components/EmployeeDashboard.tsx-          <div className="flex items-center gap-1 bg-slate-200 p-1 rounded-xl border border-slate-300 self-start sm:self-auto">
+src/components/EmployeeDashboard.tsx:            <button
+src/components/EmployeeDashboard.tsx-               onClick={() => setActiveTab("active")}
+src/components/EmployeeDashboard.tsx-               className={`px-4 py-2 rounded-lg text-xs font-extrabold tracking-wide transition-all uppercase flex items-center gap-1.5 ${
+--
+src/components/EmployeeDashboard.tsx-               <span>Assigned ({activeMyTasks.length})</span>
+src/components/EmployeeDashboard.tsx-             </button>
+src/components/EmployeeDashboard.tsx:             <button
+src/components/EmployeeDashboard.tsx-               onClick={() => setActiveTab("completed")}
+src/components/EmployeeDashboard.tsx-               className={`px-4 py-2 rounded-lg text-xs font-extrabold tracking-wide transition-all uppercase flex items-center gap-1.5 ${
+--
+src/components/EmployeeDashboard.tsx-                </span>
+src/components/EmployeeDashboard.tsx-              </div>
+src/components/EmployeeDashboard.tsx:              <button
+src/components/EmployeeDashboard.tsx-                onClick={handleCloseModal}
+src/components/EmployeeDashboard.tsx-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-705 hover:bg-slate-100 transition-colors"
+--
+src/components/EmployeeDashboard.tsx-                  />
+src/components/EmployeeDashboard.tsx-                  <div className="flex justify-end pt-1">
+src/components/EmployeeDashboard.tsx:                    <button
+src/components/EmployeeDashboard.tsx-                      type="button"
+src/components/EmployeeDashboard.tsx-                      onClick={handleSaveRemarks}
+--
+src/components/EmployeeDashboard.tsx-                  />
+src/components/EmployeeDashboard.tsx-                  <div className="flex gap-2 justify-end">
+src/components/EmployeeDashboard.tsx:                    <button
+src/components/EmployeeDashboard.tsx-                      type="button"
+src/components/EmployeeDashboard.tsx-                      onClick={() => setShowRemarksInput(false)}
+--
+src/components/EmployeeDashboard.tsx-                      Cancel
+src/components/EmployeeDashboard.tsx-                    </button>
+src/components/EmployeeDashboard.tsx:                    <button
+src/components/EmployeeDashboard.tsx-                      type="submit"
+src/components/EmployeeDashboard.tsx-                      disabled={isSubmitting || !remarksText.trim()}
+--
+src/components/EmployeeDashboard.tsx-            {!showRemarksInput && (
+src/components/EmployeeDashboard.tsx-              <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2.5">
+src/components/EmployeeDashboard.tsx:                <button
+src/components/EmployeeDashboard.tsx-                  type="button"
+src/components/EmployeeDashboard.tsx-                  onClick={handleCloseModal}
+--
+src/components/EmployeeDashboard.tsx-                {/* Accept Button -> Finish Button States */}
+src/components/EmployeeDashboard.tsx-                {selectedTask.status === "Pending" && (
+src/components/EmployeeDashboard.tsx:                  <button
+src/components/EmployeeDashboard.tsx-                    type="button"
+src/components/EmployeeDashboard.tsx-                    onClick={() => handleAccept(selectedTask.id)}
+--
+src/components/EmployeeDashboard.tsx-
+src/components/EmployeeDashboard.tsx-                {selectedTask.status === "In Progress" && (
+src/components/EmployeeDashboard.tsx:                  <button
+src/components/EmployeeDashboard.tsx-                    type="button"
+src/components/EmployeeDashboard.tsx-                    onClick={() => setShowRemarksInput(true)}
+--
+src/components/EmployeeDashboard.tsx-
+src/components/EmployeeDashboard.tsx-              <div className="flex gap-2.5 pt-2">
+src/components/EmployeeDashboard.tsx:                <button
+src/components/EmployeeDashboard.tsx-                  type="button"
+src/components/EmployeeDashboard.tsx-                  onClick={() => setShowPasswordModal(false)}
+--
+src/components/EmployeeDashboard.tsx-                  Cancel
+src/components/EmployeeDashboard.tsx-                </button>
+src/components/EmployeeDashboard.tsx:                <button
+src/components/EmployeeDashboard.tsx-                  type="submit"
+src/components/EmployeeDashboard.tsx-                  disabled={isUpdatingPassword}
+--
+src/components/EmployeeManagementSection.tsx-            {/* Modal actions */}
+src/components/EmployeeManagementSection.tsx-            <div className="flex gap-2.5 pt-2">
+src/components/EmployeeManagementSection.tsx:              <button
+src/components/EmployeeManagementSection.tsx-                type="button"
+src/components/EmployeeManagementSection.tsx-                onClick={() => setPromoteTarget(null)}
+--
+src/components/EmployeeManagementSection.tsx-                Cancel
+src/components/EmployeeManagementSection.tsx-              </button>
+src/components/EmployeeManagementSection.tsx:              <button
+src/components/EmployeeManagementSection.tsx-                type="button"
+src/components/EmployeeManagementSection.tsx-                disabled={isPromoting}
+--
+src/components/EmployeeManagementSection.tsx-            {/* Modal actions */}
+src/components/EmployeeManagementSection.tsx-            <div className="flex gap-2.5 pt-2">
+src/components/EmployeeManagementSection.tsx:              <button
+src/components/EmployeeManagementSection.tsx-                type="button"
+src/components/EmployeeManagementSection.tsx-                onClick={() => setDecommissionTarget(null)}
+--
+src/components/EmployeeManagementSection.tsx-                Cancel
+src/components/EmployeeManagementSection.tsx-              </button>
+src/components/EmployeeManagementSection.tsx:              <button
+src/components/EmployeeManagementSection.tsx-                type="button"
+src/components/EmployeeManagementSection.tsx-                disabled={isDecommissioning}
+--
+src/components/EmployeeManagementSection.tsx-
+src/components/EmployeeManagementSection.tsx-              <div className="flex gap-2.5 pt-2">
+src/components/EmployeeManagementSection.tsx:                <button
+src/components/EmployeeManagementSection.tsx-                  type="button"
+src/components/EmployeeManagementSection.tsx-                  onClick={() => setChangePasswordTarget(null)}
+--
+src/components/EmployeeManagementSection.tsx-                  Cancel
+src/components/EmployeeManagementSection.tsx-                </button>
+src/components/EmployeeManagementSection.tsx:                <button
+src/components/EmployeeManagementSection.tsx-                  type="submit"
+src/components/EmployeeManagementSection.tsx-                  disabled={isChangingPassword}
+--
+src/components/EmployeeManagementSection.tsx-          )}
+src/components/EmployeeManagementSection.tsx-
+src/components/EmployeeManagementSection.tsx:          <button
+src/components/EmployeeManagementSection.tsx-            type="submit"
+src/components/EmployeeManagementSection.tsx-            disabled={isRegisteringEmp}
+--
+src/components/EmployeeManagementSection.tsx-                        <div className="flex items-center justify-end gap-1">
+src/components/EmployeeManagementSection.tsx-                          {emp.role !== "Admin" ? (
+src/components/EmployeeManagementSection.tsx:                            <button
+src/components/EmployeeManagementSection.tsx-                              type="button"
+src/components/EmployeeManagementSection.tsx-                              onClick={() => setPromoteTarget(emp)}
+--
+src/components/EmployeeManagementSection.tsx-                            </span>
+src/components/EmployeeManagementSection.tsx-                          )}
+src/components/EmployeeManagementSection.tsx:                          <button
+src/components/EmployeeManagementSection.tsx-                            type="button"
+src/components/EmployeeManagementSection.tsx-                            onClick={() => {
+--
+src/components/EmployeeManagementSection.tsx-                            Update Pass
+src/components/EmployeeManagementSection.tsx-                          </button>
+src/components/EmployeeManagementSection.tsx:                          <button
+src/components/EmployeeManagementSection.tsx-                            type="button"
+src/components/EmployeeManagementSection.tsx-                            onClick={() => setDecommissionTarget(emp)}
+--
+src/components/Header.tsx-
+src/components/Header.tsx-               {/* Log Out button */}
+src/components/Header.tsx:              <button
+src/components/Header.tsx-                onClick={onLogout}
+src/components/Header.tsx-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800 text-xs font-sans font-bold transition-all shadow-2xs"
+--
+src/components/LoginScreen.tsx-      {/* Modern Role Tabs */}
+src/components/LoginScreen.tsx-      <div className="bg-slate-200/85 p-1.5 rounded-2xl border border-slate-300 flex gap-1 mb-6">
+src/components/LoginScreen.tsx:        <button
+src/components/LoginScreen.tsx-          onClick={() => {
+src/components/LoginScreen.tsx-            setActiveTab("employee");
+--
+src/components/LoginScreen.tsx-          <span>Employee portal</span>
+src/components/LoginScreen.tsx-        </button>
+src/components/LoginScreen.tsx:        <button
+src/components/LoginScreen.tsx-          onClick={() => {
+src/components/LoginScreen.tsx-            setActiveTab("admin");
+--
+src/components/LoginScreen.tsx-          )}
+src/components/LoginScreen.tsx-
+src/components/LoginScreen.tsx:          <button
+src/components/LoginScreen.tsx-            type="submit"
+src/components/LoginScreen.tsx-            disabled={isLoading}
+--
+src/components/ReportsSection.tsx-              <div className="flex items-center gap-1 bg-slate-200 border border-slate-300 p-0.5 rounded-lg self-start sm:self-auto">
+src/components/ReportsSection.tsx-                {(["All", "Pending", "In Progress", "Finished"] as const).map((st) => (
+src/components/ReportsSection.tsx:                  <button
+src/components/ReportsSection.tsx-                    key={st}
+src/components/ReportsSection.tsx-                    onClick={() => setGuiStatusFilter(st)}
+--
+src/components/ReportsSection.tsx-                </span>
+src/components/ReportsSection.tsx-              </div>
+src/components/ReportsSection.tsx:              <button
+src/components/ReportsSection.tsx-                onClick={handleCloseTaskModal}
+src/components/ReportsSection.tsx-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+--
+src/components/ReportsSection.tsx-                    </select>
+src/components/ReportsSection.tsx-
+src/components/ReportsSection.tsx:                     <button
+src/components/ReportsSection.tsx-                      type="submit"
+src/components/ReportsSection.tsx-                      disabled={isTransferring || !transferTargetId}
+--
+src/components/ReportsSection.tsx-            {/* Modal Footer */}
+src/components/ReportsSection.tsx-            <div className="p-4 border-t border-slate-150 bg-slate-50 flex justify-end gap-2">
+src/components/ReportsSection.tsx:              <button
+src/components/ReportsSection.tsx-                type="button"
+src/components/ReportsSection.tsx-                onClick={handleCloseTaskModal}
+--
+src/components/TaskManagementSection.tsx-            )}
+src/components/TaskManagementSection.tsx-
+src/components/TaskManagementSection.tsx:             <button
+src/components/TaskManagementSection.tsx-              type="submit"
+src/components/TaskManagementSection.tsx-              disabled={isAssigning}
+--
+src/components/TaskManagementSection.tsx-              <div className="flex items-center gap-1 bg-slate-200 border border-slate-300 p-0.5 rounded-lg text-xs">
+src/components/TaskManagementSection.tsx-                {(["All", "Pending", "In Progress", "Finished"] as const).map((filter) => (
+src/components/TaskManagementSection.tsx:                  <button
+src/components/TaskManagementSection.tsx-                    key={filter}
+src/components/TaskManagementSection.tsx-                    onClick={() => setStatusFilter(filter)}
+--
+src/components/TaskManagementSection.tsx-                </span>
+src/components/TaskManagementSection.tsx-              </div>
+src/components/TaskManagementSection.tsx:              <button
+src/components/TaskManagementSection.tsx-                onClick={handleCloseInspector}
+src/components/TaskManagementSection.tsx-                className="p-1.5 rounded-lg text-slate-450 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+--
+src/components/TaskManagementSection.tsx-
+src/components/TaskManagementSection.tsx-                  <div className="flex gap-2 justify-end pt-1">
+src/components/TaskManagementSection.tsx:                    <button
+src/components/TaskManagementSection.tsx-                      type="button"
+src/components/TaskManagementSection.tsx-                      onClick={() => {
+--
+src/components/TaskManagementSection.tsx-                      Cancel
+src/components/TaskManagementSection.tsx-                    </button>
+src/components/TaskManagementSection.tsx:                    <button
+src/components/TaskManagementSection.tsx-                      type="button"
+src/components/TaskManagementSection.tsx-                      onClick={handleSaveDetails}
+--
+src/components/TaskManagementSection.tsx-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-1 relative">
+src/components/TaskManagementSection.tsx-                    {selectedTask.status !== "Finished" && (
+src/components/TaskManagementSection.tsx:                      <button
+src/components/TaskManagementSection.tsx-                        onClick={() => setIsEditingDetails(true)}
+src/components/TaskManagementSection.tsx-                        className="absolute top-3.5 right-3.5 px-2 py-1 bg-white hover:bg-slate-100 border border-slate-250 hover:border-slate-400 text-slate-705 text-[10px] font-black tracking-tight rounded-lg transition-colors cursor-pointer"
+--
+src/components/TaskManagementSection.tsx-                </div>
+src/components/TaskManagementSection.tsx-                {onTogglePriority && selectedTask.status !== "Finished" && (
+src/components/TaskManagementSection.tsx:                  <button
+src/components/TaskManagementSection.tsx-                    onClick={handleTogglePriorityClick}
+src/components/TaskManagementSection.tsx-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-extrabold uppercase transition-all tracking-wider ${
+--
+src/components/TaskManagementSection.tsx-                  />
+src/components/TaskManagementSection.tsx-                  <div className="flex justify-end pt-1">
+src/components/TaskManagementSection.tsx:                    <button
+src/components/TaskManagementSection.tsx-                      type="button"
+src/components/TaskManagementSection.tsx-                      onClick={handleSaveRemarks}
+--
+src/components/TaskManagementSection.tsx-                    </select>
+src/components/TaskManagementSection.tsx-
+src/components/TaskManagementSection.tsx:                    <button
+src/components/TaskManagementSection.tsx-                      type="submit"
+src/components/TaskManagementSection.tsx-                      disabled={isTransferring || !transferTargetId}
+--
+src/components/TaskManagementSection.tsx-            {/* Modal Footer */}
+src/components/TaskManagementSection.tsx-            <div className="p-4 border-t border-slate-150 bg-slate-50 flex justify-end gap-2">
+src/components/TaskManagementSection.tsx:              <button
+src/components/TaskManagementSection.tsx-                type="button"
+src/components/TaskManagementSection.tsx-                onClick={handleCloseInspector}
