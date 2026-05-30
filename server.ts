@@ -667,6 +667,73 @@ app.post("/api/employees/:id/password", async (req, res) => {
   }
 });
 
+// Unified State Synchronizer (Aggregates employees, tasks, and logs into a single rapid fetch roundtrip to bypass multiple connection latency)
+app.get("/api/sync", async (req, res) => {
+  let employeesList: Employee[] = [];
+  let tasksList: any[] = [];
+  let mappedLogs: SqlLog[] = [];
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const [empRes, taskRes, logRes] = await Promise.all([
+        supabase.from("employees").select("*").order("name", { ascending: true }),
+        supabase.from("tasks").select("*").order("id", { ascending: false }),
+        supabase.from("sql_logs").select("*").order("id", { ascending: false })
+      ]);
+
+      if (empRes.error) throw empRes.error;
+      if (taskRes.error) throw taskRes.error;
+
+      employeesList = empRes.data || [];
+      const rawTasks = taskRes.data || [];
+      tasksList = rawTasks.map(task => {
+        const emp = employeesList.find(e => e.id === task.assigned_to);
+        return {
+          ...task,
+          employee_name: emp ? emp.name : "Unassigned"
+        };
+      });
+
+      if (!logRes.error && logRes.data && logRes.data.length > 0) {
+        mappedLogs = logRes.data.map(l => ({
+          timestamp: l.timestamp ? new Date(l.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString(),
+          sql: l.sql,
+          rowsAffected: l.rows_affected !== undefined ? l.rows_affected : l.rowsAffected || 0
+        }));
+      } else {
+        mappedLogs = sqlLogs;
+      }
+
+      logSQL("SELECT * FROM employees; SELECT * FROM tasks; SELECT * FROM sql_logs; -- (Unified Live Connection Sync)", employeesList.length + tasksList.length + mappedLogs.length);
+
+      return res.json({
+        employees: employeesList,
+        tasks: tasksList,
+        sqlLogs: mappedLogs
+      });
+    } catch (e: any) {
+      console.error("Failed to sync from Supabase, falling back to local memory DB:", e);
+    }
+  }
+
+  // Backup Local Memory Database Sync
+  const tasksWithEmployees = db.tasks.map(task => {
+    const emp = db.employees.find(e => e.id === task.assigned_to);
+    return {
+      ...task,
+      employee_name: emp ? emp.name : "Unassigned"
+    };
+  });
+
+  logSQL("SELECT * FROM employees; SELECT * FROM tasks; -- (Unified Local Cache Sync)", db.employees.length + tasksWithEmployees.length);
+
+  return res.json({
+    employees: db.employees,
+    tasks: tasksWithEmployees,
+    sqlLogs: sqlLogs
+  });
+});
+
 // Get list of employees
 app.get("/api/employees", async (req, res) => {
   const sql = "SELECT * FROM employees ORDER BY name ASC;";

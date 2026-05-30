@@ -21,30 +21,22 @@ export default function App() {
   // Focus utility trigger for the SQL console shell
   const [isSqlConsoleFocused, setIsSqlConsoleFocused] = useState(false);
 
-  // Fetch critical relational tables
+  // Fetch critical relational tables via the single unified sync endpoint
   const fetchData = async (silent = false) => {
     if (!silent) setIsLoading(true);
     setDbError(null);
     try {
-      const [empResp, taskResp, logResp] = await Promise.all([
-        fetch("/api/employees"),
-        fetch("/api/tasks"),
-        fetch("/api/sql/logs")
-      ]);
+      const resp = await fetch("/api/sync");
 
-      if (!empResp.ok || !taskResp.ok || !logResp.ok) {
+      if (!resp.ok) {
         throw new Error("Relational server connection error. Make sure the backend dev server has booted up.");
       }
 
-      const [empData, taskData, logData] = await Promise.all([
-        empResp.json().catch(() => []),
-        taskResp.json().catch(() => []),
-        logResp.json().catch(() => [])
-      ]);
+      const data = await resp.json();
 
-      setEmployees(empData);
-      setTasks(taskData);
-      setSqlLogs(logData);
+      setEmployees(data.employees || []);
+      setTasks(data.tasks || []);
+      setSqlLogs(data.sqlLogs || []);
     } catch (err: any) {
       console.error(err);
       setDbError(err.message || "Failed to load database. Attempting reconnect...");
@@ -67,10 +59,10 @@ export default function App() {
       }
     }
 
-    // Set up rapid syncing so Admin & Employee screens stay cohesive
+    // Set up rapid syncing so Admin & Employee screens stay cohesive (6 seconds to reduce server load on Render)
     const interval = setInterval(() => {
       fetchData(true);
-    }, 4000);
+    }, 6000);
 
     return () => clearInterval(interval);
   }, []);
