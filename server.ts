@@ -13,7 +13,11 @@ const PORT = 3000;
 app.use(express.json());
 
 // Database File Path
-const DB_FILE = path.join(process.cwd(), "pats_database.json");
+const IS_VERCEL = !!process.env.VERCEL;
+const BUNDLED_DB_FILE = path.join(process.cwd(), "pats_database.json");
+const DB_FILE = IS_VERCEL 
+  ? path.join("/tmp", "pats_database.json") 
+  : BUNDLED_DB_FILE;
 
 // Define Supabase Live Connection Client
 let supabaseUrl = process.env.SUPABASE_URL || "";
@@ -101,6 +105,20 @@ interface DatabaseSchema {
 }
 
 function initDb(): DatabaseSchema {
+  // If running on Vercel, copy the bundled DB_FILE to /tmp/pats_database.json if it doesn't exist yet
+  if (IS_VERCEL && !fs.existsSync(DB_FILE)) {
+    try {
+      if (fs.existsSync(BUNDLED_DB_FILE)) {
+        fs.copyFileSync(BUNDLED_DB_FILE, DB_FILE);
+        console.log("📋 Copied bundled database template onto writable /tmp filesystem successfully.");
+      } else {
+        console.log("📋 Bundled database not found, initializing fresh structure inside /tmp.");
+      }
+    } catch (err: any) {
+      console.error("⚠️ Failed to copy bundled database file to /tmp:", err?.message || err);
+    }
+  }
+
   if (fs.existsSync(DB_FILE)) {
     try {
       const data: DatabaseSchema = JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
@@ -161,8 +179,12 @@ function initDb(): DatabaseSchema {
         });
       }
       if (migrated) {
-        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-        console.log("Database employees migrated with clean access credentials and joining date successfully.");
+        try {
+          fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+          console.log("Database employees migrated with clean access credentials and joining date successfully.");
+        } catch (writeErr: any) {
+          console.error("⚠️ Failed to write migrated database to filesystem:", writeErr?.message || writeErr);
+        }
       }
       return data;
     } catch (e) {
@@ -244,7 +266,11 @@ function initDb(): DatabaseSchema {
     }
   };
 
-  fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(initialData, null, 2));
+  } catch (writeErr: any) {
+    console.error("⚠️ Failed to write initial seed database to filesystem:", writeErr?.message || writeErr);
+  }
 
   // Log schema creation
   logSQL(
@@ -288,7 +314,11 @@ function logSQL(sql: string, rowsAffected: number = 0) {
 const db = initDb();
 
 function saveDb() {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+  } catch (writeErr: any) {
+    console.error("⚠️ Failed to write database state update to filesystem:", writeErr?.message || writeErr);
+  }
 }
 
 // REST Backend Endpoints 
