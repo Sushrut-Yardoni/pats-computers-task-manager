@@ -451,17 +451,18 @@ export default function EmployeeManagementSection({
           <table className="min-w-full divide-y divide-slate-100 text-left text-[11px] md:text-xs">
             <thead className="bg-slate-50 font-sans text-slate-500">
               <tr>
-                <th className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider">ID</th>
-                <th className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider">Engineer Identity</th>
-                <th className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider">Joined Date</th>
-                <th className="px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider">Status / Exits</th>
-                <th className="px-2.5 py-1.5 text-right text-[9px] font-bold uppercase tracking-wider">Action</th>
+                <th className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-wider">ID</th>
+                <th className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-wider">Engineer Identity</th>
+                <th className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-wider">Email</th>
+                <th className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-wider">Password</th>
+                <th className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-wider">Status / Exits</th>
+                <th className="px-2.5 py-2 text-right text-[9px] font-bold uppercase tracking-wider">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {displayedEmployees.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-3.5 py-10 text-center text-slate-400 italic font-sans font-medium">
+                  <td colSpan={6} className="px-3.5 py-10 text-center text-slate-400 italic font-sans font-medium">
                     No matching technical specialists found for this month range.
                   </td>
                 </tr>
@@ -471,39 +472,42 @@ export default function EmployeeManagementSection({
 
                   return (
                     <tr key={emp.id} className={`hover:bg-slate-50/40 transition-colors ${isDecomm ? 'opacity-40 bg-red-50/5' : ''}`}>
-                    <td className="px-2.5 py-1.5 text-[10px] font-extrabold text-indigo-600 font-mono">#{emp.id}</td>
-                    <td className="px-2.5 py-1.5">
+                    <td className="px-2.5 py-2 text-[10px] font-extrabold text-indigo-600 font-mono">#{emp.id}</td>
+                    <td className="px-2.5 py-2">
                       <p className="font-bold text-slate-800 leading-tight select-all">{emp.name}</p>
                       <p className="text-[9px] text-slate-400 select-all font-medium">{emp.role}</p>
                     </td>
-                    <td className="px-2.5 py-1.5 font-mono text-slate-500 select-all text-[10px]">{emp.joined_at}</td>
-                    <td className="px-2.5 py-1.5 text-[10px]">
+                    <td className="px-2.5 py-2 font-mono text-[10px] text-slate-600 select-all font-medium break-all">{emp.email_id || "N/A"}</td>
+                    <td className="px-2.5 py-2">
+                      <span className="font-mono text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100/60 font-bold select-all">{emp.password || "N/A"}</span>
+                    </td>
+                    <td className="px-2.5 py-2 text-[10px]">
                       {isDecomm ? (
                         <div className="flex flex-col leading-none">
-                          <span className="text-red-600 text-[8px] uppercase font-bold tracking-wider font-mono">Removed</span>
-                          <span className="text-[8px] text-red-400 font-mono">{emp.ended_at}</span>
+                          <span className="text-red-605 text-red-600 text-[8px] uppercase font-bold tracking-wider font-mono">Removed</span>
+                          <span className="text-[8px] text-red-400 font-mono mt-0.5">{emp.ended_at}</span>
                         </div>
                       ) : (
                         <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 text-[8px] font-bold tracking-wide uppercase font-mono">Active</span>
                       )}
                     </td>
-                    <td className="px-2.5 py-1.5 text-right">
+                    <td className="px-2.5 py-2 text-right">
                       {!isDecomm ? (
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="flex items-center justify-end gap-1 flex-wrap">
                           {emp.role !== "Admin" ? (
                             <button
                               type="button"
                               onClick={() => setPromoteTarget(emp)}
-                              className="px-2 py-0.5 bg-blue-50 text-blue-600 hover:bg-blue-100 text-[9px] font-black tracking-tight rounded border border-blue-200 transition-all active:scale-95 flex items-center gap-0.5 cursor-pointer"
+                              className="px-1.5 py-0.5 bg-blue-50 text-blue-600 hover:bg-blue-100 text-[8.5px] font-bold rounded border border-blue-200 transition-all active:scale-95 flex items-center gap-0.5 cursor-pointer"
                               title="Promote to admin"
                             >
-                              <ShieldCheck className="h-3 w-3" />
-                              <span>Make Admin</span>
+                              <ShieldCheck className="h-2.5 w-2.5" />
+                              <span>Admin</span>
                             </button>
                           ) : (
-                            <span className="text-blue-600 bg-blue-50/55 px-2 py-0.5 rounded border border-blue-200 text-[8px] font-black tracking-wider uppercase font-mono flex items-center gap-0.5">
+                            <span className="text-blue-600 bg-blue-50/50 px-1.5 py-0.5 rounded border border-blue-200 text-[8px] font-bold uppercase font-mono flex items-center gap-0.5" title="Admin level owner">
                               <ShieldCheck className="h-2.5 w-2.5" />
-                              <span>Admin Owner</span>
+                              <span>Owner</span>
                             </span>
                           )}
                           <button
@@ -512,20 +516,22 @@ export default function EmployeeManagementSection({
                               setChangePasswordTarget(emp);
                               setNewPasswordValue("");
                             }}
-                            className="px-2 py-0.5 bg-slate-100 text-slate-700 hover:bg-slate-200 text-[9px] font-black tracking-tight rounded border border-slate-300 transition-all active:scale-95 cursor-pointer"
+                            className="px-1.5 py-0.5 bg-slate-50 text-slate-700 hover:bg-slate-100 text-[8.5px] font-bold rounded border border-slate-200 transition-all active:scale-95 cursor-pointer"
+                            title="Update password"
                           >
-                            Update Pass
+                            Password
                           </button>
                           <button
                             type="button"
                             onClick={() => setDecommissionTarget(emp)}
-                            className="px-2 py-0.5 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800 text-[9px] font-black tracking-tight rounded border border-red-200 transition-all active:scale-95 cursor-pointer"
+                            className="px-1.5 py-0.5 bg-red-50 text-red-605 text-red-600 hover:bg-red-100 text-[8.5px] font-bold rounded border border-red-200 transition-all active:scale-95 cursor-pointer"
+                            title="Decommission engineer"
                           >
-                            Decommission
+                            Exit
                           </button>
                         </div>
                       ) : (
-                        <span className="text-slate-400 text-[9px] italic font-mono uppercase">Decomm'ed</span>
+                        <span className="text-slate-400 text-[8px] font-bold uppercase tracking-wider font-mono bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">Inactive</span>
                       )}
                     </td>
                   </tr>

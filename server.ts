@@ -168,10 +168,18 @@ function initDb(): DatabaseSchema {
             updated = true;
           }
           if (!emp.joined_at) {
-            emp.joined_at = (emp as any).joined_at || "2025-01-15";
+            emp.joined_at = "2025-01-15";
             if ((emp as any).email) {
               delete (emp as any).email;
             }
+            updated = true;
+          }
+          if (emp.joined_at.includes("T")) {
+            emp.joined_at = emp.joined_at.split("T")[0];
+            updated = true;
+          }
+          if (emp.ended_at && emp.ended_at.includes("T")) {
+            emp.ended_at = emp.ended_at.split("T")[0];
             updated = true;
           }
           if (updated) migrated = true;
@@ -684,7 +692,12 @@ app.get("/api/sync", async (req, res) => {
       if (empRes.error) throw empRes.error;
       if (taskRes.error) throw taskRes.error;
 
-      employeesList = empRes.data || [];
+      const rawEmployees = empRes.data || [];
+      employeesList = rawEmployees.map(emp => ({
+        ...emp,
+        joined_at: emp.joined_at ? emp.joined_at.split("T")[0] : null,
+        ended_at: emp.ended_at ? emp.ended_at.split("T")[0] : null
+      }));
       const rawTasks = taskRes.data || [];
       tasksList = rawTasks.map(task => {
         const emp = employeesList.find(e => e.id === task.assigned_to);
@@ -717,18 +730,24 @@ app.get("/api/sync", async (req, res) => {
   }
 
   // Backup Local Memory Database Sync
+  const cleanEmployees = db.employees.map(emp => ({
+    ...emp,
+    joined_at: emp.joined_at ? emp.joined_at.split("T")[0] : null,
+    ended_at: emp.ended_at ? emp.ended_at.split("T")[0] : null
+  }));
+
   const tasksWithEmployees = db.tasks.map(task => {
-    const emp = db.employees.find(e => e.id === task.assigned_to);
+    const emp = cleanEmployees.find(e => e.id === task.assigned_to);
     return {
       ...task,
       employee_name: emp ? emp.name : "Unassigned"
     };
   });
 
-  logSQL("SELECT * FROM employees; SELECT * FROM tasks; -- (Unified Local Cache Sync)", db.employees.length + tasksWithEmployees.length);
+  logSQL("SELECT * FROM employees; SELECT * FROM tasks; -- (Unified Local Cache Sync)", cleanEmployees.length + tasksWithEmployees.length);
 
   return res.json({
-    employees: db.employees,
+    employees: cleanEmployees,
     tasks: tasksWithEmployees,
     sqlLogs: sqlLogs
   });
@@ -742,15 +761,26 @@ app.get("/api/employees", async (req, res) => {
     try {
       const { data: employees, error } = await supabase.from("employees").select("*").order("name", { ascending: true });
       if (error) throw error;
-      logSQL(sql, employees.length);
-      return res.json(employees);
+      const cleanEmps = (employees || []).map(emp => ({
+        ...emp,
+        joined_at: emp.joined_at ? emp.joined_at.split("T")[0] : null,
+        ended_at: emp.ended_at ? emp.ended_at.split("T")[0] : null
+      }));
+      logSQL(sql, cleanEmps.length);
+      return res.json(cleanEmps);
     } catch (e: any) {
       console.error("Failed to query employees from Supabase:", e);
     }
   }
 
-  logSQL(sql, db.employees.length);
-  res.json(db.employees);
+  const cleanLocal = (db.employees || []).map(emp => ({
+    ...emp,
+    joined_at: emp.joined_at ? emp.joined_at.split("T")[0] : null,
+    ended_at: emp.ended_at ? emp.ended_at.split("T")[0] : null
+  }));
+
+  logSQL(sql, cleanLocal.length);
+  res.json(cleanLocal);
 });
 
 // Logs fetcher (queries live from Supabase if configured, falling back onto memory server logs)
@@ -1776,10 +1806,10 @@ app.post("/api/sql/execute", async (req, res) => {
 // Reset backend database (Clears structures and completely seeds standard datasets)
 app.post("/api/sql/reset", async (req, res) => {
   const initialEmployeesData = [
-    { id: 101, name: "Rahul Sharma", role: "Desktop Engineer", joined_at: "2025-01-15T09:00:00+00", email_id: "rahul@pats.co.in", password: "pats@101", ended_at: null },
-    { id: 102, name: "Sneha Patel", role: "Network Specialist", joined_at: "2025-01-15T10:15:00+00", email_id: "sneha@pats.co.in", password: "pats@102", ended_at: null },
-    { id: 103, name: "David Miller", role: "System Administrator", joined_at: "2025-01-15T08:30:00+00", email_id: "david@pats.co.in", password: "pats@103", ended_at: null },
-    { id: 104, name: "Anjali Rao", role: "Software Support Expert", joined_at: "2025-01-15T11:00:00+00", email_id: "anjali@pats.co.in", password: "pats@104", ended_at: null }
+    { id: 101, name: "Rahul Sharma", role: "Desktop Engineer", joined_at: "2025-01-15", email_id: "rahul@pats.co.in", password: "pats@101", ended_at: null },
+    { id: 102, name: "Sneha Patel", role: "Network Specialist", joined_at: "2025-01-15", email_id: "sneha@pats.co.in", password: "pats@102", ended_at: null },
+    { id: 103, name: "David Miller", role: "System Administrator", joined_at: "2025-01-15", email_id: "david@pats.co.in", password: "pats@103", ended_at: null },
+    { id: 104, name: "Anjali Rao", role: "Software Support Expert", joined_at: "2025-01-15", email_id: "anjali@pats.co.in", password: "pats@104", ended_at: null }
   ];
 
   const initialTasksData = [
