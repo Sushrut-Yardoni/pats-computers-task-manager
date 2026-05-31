@@ -6,6 +6,13 @@ export interface Employee {
   ended_at?: string | null;
   email_id?: string;
   password?: string;
+  phone?: string | null;
+  skills?: string | null;
+  experience?: string | null;
+  blood_group?: string | null;
+  emergency_contact?: string | null;
+  address?: string | null;
+  notes?: string | null;
 }
 
 export interface Task {
@@ -22,6 +29,7 @@ export interface Task {
   employee_name?: string; // Client-side enhancement from server JOIN
   address?: string; // Optional address for task location
   is_priority?: boolean; // Set a task as priority/urgent
+  is_repeat?: boolean; // Set a task as a Repeat call
   km_travelled?: number;
   materials_carried?: string | null;
 }

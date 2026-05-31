@@ -476,7 +476,7 @@ export default function ReportsSection({
                           </td>
                           <td className="px-3.5 py-3">
                             <p className="font-semibold text-slate-700">{task.employee_name || "Unassigned"}</p>
-                            <p className="text-[9px] text-slate-400 font-mono">FK ID: {task.assigned_to}</p>
+                            <p className="text-[9px] text-slate-400 font-mono">ID: {task.assigned_to}</p>
                           </td>
                           <td className="px-3.5 py-3 text-[10px]">
                             {isPending && (

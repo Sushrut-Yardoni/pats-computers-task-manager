@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Users, UserCheck, AlertTriangle, ShieldCheck, Trash2 } from "lucide-react";
+import { Users, UserCheck, AlertTriangle, ShieldCheck, Trash2, X } from "lucide-react";
 import { Employee, Task } from "../types";
 
 interface EmployeeManagementSectionProps {
@@ -35,8 +35,11 @@ export default function EmployeeManagementSection({
   const [newPasswordValue, setNewPasswordValue] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
+  // Popup details modal state
+  const [selectedEmpDetails, setSelectedEmpDetails] = useState<Employee | null>(null);
+
   // Limits and Month filtering
-  const [limit, setLimit] = useState<number | "All">(10);
+  const [limit, setLimit] = useState<number | "All">(5);
   const [selectedMonth, setSelectedMonth] = useState<string>("All");
 
   const uniqueMonths = React.useMemo(() => {
@@ -332,6 +335,175 @@ export default function EmployeeManagementSection({
         </div>
       )}
 
+      {/* 📋 Specialist Details Modal (Interactive Profile view for admins) */}
+      {selectedEmpDetails && (
+        <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in select-text text-slate-800">
+          <div className="bg-white border border-slate-200 rounded-2xl w-full max-w-2xl shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Top design strip */}
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-indigo-500 via-blue-500 to-purple-500" />
+            
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-100 flex justify-between items-start">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-mono uppercase bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100 font-bold select-all">
+                    Staff ID #{selectedEmpDetails.id}
+                  </span>
+                  {selectedEmpDetails.ended_at ? (
+                    <span className="text-[10px] font-mono uppercase bg-red-50 text-red-700 px-2 py-0.5 rounded border border-red-100 font-bold">
+                      Decommissioned
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-mono uppercase bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-100 font-bold">
+                      Active specialist
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-xl font-display font-extrabold text-slate-900 select-all leading-tight">
+                  {selectedEmpDetails.name}
+                </h3>
+                <p className="text-xs text-slate-500 font-mono">
+                  Role: <span className="text-indigo-600 font-bold">{selectedEmpDetails.role}</span>
+                </p>
+              </div>
+              
+              <button
+                type="button"
+                onClick={() => setSelectedEmpDetails(null)}
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                aria-label="Close details"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto space-y-6">
+              
+              {/* Grid block for profile fields */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                
+                {/* Email Identifier */}
+                <div className="space-y-1">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Company Email Address</span>
+                  <span className="text-xs text-slate-800 font-mono select-all break-all block font-semibold">
+                    {selectedEmpDetails.email_id || "-"}
+                  </span>
+                </div>
+
+                {/* Password */}
+                <div className="space-y-1">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">System Password</span>
+                  <span className="text-xs text-indigo-700 bg-indigo-50/40 px-1.5 py-0.5 rounded border border-indigo-100/50 font-mono select-all inline-block font-bold">
+                    {selectedEmpDetails.password || "-"}
+                  </span>
+                </div>
+
+                {/* Contact phone number */}
+                <div className="space-y-1">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Contact Phone</span>
+                  <span className="text-xs text-slate-800 font-mono select-all font-semibold block">
+                    {selectedEmpDetails.phone || "-"}
+                  </span>
+                </div>
+
+                {/* Blood Group */}
+                <div className="space-y-1">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Blood Group</span>
+                  <span className="text-xs text-slate-800 select-all font-bold block">
+                    {selectedEmpDetails.blood_group || "-"}
+                  </span>
+                </div>
+
+                {/* Emergency Contact */}
+                <div className="space-y-1">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Emergency Contact info</span>
+                  <span className="text-xs text-slate-800 select-all font-semibold block">
+                    {selectedEmpDetails.emergency_contact || "-"}
+                  </span>
+                </div>
+
+                {/* Joined Date */}
+                <div className="space-y-1">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Joined Date</span>
+                  <span className="text-xs text-slate-600 font-mono select-all block">
+                    {selectedEmpDetails.joined_at || "-"}
+                  </span>
+                </div>
+
+                {/* Exit Date */}
+                {selectedEmpDetails.ended_at && (
+                  <div className="space-y-1">
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Exit Date</span>
+                    <span className="text-xs text-red-600 font-mono select-all block font-bold">
+                      {selectedEmpDetails.ended_at}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Technical Certifications / Skills */}
+              <div className="border-t border-slate-100 pt-4 space-y-1">
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">Specializations & Certifications</span>
+                {selectedEmpDetails.skills ? (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {selectedEmpDetails.skills.split(",").map((sk, index) => {
+                      const skill = sk.trim();
+                      if (!skill) return null;
+                      return (
+                        <span key={index} className="text-[10px] font-semibold bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded-lg">
+                          {skill}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <span className="text-xs text-slate-400 block italic">
+                    -
+                  </span>
+                )}
+              </div>
+
+              {/* Professional Experience */}
+              <div className="border-t border-slate-100 pt-4 space-y-1">
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Professional Experience Details</span>
+                <p className="text-xs text-slate-800 leading-relaxed select-all">
+                  {selectedEmpDetails.experience || "-"}
+                </p>
+              </div>
+
+              {/* Residential Address */}
+              <div className="border-t border-slate-100 pt-4 space-y-1">
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none font-sans">Employee Residential Address</span>
+                <p className="text-xs text-slate-800 leading-relaxed select-all whitespace-pre-line">
+                  {selectedEmpDetails.address || "-"}
+                </p>
+              </div>
+
+              {/* Internal notes / availability */}
+              <div className="border-t border-slate-100 pt-4 space-y-1">
+                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none font-sans">Bio / Dispatch Notes</span>
+                <p className="text-xs text-slate-808 leading-relaxed select-all whitespace-pre-line font-medium">
+                  {selectedEmpDetails.notes || "-"}
+                </p>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedEmpDetails(null)}
+                className="py-2 px-5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-extrabold text-slate-700 transition-all active:scale-95 cursor-pointer shadow-xs uppercase tracking-wider"
+              >
+                Close Profile
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Register card */}
       <div className="xl:col-span-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-indigo-600 to-purple-600" />
@@ -474,8 +646,15 @@ export default function EmployeeManagementSection({
                     <tr key={emp.id} className={`hover:bg-slate-50/40 transition-colors ${isDecomm ? 'opacity-40 bg-red-50/5' : ''}`}>
                     <td className="px-2.5 py-2 text-[10px] font-extrabold text-indigo-600 font-mono">#{emp.id}</td>
                     <td className="px-2.5 py-2">
-                      <p className="font-bold text-slate-800 leading-tight select-all">{emp.name}</p>
-                      <p className="text-[9px] text-slate-400 select-all font-medium">{emp.role}</p>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedEmpDetails(emp)}
+                        className="text-left font-bold text-indigo-700 hover:text-indigo-900 hover:underline leading-tight select-all focus:outline-none transition-all cursor-pointer font-sans block"
+                        title="Click to view complete details"
+                      >
+                        {emp.name}
+                      </button>
+                      <p className="text-[9px] text-slate-400 select-all font-medium mt-0.5">{emp.role}</p>
                     </td>
                     <td className="px-2.5 py-2 font-mono text-[10px] text-slate-600 select-all font-medium break-all">{emp.email_id || "N/A"}</td>
                     <td className="px-2.5 py-2">

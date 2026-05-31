@@ -1,29 +1,38 @@
 import React, { useState, useEffect } from "react";
 import { 
   CheckCircle, Clock, AlertTriangle, Phone, Mail, 
-  X, Cpu, Calendar, CheckSquare, MessageSquare, ArrowRight, Play, Check, Navigation, Package
+  X, Cpu, Calendar, CheckSquare, MessageSquare, ArrowRight, Play, Check, Navigation, Package,
+  User, ShieldAlert, ChevronLeft, ChevronRight, Menu, AlertCircle, Settings
 } from "lucide-react";
 import EmployeeTravelSection from "./EmployeeTravelSection";
 import { Task, Employee } from "../types";
 
 interface EmployeeDashboardProps {
   currentEmployee: { id: number; name: string; role: string };
+  employees: Employee[];
   tasks: Task[];
   onAcceptTask: (taskId: number) => Promise<void>;
   onFinishTask: (taskId: number, remarks: string, km_travelled?: number) => Promise<void>;
   onUpdateRemarks: (taskId: number, remarks: string) => Promise<void>;
   onUpdatePassword?: (employeeId: number, newPassword: string) => Promise<void>;
   onUpdateMaterials?: (taskId: number, materials: string | null) => Promise<void>;
+  onUpdateProfile?: (employeeId: number, profileData: Partial<Employee>) => Promise<void>;
+  activeTab?: "active" | "completed" | "travel" | "profile";
+  onTabChange?: (tab: "active" | "completed" | "travel" | "profile") => void;
 }
 
 export default function EmployeeDashboard({
   currentEmployee,
+  employees,
   tasks,
   onAcceptTask,
   onFinishTask,
   onUpdateRemarks,
   onUpdatePassword,
-  onUpdateMaterials
+  onUpdateMaterials,
+  onUpdateProfile,
+  activeTab: propsActiveTab,
+  onTabChange
 }: EmployeeDashboardProps) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [remarksText, setRemarksText] = useState("");
@@ -32,7 +41,13 @@ export default function EmployeeDashboard({
   const [savingRemarks, setSavingRemarks] = useState(false);
   const [showRemarksInput, setShowRemarksInput] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTab, setActiveTab ] = useState<"active" | "completed" | "travel">("active");
+
+  const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile">("active");
+  const activeTab = propsActiveTab !== undefined ? propsActiveTab : internalActiveTab;
+  const setActiveTab = onTabChange !== undefined ? onTabChange : setInternalActiveTab;
+
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
   const [petrolPrice, setPetrolPrice] = useState(100);
   
   // Custom materials logging states
@@ -54,12 +69,68 @@ export default function EmployeeDashboard({
       });
   }, []);
 
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [empNewPassword, setEmpNewPassword] = useState("");
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   // Offline Travel Log State
   const [isSubmittingOffline, setIsSubmittingOffline] = useState(false);
+
+  // Profile Editable Details states
+  const fullEmployeeInfo = employees.find(e => e.id === currentEmployee.id) || currentEmployee;
+
+  const [profPhone, setProfPhone] = useState("");
+  const [profSkills, setProfSkills] = useState("");
+  const [profExperience, setProfExperience] = useState("");
+  const [profBloodGroup, setProfBloodGroup] = useState("");
+  const [profEmergencyContact, setProfEmergencyContact] = useState("");
+  const [profAddress, setProfAddress] = useState("");
+  const [profNotes, setProfNotes] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+
+  useEffect(() => {
+    if (fullEmployeeInfo) {
+      setProfPhone((fullEmployeeInfo as any).phone || "");
+      setProfSkills((fullEmployeeInfo as any).skills || "");
+      setProfExperience((fullEmployeeInfo as any).experience || "");
+      setProfBloodGroup((fullEmployeeInfo as any).blood_group || "");
+      setProfEmergencyContact((fullEmployeeInfo as any).emergency_contact || "");
+      setProfAddress((fullEmployeeInfo as any).address || "");
+      setProfNotes((fullEmployeeInfo as any).notes || "");
+    }
+  }, [
+    fullEmployeeInfo.id,
+    (fullEmployeeInfo as any).phone,
+    (fullEmployeeInfo as any).skills,
+    (fullEmployeeInfo as any).experience,
+    (fullEmployeeInfo as any).blood_group,
+    (fullEmployeeInfo as any).emergency_contact,
+    (fullEmployeeInfo as any).address,
+    (fullEmployeeInfo as any).notes
+  ]);
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onUpdateProfile) return;
+
+    setProfileSaving(true);
+    try {
+      await onUpdateProfile(currentEmployee.id, {
+        phone: profPhone.trim() || null,
+        skills: profSkills.trim() || null,
+        experience: profExperience.trim() || null,
+        blood_group: profBloodGroup.trim() || null,
+        emergency_contact: profEmergencyContact.trim() || null,
+        address: profAddress.trim() || null,
+        notes: profNotes.trim() || null
+      });
+      alert("Your profile details have been updated successfully!");
+    } catch (err: any) {
+      console.error(err);
+      alert("Failed to update profile details: " + (err.message || err));
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   const handleEmpPasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,7 +139,6 @@ export default function EmployeeDashboard({
     setIsUpdatingPassword(true);
     try {
       await onUpdatePassword(currentEmployee.id, empNewPassword.trim());
-      setShowPasswordModal(false);
       setEmpNewPassword("");
       alert("Your password has been updated successfully!");
     } catch (err: any) {
@@ -220,78 +290,332 @@ export default function EmployeeDashboard({
   };
 
   return (
-    <div className="space-y-6 animate-fade-in py-4 text-slate-800">
-      
-      {/* Employee Intro card */}
-      <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <span className="text-[10px] font-mono uppercase bg-blue-50 text-blue-700 px-2.5 py-1 rounded border border-blue-100 font-bold">
-              Active Dispatch Board
-            </span>
-            <div className="mt-3 flex flex-wrap items-center gap-3">
-              <h2 className="text-2xl font-display font-extrabold text-slate-900 select-all">
-                Welcome, {currentEmployee.name}
-              </h2>
-              {onUpdatePassword && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmpNewPassword("");
-                    setShowPasswordModal(true);
-                  }}
-                  className="px-2.5 py-1 text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-extrabold tracking-wide uppercase rounded-lg border border-slate-300 transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                >
-                  Change Password
-                </button>
+    <div className="flex flex-col md:flex-row gap-6 items-start min-h-[75vh]">
+      {/* 🧭 Collapsible Side Navigation Panel */}
+      <aside 
+        className={`bg-white border border-slate-200 rounded-3xl flex flex-col transition-all duration-300 relative shrink-0 w-full md:w-auto ${
+          isSidebarCollapsed ? "md:w-16" : "md:w-64"
+        }`}
+      >
+        {/* Toggle Collapse Button */}
+        <button
+          type="button"
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          className="absolute right-[-10px] top-6 h-6 w-6 hidden md:flex items-center justify-center bg-white border border-slate-200 hover:border-slate-350 rounded-full text-slate-500 hover:text-slate-850 transition-all cursor-pointer shadow-xs z-10"
+          title={isSidebarCollapsed ? "Expand Sidebar Navigation" : "Collapse Sidebar Navigation"}
+        >
+          {isSidebarCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+        </button>
+
+        {/* Sidebar Banner / Header */}
+        <div className="p-4.5 border-b border-slate-100 flex items-center gap-3">
+          <div className="bg-gradient-to-tr from-blue-50 to-indigo-50 p-2.5 rounded-xl text-blue-600 shrink-0 border border-blue-100/50">
+            <Cpu className="h-5 w-5 animate-pulse" />
+          </div>
+          {!isSidebarCollapsed && (
+            <div className="min-w-0">
+              <span className="block text-xs font-extrabold uppercase tracking-wide text-slate-800 truncate" title={currentEmployee.name}>
+                {currentEmployee.name}
+              </span>
+              <span className="block text-[10px] text-slate-400 font-medium truncate">Engineer ID: #{currentEmployee.id}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Navigation Items */}
+        <nav className="p-3 flex flex-row md:flex-col gap-1 w-full overflow-x-auto md:overflow-x-visible">
+          <button
+            type="button"
+            onClick={() => setActiveTab("active")}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer relative ${
+              activeTab === "active"
+                ? "bg-blue-50 text-blue-800 border border-blue-100 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-900 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <div className="relative flex items-center justify-center shrink-0">
+              <Clock className="h-4 w-4 text-blue-600" />
+              {isSidebarCollapsed && activeMyTasks.length > 0 && (
+                <span className="absolute -top-2 -right-2 bg-blue-100 text-blue-805 text-[8.5px] font-extrabold px-1 rounded-full min-w-[14px] h-[14px] flex items-center justify-center">
+                  {activeMyTasks.length}
+                </span>
               )}
             </div>
-            <p className="text-xs text-slate-600 mt-1 font-sans font-medium">
-              SPECIALIZATION: <strong className="text-blue-700 font-mono">{currentEmployee.role}</strong> (STAFF ID: #{currentEmployee.id})
-            </p>
-          </div>
+            {!isSidebarCollapsed && (
+              <span className="font-sans flex items-center justify-between w-full">
+                <span>Active Tickets</span>
+                <span className="bg-blue-100/60 text-blue-805 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                  {activeMyTasks.length}
+                </span>
+              </span>
+            )}
+          </button>
 
-          <div className="flex flex-col items-end gap-2 self-start sm:self-auto">
-            <div className="flex items-center gap-1 bg-slate-200 p-1 rounded-xl border border-slate-300">
-              <button
-                 onClick={() => setActiveTab("active")}
-                 className={`px-4 py-2 rounded-lg text-xs font-extrabold tracking-wide transition-all uppercase flex items-center gap-1.5 ${
-                   activeTab === "active"
-                     ? "bg-white text-blue-800 border border-slate-300 shadow-md"
-                     : "text-slate-600 hover:text-slate-900"
-                 }`}
-               >
-                 <Clock className="h-3.5 w-3.5" />
-                 <span>Assigned ({activeMyTasks.length})</span>
-               </button>
-               <button
-                 onClick={() => setActiveTab("completed")}
-                 className={`px-4 py-2 rounded-lg text-xs font-extrabold tracking-wide transition-all uppercase flex items-center gap-1.5 ${
-                   activeTab === "completed"
-                     ? "bg-white text-emerald-700 border border-slate-300 shadow-md"
-                     : "text-slate-600 hover:text-slate-900"
-                 }`}
-               >
-                <CheckCircle className="h-3.5 w-3.5" />
-                <span>Resolved ({completedMyTasks.length})</span>
-              </button>
-              <button
-                 onClick={() => setActiveTab("travel")}
-                 className={`px-4 py-2 rounded-lg text-xs font-extrabold tracking-wide transition-all uppercase flex items-center gap-1.5 ${
-                   activeTab === "travel"
-                     ? "bg-white text-purple-700 border border-slate-300 shadow-md"
-                     : "text-slate-600 hover:text-slate-900"
-                 }`}
-               >
-                <Navigation className="h-3.5 w-3.5" />
-                <span>Travel Logs</span>
-              </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("completed")}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
+              activeTab === "completed"
+                ? "bg-emerald-50 text-emerald-800 border border-emerald-100 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <CheckCircle className="h-4 w-4 text-emerald-600 shrink-0" />
+            {!isSidebarCollapsed && (
+              <span className="font-sans flex items-center justify-between w-full">
+                <span>Completed History</span>
+                <span className="bg-emerald-100/60 text-emerald-805 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                  {completedMyTasks.length}
+                </span>
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("travel")}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
+              activeTab === "travel"
+                ? "bg-purple-50 text-purple-800 border border-purple-100 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <Navigation className="h-4 w-4 text-purple-600 shrink-0" />
+            {!isSidebarCollapsed && <span className="font-sans">Travel & Fuel Logs</span>}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("profile")}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
+              activeTab === "profile"
+                ? "bg-indigo-50 text-indigo-800 border border-indigo-100 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <Settings className="h-4 w-4 text-indigo-600 shrink-0" />
+            {!isSidebarCollapsed && <span className="font-sans">Settings</span>}
+          </button>
+        </nav>
+      </aside>
+
+      {/* 🖥️ Main Workspace Content Area */}
+      <div className="flex-1 w-full space-y-6">
+        {/* Workspace Intro Card */}
+        {activeTab === "active" && (
+          <section className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-display font-extrabold text-slate-900 select-all">
+                Welcome, {currentEmployee.name}
+              </h2>
+              <p className="text-xs text-slate-500 mt-1 font-sans font-medium">
+                Employee ID: #{currentEmployee.id}
+              </p>
+            </div>
+          </section>
+        )}
+
+        {/* Conditional Screen Page Renders */}
+        {activeTab === "profile" ? (
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs max-w-4xl mx-auto space-y-6">
+          <div className="border-b border-slate-100 pb-4 flex justify-between items-center flex-wrap gap-2">
+            <div>
+              <h3 className="text-lg font-display font-bold text-slate-800">My Professional Identity</h3>
+              <p className="text-xs text-slate-500 font-medium">View and update your personal and technical details for the dispatch roster.</p>
+            </div>
+            <div className="bg-indigo-50 border border-indigo-100/50 text-indigo-700 font-bold px-3 py-1 rounded-xl text-xs flex items-center gap-1">
+              <span className="h-2 w-2 bg-indigo-600 rounded-full animate-ping" />
+              <span>Staff ID: #{fullEmployeeInfo.id}</span>
             </div>
           </div>
-        </div>
-      </section>
 
-      {activeTab === "travel" ? (
+          <form onSubmit={handleProfileSubmit} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-slate-800">
+              {/* Name (Read-only) */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={fullEmployeeInfo.name}
+                  disabled
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-500 px-3 py-2 rounded-xl text-xs cursor-not-allowed font-medium"
+                />
+              </div>
+
+              {/* Designation / Role (Read-only) */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Designation</label>
+                <input
+                  type="text"
+                  value={fullEmployeeInfo.role}
+                  disabled
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-500 px-3 py-2 rounded-xl text-xs cursor-not-allowed font-medium"
+                />
+              </div>
+
+              {/* Email (Read-only) */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Company Email</label>
+                <input
+                  type="text"
+                  value={(fullEmployeeInfo as any).email_id || ""}
+                  disabled
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-500 px-3 py-2 rounded-xl text-xs cursor-not-allowed font-medium font-mono"
+                />
+              </div>
+
+              {/* Phone (Editable) */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Contact Phone</label>
+                <input
+                  type="text"
+                  placeholder="e.g. +91 98765 43210"
+                  value={profPhone}
+                  onChange={(e) => setProfPhone(e.target.value)}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all font-mono"
+                />
+              </div>
+
+              {/* Blood Group (Editable) */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Blood Group</label>
+                <select
+                  value={profBloodGroup}
+                  onChange={(e) => setProfBloodGroup(e.target.value)}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 px-3 py-2 rounded-xl text-xs focus:outline-none transition-all cursor-pointer"
+                >
+                  <option value="">Select Blood Group</option>
+                  <option value="A+">A+</option>
+                  <option value="A-">A-</option>
+                  <option value="B+">B+</option>
+                  <option value="B-">B-</option>
+                  <option value="O+">O+</option>
+                  <option value="O-">O-</option>
+                  <option value="AB+">AB+</option>
+                  <option value="AB-">AB-</option>
+                </select>
+              </div>
+
+              {/* Emergency Contact No. (Editable) */}
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Emergency Contact</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Spouse / Parent Contact info"
+                  value={profEmergencyContact}
+                  onChange={(e) => setProfEmergencyContact(e.target.value)}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-850 text-slate-805 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all"
+                />
+              </div>
+
+              {/* Technical Skills Tag / Line (Editable) */}
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Technical Specializations & Certifications</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Cisco CCNA, Hardware Repair, Linux Server Admin, Liquid Cooling"
+                  value={profSkills}
+                  onChange={(e) => setProfSkills(e.target.value)}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all"
+                />
+              </div>
+
+              {/* Prior Professional Experience (Editable) */}
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Professional Experience Context</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 5+ years in Field Support, previously at Dell Hardware Support"
+                  value={profExperience}
+                  onChange={(e) => setProfExperience(e.target.value)}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all"
+                />
+              </div>
+
+              {/* Contact Address (Editable) */}
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Residential Address</label>
+                <textarea
+                  placeholder="Enter your current billing or residential address..."
+                  value={profAddress}
+                  onChange={(e) => setProfAddress(e.target.value)}
+                  rows={2}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 p-3 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all resize-none"
+                />
+              </div>
+
+              {/* Bio/Notes (Editable) */}
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Internal Professional Bio / Notes</label>
+                <textarea
+                  placeholder="Write a brief statement or note about your availability, diagnostic domains, or tools inventory..."
+                  value={profNotes}
+                  onChange={(e) => setProfNotes(e.target.value)}
+                  rows={3}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 p-3 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-slate-100 flex-wrap gap-2 text-slate-800">
+              <span className="text-[10px] text-slate-400 font-mono italic font-medium">
+                All saved metadata becomes immediately visible under Admin Directory dashboards.
+              </span>
+              <button
+                type="submit"
+                disabled={profileSaving}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white disabled:text-slate-400 rounded-xl text-xs font-extrabold uppercase tracking-widest leading-none shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+              >
+                {profileSaving ? (
+                  <div className="w-3" />
+                ) : (
+                  <Check className="h-3.5 w-3.5 stroke-[2.5]" />
+                )}
+                <span>{profileSaving ? "Saving..." : "Save My Details"}</span>
+              </button>
+            </div>
+          </form>
+
+          {/* Card 2: Portal Security Options (Satisfies: "move the Change password button on the profile page.") */}
+          {onUpdatePassword && (
+            <div className="bg-slate-50 border border-slate-200 rounded-3xl p-6 space-y-4 pt-5">
+              <div className="border-b border-slate-200 pb-3 flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-extrabold uppercase text-slate-800 tracking-wide flex items-center gap-1.5 font-sans">
+                    <ShieldAlert className="h-4 w-4 text-emerald-600 animate-pulse" />
+                    Workstation Security & Login Details
+                  </h4>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Maintain separate, secure, and confidential credentials for PATS portal dispatch access.</p>
+                </div>
+                <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                  Encrypted SSL DB
+                </span>
+              </div>
+
+              <form onSubmit={handleEmpPasswordUpdate} className="flex flex-col sm:flex-row gap-3 items-end">
+                <div className="flex-1 min-w-0 w-full">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 font-sans">Set Secure New Password</label>
+                  <input
+                    type="password"
+                    placeholder="Enter raw plain-text password to hash & store..."
+                    value={empNewPassword}
+                    onChange={(e) => setEmpNewPassword(e.target.value)}
+                    className="w-full bg-white border border-slate-200 hover:border-slate-350 focus:border-indigo-500 text-slate-800 px-3 py-2.5 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all font-mono"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isUpdatingPassword || !empNewPassword.trim()}
+                  className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-100 text-white disabled:text-slate-400 rounded-xl text-xs font-extrabold uppercase tracking-wider leading-none transition-all h-10 shrink-0 cursor-pointer shadow-sm border border-slate-950 font-sans"
+                >
+                  {isUpdatingPassword ? "Encrypting SQL..." : "Update Portal Password"}
+                </button>
+              </form>
+            </div>
+          )}
+        </div>
+      ) : activeTab === "travel" ? (
         <EmployeeTravelSection myTasks={myTasks} employeeId={currentEmployee.id} petrolPrice={petrolPrice} />
       ) : (
         <div className="space-y-4">
@@ -361,7 +685,17 @@ export default function EmployeeDashboard({
                     <span className="font-mono text-xs text-indigo-600 font-extrabold select-all">
                       #{task.id}
                     </span>
-                    <div>
+                    <div className="flex flex-wrap items-center gap-1">
+                      {task.is_priority && (
+                        <span className="inline-flex items-center rounded-md bg-rose-50 px-1.5 py-0.5 text-[8.5px] font-extrabold text-rose-700 ring-1 ring-rose-200 uppercase tracking-wide">
+                          🚨 Priority
+                        </span>
+                      )}
+                      {task.is_repeat && (
+                        <span className="inline-flex items-center rounded-md bg-purple-50 px-1.5 py-0.5 text-[8.5px] font-extrabold text-purple-700 ring-1 ring-purple-200 uppercase tracking-wide">
+                          🔄 Repeat Call
+                        </span>
+                      )}
                       {isPending && (
                         <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-[9px] font-bold text-amber-700 ring-1 ring-amber-200 uppercase tracking-wider">
                           New assigned
@@ -643,6 +977,16 @@ export default function EmployeeDashboard({
                     className="w-full bg-white border border-slate-300 hover:border-slate-400 focus:border-indigo-500 text-slate-800 p-3 rounded-lg text-xs placeholder-slate-400 focus:outline-none transition-colors"
                   />
 
+                  {selectedTask.is_repeat && (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-800 p-3.5 rounded-xl text-xs flex items-start gap-2.5 mt-2.5 select-none">
+                      <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5 animate-bounce" />
+                      <div>
+                        <strong className="font-extrabold block text-amber-950 text-[10.5px] uppercase tracking-wide">⛽ No Petrol Allowed</strong>
+                        <p className="text-[10px] mt-0.5 leading-relaxed font-sans font-semibold">This dispatch ticket is designated as a <strong className="text-amber-950 font-bold">Repeat Call</strong>. Please note that no petrol/fuel allocation or travel rate calculations will be assigned or reimbursed.</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex gap-2 justify-end pt-2">
                     <button
                       type="button"
@@ -709,56 +1053,7 @@ export default function EmployeeDashboard({
         </div>
       )}
 
-      {/* 🔑 Change Password Modal */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in text-slate-800">
-          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4 relative">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-t-2xl" />
-            
-            <div className="space-y-1">
-              <h4 className="font-extrabold text-slate-900 text-sm uppercase tracking-wide flex items-center gap-1.5">
-                <span>Update Your Password</span>
-              </h4>
-              <p className="text-xs text-slate-500 font-sans">
-                Set a secure new password for your technical engineer portal login.
-              </p>
-            </div>
-
-            <form onSubmit={handleEmpPasswordUpdate} className="space-y-3 pt-1">
-              <div>
-                <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
-                  New Password
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter secure new password"
-                  value={empNewPassword}
-                  onChange={(e) => setEmpNewPassword(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-mono"
-                  required
-                />
-              </div>
-
-              <div className="flex gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordModal(false)}
-                  className="flex-1 py-2 px-3 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl text-xs font-extrabold text-slate-700 transition-colors shadow-sm cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isUpdatingPassword}
-                  className="flex-1 py-2 px-3 rounded-xl text-white font-extrabold text-xs bg-blue-700 hover:bg-blue-800 transition-all border border-blue-800 active:scale-95 uppercase tracking-wide shadow-md cursor-pointer"
-                >
-                  {isUpdatingPassword ? "Saving..." : "Update Password"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 }

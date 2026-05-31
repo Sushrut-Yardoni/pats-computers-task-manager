@@ -65,6 +65,13 @@ interface Employee {
   ended_at?: string | null;
   email_id?: string;
   password?: string;
+  phone?: string | null;
+  skills?: string | null;
+  experience?: string | null;
+  blood_group?: string | null;
+  emergency_contact?: string | null;
+  address?: string | null;
+  notes?: string | null;
 }
 
 interface Task {
@@ -80,6 +87,7 @@ interface Task {
   remarks: string | null;
   address?: string;
   is_priority?: boolean;
+  is_repeat?: boolean;
   km_travelled?: number;
   materials_carried?: string | null;
 }
@@ -675,6 +683,90 @@ app.post("/api/employees/:id/password", async (req, res) => {
   }
 });
 
+// Update employee details profile
+app.post("/api/employees/:id/profile", async (req, res) => {
+  const empId = Number(req.params.id);
+  const { phone, skills, experience, blood_group, emergency_contact, address, notes } = req.body;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: employee, error: selectErr } = await supabase.from("employees").select("*").eq("id", empId).single();
+      if (selectErr || !employee) {
+        return res.status(404).json({ error: "Employee/Engineer not found." });
+      }
+
+      const updateFields: any = {};
+      if (phone !== undefined) updateFields.phone = phone || null;
+      if (skills !== undefined) updateFields.skills = skills || null;
+      if (experience !== undefined) updateFields.experience = experience || null;
+      if (blood_group !== undefined) updateFields.blood_group = blood_group || null;
+      if (emergency_contact !== undefined) updateFields.emergency_contact = emergency_contact || null;
+      if (address !== undefined) updateFields.address = address || null;
+      if (notes !== undefined) updateFields.notes = notes || null;
+
+      let supabaseError = null;
+      if (Object.keys(updateFields).length > 0) {
+        const { error: updateErr } = await supabase.from("employees").update(updateFields).eq("id", empId);
+        if (updateErr) {
+          throw new Error("Supabase Schema Error: Could not update profile fields. Please ensure you have added the new columns (phone, skills, experience, blood_group, emergency_contact, address, notes) to your Supabase 'employees' table. Error: " + updateErr.message);
+        }
+      }
+
+      // Also ensure we cache/save it locally so it works flawlessly either way in AI Studio sandbox!
+      const empIndex = db.employees.findIndex(e => e.id === empId);
+      if (empIndex !== -1) {
+        const emp = db.employees[empIndex];
+        if (phone !== undefined) emp.phone = phone || null;
+        if (skills !== undefined) emp.skills = skills || null;
+        if (experience !== undefined) emp.experience = experience || null;
+        if (blood_group !== undefined) emp.blood_group = blood_group || null;
+        if (emergency_contact !== undefined) emp.emergency_contact = emergency_contact || null;
+        if (address !== undefined) emp.address = address || null;
+        if (notes !== undefined) emp.notes = notes || null;
+        saveDb();
+      }
+
+      const query = `UPDATE employees \nSET phone = '${(phone || "").replace(/'/g, "''")}', skills = '${(skills || "").replace(/'/g, "''")}' \nWHERE id = ${empId};`;
+      logSQL(query, 1);
+
+      return res.json({
+        message: "Profile details updated successfully",
+        supabase_error: supabaseError,
+        employee: {
+          ...employee,
+          ...updateFields
+        }
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message || "Failed to update profile details." });
+    }
+  } else {
+    // Local DB update
+    const empIndex = db.employees.findIndex(e => e.id === empId);
+    if (empIndex === -1) {
+      return res.status(404).json({ error: "Employee/Engineer not found" });
+    }
+
+    const emp = db.employees[empIndex];
+    if (phone !== undefined) emp.phone = phone || null;
+    if (skills !== undefined) emp.skills = skills || null;
+    if (experience !== undefined) emp.experience = experience || null;
+    if (blood_group !== undefined) emp.blood_group = blood_group || null;
+    if (emergency_contact !== undefined) emp.emergency_contact = emergency_contact || null;
+    if (address !== undefined) emp.address = address || null;
+    if (notes !== undefined) emp.notes = notes || null;
+    saveDb();
+
+    const query = `UPDATE employees \nSET phone = '${(phone || "").replace(/'/g, "''")}', skills = '${(skills || "").replace(/'/g, "''")}', experience = '${(experience || "").replace(/'/g, "''")}', blood_group = '${(blood_group || "").replace(/'/g, "''")}', emergency_contact = '${(emergency_contact || "").replace(/'/g, "''")}', address = '${(address || "").replace(/'/g, "''")}', notes = '${(notes || "").replace(/'/g, "''")}' \nWHERE id = ${empId};`;
+    logSQL(query, 1);
+
+    return res.json({
+      message: "Profile details updated successfully",
+      employee: emp
+    });
+  }
+});
+
 // Unified State Synchronizer (Aggregates employees, tasks, and logs into a single rapid fetch roundtrip to bypass multiple connection latency)
 app.get("/api/sync", async (req, res) => {
   let employeesList: Employee[] = [];
@@ -1262,6 +1354,117 @@ app.post("/api/tasks/:id/transfer", async (req, res) => {
       task: {
         ...task,
         employee_name: emp ? emp.name : "Unassigned"
+      }
+    });
+  }
+});
+
+// Admin re-assigns task with Repeat call status
+app.post("/api/tasks/:id/reassign", async (req, res) => {
+  const taskId = Number(req.params.id);
+  const { reassign_to_id } = req.body;
+
+  if (!reassign_to_id) {
+    return res.status(400).json({ error: "Service specialist ID is required for reassignment." });
+  }
+
+  const targetId = Number(reassign_to_id);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: task, error: fetchErr } = await supabase.from("tasks").select("*").eq("id", taskId).single();
+      if (fetchErr || !task) {
+        return res.status(404).json({ error: "Task not found." });
+      }
+
+      const { data: targetEmployee, error: empErr } = await supabase.from("employees").select("*").eq("id", targetId).is("ended_at", null).single();
+      if (empErr || !targetEmployee) {
+        return res.status(400).json({ error: "Selected active specialist is not found or is inactive." });
+      }
+
+      const { data: allTasks } = await supabase.from("tasks").select("id");
+      const newId = allTasks && allTasks.length > 0 ? Math.max(...allTasks.map(t => t.id)) + 1 : 1001;
+      
+      const newTask: Task = {
+        id: newId,
+        customer_name: task.customer_name,
+        contact_details: task.contact_details,
+        problem_reported: task.problem_reported,
+        address: task.address || "",
+        assigned_to: targetId,
+        status: "Pending",
+        assigned_at: new Date().toISOString(),
+        accepted_at: null,
+        finished_at: null,
+        remarks: null,
+        is_priority: task.is_priority || false,
+        km_travelled: 0,
+        materials_carried: null,
+        is_repeat: true
+      };
+
+      const { error: insertErr } = await supabase.from("tasks").insert(newTask);
+
+      if (insertErr) {
+        return res.status(400).json({ error: "Supabase Insert Error: " + insertErr.message });
+      }
+
+      const query = `INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, address)\nVALUES (${newId}, '${newTask.customer_name.replace(/'/g, "''")}', '${newTask.contact_details.replace(/'/g, "''")}', '${newTask.problem_reported.replace(/'/g, "''")}', ${targetId}, 'Pending', '${newTask.assigned_at}', '${newTask.address.replace(/'/g, "''")}');`;
+      logSQL(query, 1);
+
+      res.json({
+        message: `A new repeat task #${newId} has been created and assigned to Specialist ID #${targetId} (${targetEmployee.name}).`,
+        task: {
+          ...newTask,
+          employee_name: targetEmployee.name
+        }
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message || "Failed to re-assign task." });
+    }
+  } else {
+    const taskIndex = db.tasks.findIndex(t => t.id === taskId);
+    if (taskIndex === -1) {
+      return res.status(404).json({ error: "Task not found." });
+    }
+
+    const task = db.tasks[taskIndex];
+    const targetEmployee = db.employees.find(e => e.id === targetId && !e.ended_at);
+    if (!targetEmployee) {
+      return res.status(400).json({ error: "Selected active specialist is not found or is inactive." });
+    }
+
+    const newId = db.tasks.length > 0 ? Math.max(...db.tasks.map(t => t.id)) + 1 : 1001;
+    
+    const newTask: Task = {
+      id: newId,
+      customer_name: task.customer_name,
+      contact_details: task.contact_details,
+      problem_reported: task.problem_reported,
+      address: task.address || "",
+      assigned_to: targetId,
+      status: "Pending",
+      assigned_at: new Date().toISOString(),
+      accepted_at: null,
+      finished_at: null,
+      remarks: null,
+      is_priority: task.is_priority || false,
+      km_travelled: 0,
+      materials_carried: undefined,
+      is_repeat: true
+    };
+
+    db.tasks.push(newTask);
+    saveDb();
+
+    const query = `INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, address)\nVALUES (${newId}, '${newTask.customer_name.replace(/'/g, "''")}', '${newTask.contact_details.replace(/'/g, "''")}', '${newTask.problem_reported.replace(/'/g, "''")}', ${targetId}, 'Pending', '${newTask.assigned_at}', '${newTask.address.replace(/'/g, "''")}');`;
+    logSQL(query, 1);
+
+    res.json({
+      message: `A new repeat task #${newId} has been created and assigned to Specialist ID #${targetId} (${targetEmployee.name}).`,
+      task: {
+        ...newTask,
+        employee_name: targetEmployee.name
       }
     });
   }

@@ -8,7 +8,6 @@ interface LoginScreenProps {
 }
 
 export default function LoginScreen({ employees, onLogin }: LoginScreenProps) {
-  const [activeTab, setActiveTab] = useState<"admin" | "employee">("employee");
   const [email_id, setEmailId] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
@@ -54,7 +53,7 @@ export default function LoginScreen({ employees, onLogin }: LoginScreenProps) {
           <Laptop className="h-8 w-8 text-blue-600 animate-pulse" />
         </div>
         <h2 className="text-3xl font-display font-extrabold text-slate-900 tracking-tight">
-          PATS Computers Pvt Ltd
+          PATS COMPUTERS
         </h2>
         <p className="text-xs text-indigo-600 font-extrabold tracking-widest uppercase mt-1">
           Service Portal
@@ -64,54 +63,14 @@ export default function LoginScreen({ employees, onLogin }: LoginScreenProps) {
         </p>
       </div>
 
-      {/* Modern Role Tabs */}
-      <div className="bg-slate-200/85 p-1.5 rounded-2xl border border-slate-300 flex gap-1 mb-6">
-        <button
-          onClick={() => {
-            setActiveTab("employee");
-            setEmailId("");
-            setPassword("");
-            setErrorMsg("");
-          }}
-          className={`flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 text-xs font-bold tracking-wide uppercase transition-all ${
-            activeTab === "employee"
-              ? "bg-white border border-slate-300 text-blue-800 shadow-md font-extrabold"
-              : "text-slate-600 hover:text-slate-900 font-bold"
-          }`}
-        >
-          <Users className="h-4 w-4" />
-          <span>Employee portal</span>
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab("admin");
-            setEmailId("");
-            setPassword("");
-            setErrorMsg("");
-          }}
-          className={`flex-1 py-3 px-4 rounded-xl flex items-center justify-center gap-2 text-xs font-bold tracking-wide uppercase transition-all ${
-            activeTab === "admin"
-              ? "bg-white border border-slate-300 text-blue-800 shadow-md font-extrabold"
-              : "text-slate-600 hover:text-slate-900 font-bold"
-          }`}
-        >
-          <Shield className="h-4 w-4" />
-          <span>Admin portal gateway</span>
-        </button>
-      </div>
-
       {/* Portal Login Card */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-md relative overflow-hidden">
         
         <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-5">
-          {activeTab === "admin" ? (
-            <Shield className="h-5 w-5 text-blue-600" />
-          ) : (
-            <Users className="h-5 w-5 text-blue-600" />
-          )}
+          <Users className="h-5 w-5 text-blue-600" />
           <div>
             <h3 className="font-display font-bold text-slate-900 text-base">
-              {activeTab === "admin" ? "Administrative Access Room" : "Technical Engineer Gateway"}
+              System Access
             </h3>
             <p className="text-xs text-slate-500 font-sans font-medium">
               Credentials verified against relational user tables
@@ -130,7 +89,7 @@ export default function LoginScreen({ employees, onLogin }: LoginScreenProps) {
               </span>
               <input
                 type="text"
-                placeholder={activeTab === "admin" ? "e.g. admin@pats.co.in" : "e.g. rahul@pats.co.in"}
+                placeholder="e.g. rahul@pats.co.in"
                 value={email_id}
                 onChange={(e) => {
                   setEmailId(e.target.value);
@@ -190,10 +149,7 @@ export default function LoginScreen({ employees, onLogin }: LoginScreenProps) {
           </button>
         </form>
 
-        {/* SQL Auth tracing disclaimer */}
-        <p className="text-[10px] text-slate-400 mt-5 leading-normal font-mono text-center font-medium">
-          * Protected under role secure hash tables
-        </p>
+
       </div>
     </div>
   );

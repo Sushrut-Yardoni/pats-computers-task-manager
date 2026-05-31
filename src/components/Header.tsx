@@ -1,14 +1,15 @@
 import React from "react";
-import { Laptop, Cpu, User, LogOut, Terminal } from "lucide-react";
+import { Laptop, Cpu, User, LogOut, Terminal, Settings } from "lucide-react";
 
 interface HeaderProps {
   currentUser: { type: "admin"; email_id?: string } | { type: "employee"; id: number; name: string; role: string } | null;
   onLogout: () => void;
   openSqlConsole: () => void;
   sqlConsoleActive: boolean;
+  onOpenSettings?: () => void;
 }
 
-export default function Header({ currentUser, onLogout, openSqlConsole, sqlConsoleActive }: HeaderProps) {
+export default function Header({ currentUser, onLogout, openSqlConsole, sqlConsoleActive, onOpenSettings }: HeaderProps) {
   return (
     <header className="border-b border-slate-200 bg-white/95 backdrop-blur-md sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
@@ -21,9 +22,6 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
             <div className="flex items-center gap-2">
               <span className="font-display font-extrabold text-lg text-slate-800 tracking-tight flex items-center gap-1">
                 PATS <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent inline-block">COMPUTERS</span>
-              </span>
-              <span className="text-[10px] font-mono uppercase bg-slate-100 border border-slate-200 text-blue-600 px-1.5 py-0.5 rounded tracking-widest font-bold">
-                Pvt Ltd
               </span>
             </div>
             <p className="text-xs text-slate-500 font-sans tracking-wide">Enterprise Service Desk</p>
@@ -59,15 +57,7 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
             </>
           )}
 
-          {!currentUser && (
-            <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
-              </span>
-              <span>GATEWAY ACTIVE</span>
-            </div>
-          )}
+
         </div>
       </div>
     </header>

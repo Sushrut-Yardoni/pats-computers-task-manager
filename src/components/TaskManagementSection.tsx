@@ -43,7 +43,7 @@ export default function TaskManagementSection({
   const [statusFilter, setStatusFilter] = useState<"All" | "Pending" | "In Progress" | "Finished">("All");
 
   // Limits and Month filter for Tasks table
-  const [limit, setLimit] = useState<number | "All">(10);
+  const [limit, setLimit] = useState<number | "All">(5);
   const [selectedMonth, setSelectedMonth] = useState<string>("All");
 
   const uniqueMonths = React.useMemo(() => {
@@ -112,6 +112,11 @@ export default function TaskManagementSection({
   const [editProblemReported, setEditProblemReported] = useState("");
   const [savingDetails, setSavingDetails] = useState(false);
 
+  // States for re-assigning task as a Repeat call
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [reassignSuccess, setReassignSuccess] = useState<string | null>(null);
+  const [reassignError, setReassignError] = useState<string | null>(null);
+
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim() || !problemReported.trim() || !assignedTo) {
@@ -153,6 +158,8 @@ export default function TaskManagementSection({
     setTransferTargetId("");
     setTransferSuccess(null);
     setTransferError(null);
+    setReassignSuccess(null);
+    setReassignError(null);
     setEditCustomerName(task.customer_name);
     setEditContactDetails(task.contact_details);
     setEditAddress(task.address || "");
@@ -166,6 +173,8 @@ export default function TaskManagementSection({
     setTransferTargetId("");
     setTransferSuccess(null);
     setTransferError(null);
+    setReassignSuccess(null);
+    setReassignError(null);
     setIsEditingDetails(false);
   };
 
@@ -273,6 +282,42 @@ export default function TaskManagementSection({
       setTransferError(err.message || "Transfer operation failed.");
     } finally {
       setIsTransferring(false);
+    }
+  };
+
+  const handleReassignTaskRepeat = async (e: React.FormEvent, taskId: number) => {
+    e.preventDefault();
+    if (!selectedTask) return;
+
+    setIsReassigning(true);
+    setReassignSuccess(null);
+    setReassignError(null);
+
+    const targetEmpId = selectedTask.assigned_to;
+
+    try {
+      const resp = await fetch(`/api/tasks/${taskId}/reassign`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reassign_to_id: targetEmpId })
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(data.error || "Failed to re-assign task as Repeat call.");
+      }
+
+      setReassignSuccess(data.message || "A new repeat task has been created successfully.");
+      refreshLogs();
+
+      // Ensure the active modal doesn't falsely show the old task as the new one
+      // We'll just leave the old task visible as its original state or close the modal if needed.
+    } catch (err: any) {
+      console.error(err);
+      setReassignError(err.message || "Reassignment failed.");
+    } finally {
+      setIsReassigning(false);
     }
   };
 
@@ -524,6 +569,11 @@ export default function TaskManagementSection({
                               🔥 Urgent
                             </span>
                           )}
+                          {task.is_repeat && (
+                            <span className="px-1.5 py-0.5 bg-purple-50 border border-purple-100 text-purple-700 text-[8px] font-extrabold uppercase rounded-md tracking-wider">
+                              🔄 Repeat Call
+                            </span>
+                          )}
                         </div>
                         <p className="text-[9px] text-slate-400 font-mono mt-0.5 select-all">{task.contact_details.split("|")[0]}</p>
                       </td>
@@ -537,7 +587,7 @@ export default function TaskManagementSection({
                           </div>
                           <div>
                             <p className="font-bold text-slate-700 select-all text-[10px]">{task.employee_name}</p>
-                            <p className="text-[8px] text-slate-400 font-mono font-medium">FK ID: {task.assigned_to}</p>
+                            <p className="text-[8px] text-slate-400 font-mono font-medium">ID: {task.assigned_to}</p>
                           </div>
                         </div>
                       </td>
@@ -883,6 +933,45 @@ export default function TaskManagementSection({
                   )}
                 </form>
               )}
+
+              {/* Reassign Task (Set as Repeat Call) */}
+              <form 
+                onSubmit={(e) => handleReassignTaskRepeat(e, selectedTask.id)} 
+                className="bg-purple-50/45 border border-purple-100 p-4 rounded-xl space-y-3 pt-3 mt-4"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wide text-purple-800 font-sans">
+                    Re-assign Task (Reset Status status as Repeat Call)
+                  </span>
+                  <span className="text-[8px] bg-purple-100 text-purple-700 border border-purple-200 uppercase px-1 rounded font-bold font-mono">
+                    Admin Option Only
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 font-sans">
+                  This action resets the task status to <strong className="text-amber-700">Pending</strong>, clears any completed remarks/materials, and flags it as a <strong className="text-purple-700">🔄 Repeat Call</strong>.
+                </p>
+                
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="submit"
+                    disabled={isReassigning}
+                    className="px-4 py-2 bg-purple-700 hover:bg-purple-800 disabled:bg-slate-200 disabled:text-slate-400 text-white font-extrabold text-xs rounded-lg transition-colors shadow-md border border-purple-900 uppercase tracking-wider cursor-pointer w-full text-center"
+                  >
+                    {isReassigning ? "Updating RDB..." : "Reassign as Repeat (Same Engineer)"}
+                  </button>
+                </div>
+
+                {reassignSuccess && (
+                  <p className="text-[10px] text-emerald-600 font-sans font-bold select-text mt-1.5">
+                    ✓ {reassignSuccess}
+                  </p>
+                )}
+                {reassignError && (
+                  <p className="text-[10px] text-red-600 font-sans font-bold select-text mt-1.5">
+                    ✗ {reassignError}
+                  </p>
+                )}
+              </form>
             </div>
 
             {/* Modal Footer */}

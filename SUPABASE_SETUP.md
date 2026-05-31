@@ -80,7 +80,14 @@ CREATE TABLE employees (
   joined_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
   ended_at TIMESTAMP WITH TIME ZONE,
   email_id VARCHAR(100) UNIQUE NOT NULL,
-  password VARCHAR(100) NOT NULL
+  password VARCHAR(100) NOT NULL,
+  phone VARCHAR(50),
+  skills TEXT,
+  experience TEXT,
+  blood_group VARCHAR(10),
+  emergency_contact VARCHAR(255),
+  address TEXT,
+  notes TEXT
 );
 
 -- =========== 2. CREATE TASKS TABLE ===========
@@ -97,6 +104,7 @@ CREATE TABLE tasks (
   remarks TEXT,
   address TEXT,
   is_priority BOOLEAN DEFAULT FALSE,
+  is_repeat BOOLEAN DEFAULT FALSE,
   km_travelled NUMERIC DEFAULT 0,
   materials_carried TEXT,
   
@@ -143,10 +151,10 @@ INSERT INTO employees (id, name, role, joined_at, email_id, password) VALUES
   (104, 'Anjali Rao', 'Software Support Expert', '2025-01-15 11:00:00+00', 'anjali@pats.co.in', 'pats@104');
 
 -- Seed Initial Service Tickets / Dispatch Tasks
-INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, accepted_at, finished_at, remarks, address, is_priority, km_travelled, materials_carried) VALUES
-  (1001, 'Amitabh Mehra', '+91 98765 43210 | amitabh@outlook.com', 'Blue Screen of Death (BSOD) occurring repeatedly on boot. Hard drive diagnostics required.', 101, 'Finished', '2026-05-26 09:00:00+00', '2026-05-26 10:00:00+00', '2026-05-26 12:00:00+00', 'Replaced faulty RAM stick (DDR4 8GB). Cleaned the internal CPU dusting. System booted successfully under bench stress test.', 'Flat 202, Royal Enclave, New Friends Colony, New Delhi', FALSE, 14.5, 'RAM (8GB DDR4), Anti-Static Wrist Strap'),
-  (1002, 'Clarissa Fernandes', '+91 87654 32109 | clarissa.f@yahoo.com', 'Office network router configuration issues. Employees cannot access the shared file server over Wi-Fi.', 102, 'In Progress', '2026-05-28 09:00:00+00', '2026-05-28 13:00:00+00', NULL, NULL, 'Building 4B, Cyber City, Phase-2, Gurugram', FALSE, 0, 'Cat6 Ethernet RJ45 Cables, Cisco Console Cable'),
-  (1003, 'Vikram Malhotra', '+91 76543 21098 | v_malhotra@gmail.com', 'Noisy SMPS fan and motherboard showing dry capacitor signs. Liquid cooling system refill needed.', 103, 'Pending', '2026-05-28 11:30:00+00', NULL, NULL, NULL, 'Sector 15, Block B, House 441, Noida', TRUE, 0, 'Spare PSU (650W Corsair), Thermal Paste, Screwdriver Toolkit');
+INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, accepted_at, finished_at, remarks, address, is_priority, is_repeat, km_travelled, materials_carried) VALUES
+  (1001, 'Amitabh Mehra', '+91 98765 43210 | amitabh@outlook.com', 'Blue Screen of Death (BSOD) occurring repeatedly on boot. Hard drive diagnostics required.', 101, 'Finished', '2026-05-26 09:00:00+00', '2026-05-26 10:00:00+00', '2026-05-26 12:00:00+00', 'Replaced faulty RAM stick (DDR4 8GB). Cleaned the internal CPU dusting. System booted successfully under bench stress test.', 'Flat 202, Royal Enclave, New Friends Colony, New Delhi', FALSE, FALSE, 14.5, 'RAM (8GB DDR4), Anti-Static Wrist Strap'),
+  (1002, 'Clarissa Fernandes', '+91 87654 32109 | clarissa.f@yahoo.com', 'Office network router configuration issues. Employees cannot access the shared file server over Wi-Fi.', 102, 'In Progress', '2026-05-28 09:00:00+00', '2026-05-28 13:00:00+00', NULL, NULL, 'Building 4B, Cyber City, Phase-2, Gurugram', FALSE, FALSE, 0, 'Cat6 Ethernet RJ45 Cables, Cisco Console Cable'),
+  (1003, 'Vikram Malhotra', '+91 76543 21098 | v_malhotra@gmail.com', 'Noisy SMPS fan and motherboard showing dry capacitor signs. Liquid cooling system refill needed.', 103, 'Pending', '2026-05-28 11:30:00+00', NULL, NULL, NULL, 'Sector 15, Block B, House 441, Noida', TRUE, FALSE, 0, 'Spare PSU (650W Corsair), Thermal Paste, Screwdriver Toolkit');
 
 -- Seed Offline Travel Log for Completed Task
 INSERT INTO offline_travels (employee_id, task_id, km_travelled, remarks, created_at) VALUES

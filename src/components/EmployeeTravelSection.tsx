@@ -10,7 +10,7 @@ interface EmployeeTravelSectionProps {
 
 export default function EmployeeTravelSection({ myTasks, employeeId, petrolPrice }: EmployeeTravelSectionProps) {
   const [travels, setTravels] = useState<OfflineTravel[]>([]);
-  const [limit, setLimit] = useState<number | "All">(10);
+  const [limit, setLimit] = useState<number | "All">(5);
   const [selectedMonth, setSelectedMonth] = useState<string>("All"); // "YYYY-MM" or "All"
   
   // State for interactive pop-up task detail modal
@@ -69,7 +69,16 @@ export default function EmployeeTravelSection({ myTasks, employeeId, petrolPrice
   }, [travels, selectedMonth]);
 
   const totalKm = filteredTravels.reduce((sum, t) => sum + t.km_travelled, 0);
-  const totalMoney = totalKm * petrolPrice;
+  const totalMoney = React.useMemo(() => {
+    return filteredTravels.reduce((sum, t) => {
+      const associatedTask = myTasks.find(task => task.id === t.task_id);
+      const isRepeatCall = associatedTask?.is_repeat === true;
+      if (isRepeatCall) {
+        return sum; // No petrol money for repeat calls
+      }
+      return sum + (t.km_travelled * petrolPrice);
+    }, 0);
+  }, [filteredTravels, myTasks, petrolPrice]);
 
   // Apply row showing limits
   const displayedTravels = React.useMemo(() => {
@@ -188,7 +197,20 @@ export default function EmployeeTravelSection({ myTasks, employeeId, petrolPrice
                       {t.remarks || "-"}
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-blue-700">{t.km_travelled} km</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">₹ {(t.km_travelled * petrolPrice).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">
+                      {(() => {
+                        const associatedTask = myTasks.find(task => task.id === t.task_id);
+                        const isRepeatCall = associatedTask?.is_repeat === true;
+                        if (isRepeatCall) {
+                          return (
+                            <span className="inline-block text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-sans font-bold" title="Zero petrol allowance allocated for Repeat Calls">
+                              Without Petrol
+                            </span>
+                          );
+                        }
+                        return `₹ ${(t.km_travelled * petrolPrice).toFixed(2)}`;
+                      })()}
+                    </td>
                   </tr>
                 ))
               )}
@@ -317,6 +339,12 @@ export default function EmployeeTravelSection({ myTasks, employeeId, petrolPrice
                         ) : (
                           <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 text-3xs font-extrabold uppercase tracking-widest rounded-md text-[10px]">
                             Standard Priority
+                          </span>
+                        )}
+
+                        {activeTaskDetails.is_repeat && (
+                          <span className="px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-700 text-3xs font-extrabold uppercase tracking-widest rounded-md flex items-center gap-1 text-[10px] mt-1.5 w-max">
+                            🔄 Repeat Call (No Petrol Assigned)
                           </span>
                         )}
                       </div>

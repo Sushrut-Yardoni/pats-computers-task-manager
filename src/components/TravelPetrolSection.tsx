@@ -11,7 +11,7 @@ export default function TravelPetrolSection() {
   const [isLoading, setIsLoading] = useState(true);
   
   // Custom Filters for Month, Record Limits, and individual Employees
-  const [limit, setLimit] = useState<number | "All">(10);
+  const [limit, setLimit] = useState<number | "All">(5);
   const [selectedMonth, setSelectedMonth] = useState<string>("All"); // "YYYY-MM" or "All"
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | "All">("All");
   
@@ -97,7 +97,16 @@ export default function TravelPetrolSection() {
   }, [offlineTravels, selectedMonth, selectedEmployeeId]);
 
   const totalKmAll = filteredTravels.reduce((sum, t) => sum + t.km_travelled, 0);
-  const totalMoneyAll = totalKmAll * petrolPrice;
+  const totalMoneyAll = React.useMemo(() => {
+    return filteredTravels.reduce((sum, t) => {
+      const associatedTask = tasks.find(task => task.id === t.task_id);
+      const isRepeatCall = associatedTask?.is_repeat === true;
+      if (isRepeatCall) {
+        return sum; // No petrol money for repeat calls
+      }
+      return sum + (t.km_travelled * petrolPrice);
+    }, 0);
+  }, [filteredTravels, tasks, petrolPrice]);
 
   // Apply row limit
   const displayedTravels = React.useMemo(() => {
@@ -272,7 +281,20 @@ export default function TravelPetrolSection() {
                       {t.remarks || "-"}
                     </td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-blue-700">{t.km_travelled} km</td>
-                    <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">₹ {(t.km_travelled * petrolPrice).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-emerald-700">
+                      {(() => {
+                        const associatedTask = tasks.find(task => task.id === t.task_id);
+                        const isRepeatCall = associatedTask?.is_repeat === true;
+                        if (isRepeatCall) {
+                          return (
+                            <span className="inline-block text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 font-sans font-bold" title="Zero petrol allowance allocated for Repeat Calls">
+                              Without Petrol
+                            </span>
+                          );
+                        }
+                        return `₹ ${(t.km_travelled * petrolPrice).toFixed(2)}`;
+                      })()}
+                    </td>
                   </tr>
                 ))
               )}

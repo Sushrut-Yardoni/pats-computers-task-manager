@@ -21,6 +21,9 @@ export default function App() {
   // Focus utility trigger for the SQL console shell
   const [isSqlConsoleFocused, setIsSqlConsoleFocused] = useState(false);
 
+  // Employee active view partition (synchronized to allow Header Settings to open Profile)
+  const [employeeActiveTab, setEmployeeActiveTab] = useState<"active" | "completed" | "travel" | "profile">("active");
+
   // Fetch critical relational tables via the single unified sync endpoint
   const fetchData = async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -179,6 +182,21 @@ export default function App() {
     await fetchData(true);
   };
 
+  const handleUpdateProfile = async (employeeId: number, profileData: Partial<Employee>) => {
+    const resp = await fetch(`/api/employees/${employeeId}/profile`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profileData)
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json();
+      throw new Error(err.error || "Failed to update profile details");
+    }
+
+    await fetchData(true);
+  };
+
   const handleAcceptTask = async (taskId: number) => {
     const resp = await fetch(`/api/tasks/${taskId}/accept`, {
       method: "POST"
@@ -261,6 +279,7 @@ export default function App() {
           onLogout={handleLogout}
           openSqlConsole={triggerScrollToSql}
           sqlConsoleActive={isSqlConsoleFocused}
+          onOpenSettings={() => setEmployeeActiveTab("profile")}
         />
 
         <main className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6">
@@ -315,12 +334,16 @@ export default function App() {
             // Employee servicing dashboard panel
             <EmployeeDashboard 
               currentEmployee={currentUser as any}
+              employees={employees}
               tasks={tasks}
               onAcceptTask={handleAcceptTask}
               onFinishTask={handleFinishTask}
               onUpdateRemarks={handleUpdateRemarks}
               onUpdatePassword={handleUpdatePassword}
               onUpdateMaterials={handleUpdateMaterials}
+              onUpdateProfile={handleUpdateProfile}
+              activeTab={employeeActiveTab}
+              onTabChange={setEmployeeActiveTab}
             />
           )}
         </main>
