@@ -15,7 +15,8 @@ export default function EmployeeManagementSection({
   refreshLogs,
   onUpdatePassword
 }: EmployeeManagementSectionProps) {
-  // New employee form states
+  // Registering form modal state
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [newEmpName, setNewEmpName] = useState("");
   const [newEmpRole, setNewEmpRole] = useState("");
   const [newEmpJoinedAt, setNewEmpJoinedAt] = useState(new Date().toISOString().split("T")[0]);
@@ -39,7 +40,8 @@ export default function EmployeeManagementSection({
   const [selectedEmpDetails, setSelectedEmpDetails] = useState<Employee | null>(null);
 
   // Limits and Month filtering
-  const [limit, setLimit] = useState<number | "All">(5);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedMonth, setSelectedMonth] = useState<string>("All");
 
   const uniqueMonths = React.useMemo(() => {
@@ -66,16 +68,25 @@ export default function EmployeeManagementSection({
   };
 
   const filteredEmployees = React.useMemo(() => {
-    return employees.filter(emp => {
-      if (selectedMonth === "All") return true;
-      return emp.joined_at && emp.joined_at.startsWith(selectedMonth);
-    });
+    return employees
+      .filter(emp => {
+        if (selectedMonth === "All") return true;
+        return emp.joined_at && emp.joined_at.startsWith(selectedMonth);
+      })
+      .sort((a, b) => a.id - b.id);
   }, [employees, selectedMonth]);
 
+  const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
+
   const displayedEmployees = React.useMemo(() => {
-    if (limit === "All") return filteredEmployees;
-    return filteredEmployees.slice(0, limit);
-  }, [filteredEmployees, limit]);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredEmployees.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredEmployees, currentPage, itemsPerPage]);
+
+  // Reset to first page when filter changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedMonth]);
 
   const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,7 +137,10 @@ export default function EmployeeManagementSection({
       setNewEmpRole("");
       setNewEmpJoinedAt(new Date().toISOString().split("T")[0]);
       setEmpSuccess(true);
-      setTimeout(() => setEmpSuccess(false), 4500);
+      setTimeout(() => {
+        setEmpSuccess(false);
+        setIsRegisterModalOpen(false);
+      }, 2000);
       
       refreshLogs();
     } catch (err: any) {
@@ -192,8 +206,19 @@ export default function EmployeeManagementSection({
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start animate-fade-in relative text-slate-800">
+    <div className="flex flex-col gap-6 animate-fade-in relative text-slate-800">
       
+      {/* Register button */}
+      <div className="flex justify-start">
+        <button
+          type="button"
+          onClick={() => setIsRegisterModalOpen(true)}
+          className="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 text-white font-extrabold text-xs py-2.5 px-4 rounded-xl shadow-md border border-indigo-800 active:scale-[0.98] uppercase tracking-wide cursor-pointer transition-all w-max"
+        >
+          <Users className="h-4 w-4" />
+          Register New Engineer
+        </button>
+      </div>
       {/* 🛡️ Promote Confirmation Dialog */}
       {promoteTarget && (
         <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in select-text text-slate-800">
@@ -504,79 +529,88 @@ export default function EmployeeManagementSection({
         </div>
       )}
 
-      {/* Register card */}
-      <div className="xl:col-span-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-indigo-600 to-purple-600" />
-        <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-3">
-          <Users className="h-4 w-4 text-indigo-600" />
-          <h3 className="font-display font-extrabold text-slate-900 text-sm">Register Engineer</h3>
-        </div>
-
-        <form onSubmit={handleRegisterEmployee} className="space-y-4 font-sans text-xs">
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 font-sans">
-              Full Name
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Anand Kumar"
-              value={newEmpName}
-              onChange={(e) => setNewEmpName(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 font-sans">
-              Specialization / Role
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Network Specialist"
-              value={newEmpRole}
-              onChange={(e) => setNewEmpRole(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 font-sans">
-              Date of Joining
-            </label>
-            <input
-              type="date"
-              value={newEmpJoinedAt}
-              onChange={(e) => setNewEmpJoinedAt(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 hover:border-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-mono"
-              required
-            />
-          </div>
-
-          {empSuccess && (
-            <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-[10px] font-medium leading-relaxed">
-              Engineer registered successfully! Database index updated with secure portal login key.
+      {/* Registering Form Modal */}
+      {isRegisterModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in select-text text-slate-800">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-t-2xl" />
+            <div className="flex items-center justify-between gap-2 mb-4 border-b border-slate-100 pb-3">
+              <h3 className="font-display font-extrabold text-slate-900 text-sm">Register Engineer</h3>
+              <button
+                type="button"
+                onClick={() => setIsRegisterModalOpen(false)}
+                className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-          )}
 
-          <button
-            type="submit"
-            disabled={isRegisteringEmp}
-            className="w-full py-2.5 px-3 rounded-xl text-white font-extrabold text-xs bg-indigo-700 hover:bg-indigo-800 transition-all flex items-center justify-center gap-1.5 shadow-md border border-indigo-800 active:scale-[0.98] uppercase tracking-wide cursor-pointer"
-          >
-            <UserCheck className="h-4 w-4" />
-            <span>{isRegisteringEmp ? "Invoking SQL INSERT..." : "Register Engineer"}</span>
-          </button>
-        </form>
-      </div>
+            <form onSubmit={handleRegisterEmployee} className="space-y-4 font-sans text-xs">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 font-sans">
+                  Full Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Anand Kumar"
+                  value={newEmpName}
+                  onChange={(e) => setNewEmpName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 font-sans">
+                  Specialization / Role
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Network Specialist"
+                  value={newEmpRole}
+                  onChange={(e) => setNewEmpRole(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 font-sans">
+                  Date of Joining
+                </label>
+                <input
+                  type="date"
+                  value={newEmpJoinedAt}
+                  onChange={(e) => setNewEmpJoinedAt(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-mono"
+                  required
+                />
+              </div>
+
+              {empSuccess && (
+                <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-[10px] font-medium leading-relaxed">
+                  Engineer registered successfully! Database index updated with secure portal login key.
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isRegisteringEmp}
+                className="w-full py-2.5 px-3 rounded-xl text-white font-extrabold text-xs bg-indigo-700 hover:bg-indigo-800 transition-all flex items-center justify-center gap-1.5 shadow-md border border-indigo-800 active:scale-[0.98] uppercase tracking-wide cursor-pointer"
+              >
+                <UserCheck className="h-4 w-4" />
+                <span>{isRegisteringEmp ? "Invoking SQL INSERT..." : "Register Engineer"}</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Roster visual data grid view */}
-      <div className="xl:col-span-8 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
         <div className="border-b border-slate-100 pb-3 mb-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <h3 className="font-display font-extrabold text-slate-900 text-sm">Professional Engineers Directory</h3>
-            <p className="text-[10px] text-slate-500 font-sans mt-0.5">Physical view on relational database: SQL employees registry</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Joined Month:</span>
@@ -593,42 +627,59 @@ export default function EmployeeManagementSection({
           </div>
         </div>
 
-        {/* Records quantity limit row */}
+        {/* Pagination row */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100 mb-4 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">Records to show:</span>
-            <div className="flex gap-1">
-              {([5, 10, 20, "All"] as const).map(num => (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => setLimit(num)}
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer border ${
-                    limit === num
-                      ? "bg-slate-800 border-slate-800 text-white shadow-2xs"
-                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  {num}
-                </button>
+            <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">Per Page:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="bg-white border border-slate-200 text-slate-800 py-0.5 px-2 rounded-lg text-[10px] font-bold focus:outline-none transition-all cursor-pointer"
+            >
+              {[5, 10, 20, 50].map(num => (
+                <option key={num} value={num}>{num}</option>
               ))}
-            </div>
+            </select>
           </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span className="text-[10px] font-bold text-slate-600">
+              Page {currentPage} of {totalPages || 1}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+          
           <span className="text-[10px] text-slate-500 font-bold font-mono">
-            Showing {displayedEmployees.length} of {filteredEmployees.length} records {selectedMonth !== "All" && `joined in ${formatMonthKey(selectedMonth)}`}
+            Showing {displayedEmployees.length} of {filteredEmployees.length} records
           </span>
         </div>
 
         <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white">
           <table className="min-w-full divide-y divide-slate-100 text-left text-[11px] md:text-xs">
-            <thead className="bg-slate-50 font-sans text-slate-500">
+             <thead className="bg-slate-100 font-sans text-slate-900 border-b border-slate-200">
               <tr>
-                <th className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-wider">ID</th>
-                <th className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-wider">Engineer Identity</th>
-                <th className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-wider">Email</th>
-                <th className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-wider">Password</th>
-                <th className="px-2.5 py-2 text-[9px] font-bold uppercase tracking-wider">Status / Exits</th>
-                <th className="px-2.5 py-2 text-right text-[9px] font-bold uppercase tracking-wider">Action</th>
+                <th className="px-2.5 py-2 text-[9px] font-extrabold uppercase tracking-wider">ID</th>
+                <th className="px-2.5 py-2 text-[9px] font-extrabold uppercase tracking-wider">Engineer Identity</th>
+                <th className="px-2.5 py-2 text-[9px] font-extrabold uppercase tracking-wider">Email</th>
+                <th className="px-2.5 py-2 text-[9px] font-extrabold uppercase tracking-wider">Password</th>
+                <th className="px-2.5 py-2 text-[9px] font-extrabold uppercase tracking-wider">Status / Exits</th>
+                <th className="px-2.5 py-2 text-right text-[9px] font-extrabold uppercase tracking-wider">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -720,6 +771,7 @@ export default function EmployeeManagementSection({
           </table>
         </div>
       </div>
+      
     </div>
   );
 }

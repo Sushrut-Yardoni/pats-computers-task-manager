@@ -84,7 +84,8 @@ export default function DatabaseExplorerSection({
 
   const activeData = getTableData();
 
-  const [dbLimit, setDbLimit] = useState<number | "All">(10);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [dbSelectedMonth, setDbSelectedMonth] = useState<string>("All");
 
   // Extract unique months from current active table rows
@@ -118,6 +119,7 @@ export default function DatabaseExplorerSection({
   // Reset page/filters when active table selection changes
   useEffect(() => {
     setDbSelectedMonth("All");
+    setCurrentPage(1);
   }, [selectedTable]);
 
   // Search filter implementation
@@ -148,10 +150,17 @@ export default function DatabaseExplorerSection({
   });
 
   // Third, slicing implementation
-  const slicedData = React.useMemo(() => {
-    if (dbLimit === "All") return filteredData;
-    return filteredData.slice(0, dbLimit);
-  }, [filteredData, dbLimit]);
+  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
+
+  const paginatedData = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredData.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredData, currentPage, itemsPerPage]);
+
+  // Reset to first page when filter changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [dbSelectedMonth, searchQuery]);
 
   // Table information metadata
   const getTableMeta = () => {
@@ -353,29 +362,46 @@ export default function DatabaseExplorerSection({
             )}
           </div>
 
-          {/* Records limit bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100 mb-4 text-xs font-sans">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">Show Limit:</span>
-              <div className="flex gap-1">
-                {([5, 10, 20, "All"] as const).map(num => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => setDbLimit(num)}
-                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer border ${
-                      dbLimit === num
-                        ? "bg-slate-800 border-slate-800 text-white shadow-2xs"
-                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-105"
-                    }`}
-                  >
-                    {num}
-                  </button>
+          {/* Pagination row */}
+          <div className="flex flex-col gap-2 bg-slate-50/50 p-2.5 rounded-xl border border-slate-100 mb-4 text-xs font-sans">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">Per Page:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-white border border-slate-200 text-slate-800 py-0.5 px-2 rounded-lg text-[10px] font-bold focus:outline-none transition-all cursor-pointer"
+              >
+                {[5, 10, 20, 50].map(num => (
+                  <option key={num} value={num}>{num}</option>
                 ))}
-              </div>
+              </select>
             </div>
+            
+            <div className="flex items-center justify-between gap-2">
+              <button
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-[10px] font-bold text-slate-600">
+                Page {currentPage} of {totalPages || 1}
+              </span>
+              <button
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+            
             <span className="text-[10px] text-slate-500 font-bold font-mono">
-              Showing {slicedData.length} of {filteredData.length} filtered records {dbSelectedMonth !== "All" && `for ${formatDbMonthKey(dbSelectedMonth)}`}
+              Showing {paginatedData.length} of {filteredData.length} filtered records
             </span>
           </div>
 
@@ -389,27 +415,27 @@ export default function DatabaseExplorerSection({
           {/* Interactive Table Element */}
           <div className="overflow-x-auto border border-slate-100 rounded-2xl flex-1 max-h-[400px]">
             <table className="min-w-full divide-y divide-slate-100 text-left text-xs">
-              <thead className="bg-slate-50 sticky top-0 z-15 shadow-2xs">
+               <thead className="bg-slate-100 sticky top-0 z-15 shadow-sm border-b border-slate-200">
                 <tr>
                   {meta?.columns.map((col) => (
-                    <th key={col} className="px-4 py-3 font-extrabold uppercase tracking-wider text-slate-500 text-[10px]">
+                    <th key={col} className="px-4 py-3 font-extrabold uppercase tracking-wider text-slate-900 text-[10px]">
                       {col}
                     </th>
                   ))}
-                  <th className="px-4 py-3 font-extrabold uppercase tracking-wider text-slate-500 text-[10px] text-right">
+                  <th className="px-4 py-3 font-extrabold uppercase tracking-wider text-slate-900 text-[10px] text-right">
                     Inspect Raw
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-sans">
-                {slicedData.length === 0 ? (
+                {paginatedData.length === 0 ? (
                   <tr>
                     <td colSpan={meta?.columns.length ? meta.columns.length + 1 : 1} className="px-5 py-16 text-center text-slate-400 italic font-medium">
                       No records match the active search/month filters or the table is empty.
                     </td>
                   </tr>
                 ) : (
-                  slicedData.map((row: any, idx: number) => {
+                  paginatedData.map((row: any, idx: number) => {
                     const rowId = row[meta?.primaryKey || "id"] || idx;
                     const isSelected = selectedRow && (selectedRow[meta?.primaryKey || "id"] === rowId || JSON.stringify(selectedRow) === JSON.stringify(row));
                     
@@ -488,7 +514,7 @@ export default function DatabaseExplorerSection({
 
           {/* Footer Count stats */}
           <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono mt-4 pt-3 border-t border-slate-100">
-            <span>Showing {slicedData.length} of {filteredData.length} filtered records</span>
+            <span>Showing {paginatedData.length} of {filteredData.length} filtered records</span>
             <span className="text-slate-300">|</span>
             <span>Click any record row to output detailed relational structure in JSON console.</span>
           </div>

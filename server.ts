@@ -347,20 +347,21 @@ app.post("/api/login", async (req, res) => {
     return res.status(400).json({ error: "Email ID and password are required" });
   }
 
-  const queryAdmin = `SELECT * FROM administrators WHERE email_id = '${email_id.replace(/'/g, "''")}' AND password = '${password.replace(/'/g, "''")}';`;
-  const queryEmp = `SELECT * FROM employees WHERE email_id = '${email_id.replace(/'/g, "''")}' AND password = '${password.replace(/'/g, "''")}';`;
+  const email_id_clean = email_id.trim();
+  const password_clean = password.trim();
+
+  const queryAdmin = `SELECT * FROM administrators WHERE email_id = '${email_id_clean.replace(/'/g, "''")}' AND password = '${password_clean.replace(/'/g, "''")}';`;
+  const queryEmp = `SELECT * FROM employees WHERE email_id = '${email_id_clean.replace(/'/g, "''")}' AND password = '${password_clean.replace(/'/g, "''")}';`;
 
   // Check hardcoded admin credentials
   const isAdmin = (
-    email_id.toLowerCase() === "admin@pats.co.in" || 
-    email_id.toLowerCase() === "shrikant@pats.co.in" || 
-    email_id.toLowerCase() === "shrikant b@pats.co.in"
-  ) && password === "admin123";
+    email_id_clean.toLowerCase() === "admin@pats.co.in"
+  ) && password_clean === "admin123";
 
   if (isAdmin) {
     logSQL(queryAdmin, 1);
     return res.json({
-      user: { type: "admin", email_id: "shrikant@pats.co.in" },
+      user: { type: "admin", email_id: "admin@pats.co.in" },
       message: "Admin authentication successful (relational credentials match)."
     });
   }
@@ -370,8 +371,8 @@ app.post("/api/login", async (req, res) => {
       const { data: employees, error } = await supabase
         .from("employees")
         .select("*")
-        .ilike("email_id", email_id.trim())
-        .eq("password", password.trim());
+        .ilike("email_id", email_id_clean)
+        .eq("password", password_clean);
 
       if (error) throw error;
 
@@ -396,7 +397,7 @@ app.post("/api/login", async (req, res) => {
   } else {
     // Local memory search
     const employee = db.employees.find(
-      e => e.email_id?.toLowerCase() === email_id.toLowerCase() && e.password === password
+      e => e.email_id?.toLowerCase() === email_id_clean.toLowerCase() && e.password === password_clean
     );
 
     if (employee) {
@@ -416,7 +417,7 @@ app.post("/api/login", async (req, res) => {
   }
 
   // Audit failed check
-  logSQL(`SELECT * FROM users WHERE email_id = '${email_id.replace(/'/g, "''")}' AND password = '${password.replace(/'/g, "''")}' LIMIT 1;`, 0);
+  logSQL(`SELECT * FROM users WHERE email_id = '${email_id_clean.replace(/'/g, "''")}' AND password = '${password_clean.replace(/'/g, "''")}' LIMIT 1;`, 0);
   
   return res.status(401).json({
     error: "Invalid email ID or password. Check credentials registry."

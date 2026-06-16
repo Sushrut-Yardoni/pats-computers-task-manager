@@ -11,7 +11,8 @@ export default function TravelPetrolSection() {
   const [isLoading, setIsLoading] = useState(true);
   
   // Custom Filters for Month, Record Limits, and individual Employees
-  const [limit, setLimit] = useState<number | "All">(5);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedMonth, setSelectedMonth] = useState<string>("All"); // "YYYY-MM" or "All"
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | "All">("All");
   
@@ -108,11 +109,18 @@ export default function TravelPetrolSection() {
     }, 0);
   }, [filteredTravels, tasks, petrolPrice]);
 
+  const totalPages = Math.ceil(filteredTravels.length / itemsPerPage);
+
   // Apply row limit
   const displayedTravels = React.useMemo(() => {
-    if (limit === "All") return filteredTravels;
-    return filteredTravels.slice(0, limit);
-  }, [filteredTravels, limit]);
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredTravels.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredTravels, currentPage, itemsPerPage]);
+
+  // Reset to first page when filter changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedMonth, selectedEmployeeId]);
 
   const activeTaskDetails = tasks.find(t => t.id === selectedTaskId);
 
@@ -214,27 +222,44 @@ export default function TravelPetrolSection() {
           </div>
         </div>
 
-        {/* Row count limiter */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/55 p-3 rounded-xl border border-slate-100">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">Records to show:</span>
-            <div className="flex gap-1">
-              {([5, 10, 20, "All"] as const).map(num => (
-                <button
-                  type="button"
-                  key={num}
-                  onClick={() => setLimit(num)}
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer border ${
-                    limit === num
-                      ? "bg-slate-800 border-slate-800 text-white shadow-2xs"
-                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  {num}
-                </button>
+        {/* Pagination row */}
+        <div className="flex flex-col gap-2 bg-slate-50/55 p-3 rounded-xl border border-slate-100 mb-4 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">Per Page:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="bg-white border border-slate-200 text-slate-800 py-0.5 px-2 rounded-lg text-[10px] font-bold focus:outline-none transition-all cursor-pointer"
+            >
+              {[5, 10, 20, 50].map(num => (
+                <option key={num} value={num}>{num}</option>
               ))}
-            </div>
+            </select>
           </div>
+          
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span className="text-[10px] font-bold text-slate-600">
+              Page {currentPage} of {totalPages || 1}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+          
           <span className="text-[10px] text-slate-500 font-bold font-mono">
             Showing {displayedTravels.length} of {filteredTravels.length} total matched records
           </span>
@@ -243,7 +268,7 @@ export default function TravelPetrolSection() {
         <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-left border-collapse font-sans">
             <thead>
-              <tr className="bg-slate-100 border-b border-slate-200 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+              <tr className="bg-slate-100 border-b border-slate-200 text-[10px] font-extrabold text-slate-900 uppercase tracking-wider">
                 <th className="px-4 py-3">Log ID</th>
                 <th className="px-4 py-3">Engineer</th>
                 <th className="px-4 py-3 w-1/3">Task Details</th>

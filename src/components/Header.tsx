@@ -37,7 +37,7 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
                 <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span className="text-xs text-slate-700 font-sans font-medium">
                   {currentUser.type === "admin" ? (
-                    <span className="text-blue-600 font-extrabold uppercase tracking-wider text-[10px]">{currentUser.email_id || "shrikant@pats.co.in"}</span>
+                    <span className="text-blue-600 font-extrabold uppercase tracking-wider text-[10px]">{currentUser.email_id || "admin@pats.co.in"}</span>
                   ) : (
                     <span>
                       Engineer: <strong className="text-blue-700 text-xs">{currentUser.name}</strong>

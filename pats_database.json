@@ -1,13 +1,10 @@
 {
   "employees": [
-    {
-      "id": 105,
-      "name": "Nilesh Yadav",
-      "role": "Desktop Engineer",
-      "joined_at": "2025-01-20",
-      "email_id": "nilesh@pats.co.in",
-      "password": "pats@105"
-    }
+    { "id": 101, "name": "Chiranjiv Shinde", "role": "Office Boy", "joined_at": "2026-01-01", "email_id": "chiranjiv_shinde@pats.co.in", "password": "pats@101" },
+    { "id": 102, "name": "Nilesh Yadav", "role": "Service Engineer", "joined_at": "2026-01-01", "email_id": "nilesh_yadav@pats.co.in", "password": "pats@102" },
+    { "id": 103, "name": "Vikrant Helale", "role": "Service Engineer", "joined_at": "2026-01-01", "email_id": "vikrant_helale@pats.co.in", "password": "pats@103" },
+    { "id": 104, "name": "Chetan Ghare", "role": "Senior Service Engineer", "joined_at": "2026-01-01", "email_id": "chetan_ghare@pats.co.in", "password": "pats@104" },
+    { "id": 106, "name": "Sushrut Yardoni", "role": "Admin", "joined_at": "2026-06-16", "email_id": "sushrut_yardoni@pats.co.in", "password": "pats@106" }
   ],
   "tasks": [
     {
@@ -15,7 +12,7 @@
       "customer_name": "Priority Customer",
       "contact_details": "+91 99999 99999 | priority@example.com",
       "problem_reported": "Server down. Urgent fix needed.",
-      "assigned_to": 105,
+      "assigned_to": 106,
       "status": "Pending",
       "assigned_at": "2026-05-31T05:00:00.000Z",
       "accepted_at": null,

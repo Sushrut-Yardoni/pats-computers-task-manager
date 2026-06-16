@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { 
   Users, Layers, Search, Cpu, Clock, CheckCircle2, AlertCircle, Phone, Mail, X, ArrowRight, Calendar, UserCheck, ShieldAlert, Package
+
 } from "lucide-react";
 import { Task, Employee } from "../types";
 
@@ -25,11 +26,13 @@ export default function ReportsSection({
   const [guiStatusFilter, setGuiStatusFilter] = useState<"All" | "Pending" | "In Progress" | "Finished">("All");
 
   // Limits and Month filter for double-panel directories
-  const [taskLimit, setTaskLimit] = useState<number | "All">(10);
-  const [taskSelectedMonth, setTaskSelectedMonth] = useState<string>("All");
-
-  const [empLimit, setEmpLimit] = useState<number | "All">(10);
+  const [empItemsPerPage, setEmpItemsPerPage] = useState(10);
+  const [empCurrentPage, setEmpCurrentPage] = useState(1);
   const [empSelectedMonth, setEmpSelectedMonth] = useState<string>("All");
+
+  const [taskItemsPerPage, setTaskItemsPerPage] = useState(10);
+  const [taskCurrentPage, setTaskCurrentPage] = useState(1);
+  const [taskSelectedMonth, setTaskSelectedMonth] = useState<string>("All");
 
   const uniqueTaskMonths = React.useMemo(() => {
     const monthsSet = new Set<string>();
@@ -92,12 +95,19 @@ export default function ReportsSection({
     });
   }, [employees, empQuery, empSelectedMonth]);
 
-  const displayedEmployeesList = React.useMemo(() => {
-    if (empLimit === "All") return filteredEmployeesList;
-    return filteredEmployeesList.slice(0, empLimit);
-  }, [filteredEmployeesList, empLimit]);
+  const empTotalPages = Math.ceil(filteredEmployeesList.length / empItemsPerPage);
 
-  // Filter Tasks
+  const displayedEmployeesList = React.useMemo(() => {
+    const startIndex = (empCurrentPage - 1) * empItemsPerPage;
+    return filteredEmployeesList.slice(startIndex, startIndex + empItemsPerPage);
+  }, [filteredEmployeesList, empCurrentPage, empItemsPerPage]);
+
+  // Reset to first page when filter changes
+  React.useEffect(() => {
+    setEmpCurrentPage(1);
+  }, [empSelectedMonth, empQuery]);
+
+  // New analytics data based on filtered list
   const filteredTasksList = React.useMemo(() => {
     return tasks.filter(task => {
       const matchesQuery = task.customer_name.toLowerCase().includes(taskQuery.toLowerCase()) || 
@@ -109,10 +119,37 @@ export default function ReportsSection({
     });
   }, [tasks, taskQuery, guiStatusFilter, taskSelectedMonth]);
 
+  const tasksPerEngineer = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredTasksList.forEach(t => {
+      const name = t.employee_name || "Unassigned";
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, count]) => ({ name, value: count }));
+  }, [filteredTasksList]);
+
+  const tasksByMonth = React.useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredTasksList.forEach(t => {
+      if (t.assigned_at) {
+        const month = t.assigned_at.substring(0, 7);
+        counts[month] = (counts[month] || 0) + 1;
+      }
+    });
+    return Object.entries(counts).sort((a,b) => a[0].localeCompare(b[0])).map(([name, count]) => ({ name: formatMonthKey(name), value: count }));
+  }, [filteredTasksList]);
+
+  const taskTotalPages = Math.ceil(filteredTasksList.length / taskItemsPerPage);
+
   const displayedTasksList = React.useMemo(() => {
-    if (taskLimit === "All") return filteredTasksList;
-    return filteredTasksList.slice(0, taskLimit);
-  }, [filteredTasksList, taskLimit]);
+    const startIndex = (taskCurrentPage - 1) * taskItemsPerPage;
+    return filteredTasksList.slice(startIndex, startIndex + taskItemsPerPage);
+  }, [filteredTasksList, taskCurrentPage, taskItemsPerPage]);
+
+  // Reset to first page when filter changes
+  React.useEffect(() => {
+    setTaskCurrentPage(1);
+  }, [taskSelectedMonth, taskQuery, guiStatusFilter]);
 
   const handleOpenTask = (task: Task) => {
     setSelectedTask(task);
@@ -223,6 +260,7 @@ export default function ReportsSection({
         </div>
       </div>
 
+
       {/* Progress Indicator Slider Block */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
         <div className="flex items-center justify-between mb-2">
@@ -280,24 +318,42 @@ export default function ReportsSection({
               </select>
             </div>
 
-            {/* Records limit selection */}
-            <div className="flex items-center justify-between gap-1 bg-slate-100/50 p-1.5 rounded-xl border border-slate-200/50 mb-3 text-xs">
-              <span className="text-[9px] font-extrabold uppercase text-slate-500 tracking-wider">Show Limit:</span>
-              <div className="flex gap-1">
-                {([5, 10, 20, "All"] as const).map(num => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => setEmpLimit(num)}
-                    className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all cursor-pointer border ${
-                      empLimit === num
-                        ? "bg-slate-800 border-slate-800 text-white"
-                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-150"
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
+            {/* Pagination row */}
+            <div className="flex flex-col gap-2 bg-slate-100/50 p-2.5 rounded-xl border border-slate-200/50 mb-3 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[9px] font-extrabold uppercase text-slate-500 tracking-wider">Per Page:</span>
+                <select
+                  value={empItemsPerPage}
+                  onChange={(e) => {
+                    setEmpItemsPerPage(Number(e.target.value));
+                    setEmpCurrentPage(1);
+                  }}
+                  className="bg-white border border-slate-200 text-slate-800 py-0.5 px-2 rounded-lg text-[10px] font-bold focus:outline-none transition-all cursor-pointer"
+                >
+                  {[5, 10, 20, 50].map(num => (
+                    <option key={num} value={num}>{num}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  onClick={() => setEmpCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={empCurrentPage === 1}
+                  className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  Prev
+                </button>
+                <span className="text-[9px] font-bold text-slate-600">
+                  {empCurrentPage} / {empTotalPages || 1}
+                </span>
+                <button
+                  onClick={() => setEmpCurrentPage(p => Math.min(empTotalPages, p + 1))}
+                  disabled={empCurrentPage === empTotalPages || empTotalPages === 0}
+                  className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  Next
+                </button>
               </div>
             </div>
 
@@ -387,13 +443,16 @@ export default function ReportsSection({
               </div>
             </div>
 
-            {/* Monthly and Record Limit controller row */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70 p-2.5 rounded-xl border border-slate-200/50 mb-4 text-xs">
-              <div className="flex items-center gap-1.5">
+            {/* Monthly and Pagination controller row */}
+            <div className="flex flex-col gap-2 bg-slate-50/70 p-2.5 rounded-xl border border-slate-200/50 mb-4 text-xs">
+              <div className="flex items-center justify-between gap-1.5">
                 <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Assigned Month:</span>
                 <select
                   value={taskSelectedMonth}
-                  onChange={(e) => setTaskSelectedMonth(e.target.value)}
+                  onChange={(e) => {
+                    setTaskSelectedMonth(e.target.value);
+                    setTaskCurrentPage(1);
+                  }}
                   className="bg-white border border-slate-200 text-slate-800 p-1 rounded-md text-[10.5px] font-extrabold focus:outline-none transition-all cursor-pointer font-sans"
                 >
                   <option value="All" className="font-bold">All Months</option>
@@ -403,24 +462,40 @@ export default function ReportsSection({
                 </select>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] font-extrabold uppercase text-slate-500 tracking-wider">Show Limit:</span>
-                <div className="flex gap-1">
-                  {([5, 10, 20, "All"] as const).map(num => (
-                    <button
-                      key={num}
-                      type="button"
-                      onClick={() => setTaskLimit(num)}
-                      className={`px-1.5 py-0.5 rounded text-[9px] font-bold transition-all cursor-pointer border ${
-                        taskLimit === num
-                          ? "bg-slate-800 border-slate-800 text-white"
-                          : "bg-white border-slate-200 text-slate-600 hover:bg-slate-150"
-                      }`}
-                    >
-                      {num}
-                    </button>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[9px] font-extrabold uppercase text-slate-500 tracking-wider">Per Page:</span>
+                <select
+                  value={taskItemsPerPage}
+                  onChange={(e) => {
+                    setTaskItemsPerPage(Number(e.target.value));
+                    setTaskCurrentPage(1);
+                  }}
+                  className="bg-white border border-slate-200 text-slate-800 py-0.5 px-2 rounded-lg text-[10px] font-bold focus:outline-none transition-all cursor-pointer"
+                >
+                  {[5, 10, 20, 50].map(num => (
+                    <option key={num} value={num}>{num}</option>
                   ))}
-                </div>
+                </select>
+              </div>
+              
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  onClick={() => setTaskCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={taskCurrentPage === 1}
+                  className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  Prev
+                </button>
+                <span className="text-[9px] font-bold text-slate-600">
+                  {taskCurrentPage} / {taskTotalPages || 1}
+                </span>
+                <button
+                  onClick={() => setTaskCurrentPage(p => Math.min(taskTotalPages, p + 1))}
+                  disabled={taskCurrentPage === taskTotalPages || taskTotalPages === 0}
+                  className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  Next
+                </button>
               </div>
             </div>
 
@@ -441,13 +516,13 @@ export default function ReportsSection({
             {/* Live Relational List click on row triggers modal */}
             <div className="overflow-x-auto border border-slate-200 rounded-xl bg-white flex-1 max-h-[380px] overflow-y-auto">
               <table className="min-w-full divide-y divide-slate-100 text-left text-[10px] md:text-xs">
-                <thead className="bg-slate-50 sticky top-0 z-10">
+                <thead className="bg-slate-100 sticky top-0 z-10 border-b border-slate-200">
                   <tr>
-                    <th className="px-3.5 py-2.5 font-bold uppercase tracking-wider text-slate-500 text-[10px]">ID</th>
-                    <th className="px-3.5 py-2.5 font-bold uppercase tracking-wider text-slate-500 text-[10px]">Customer Name</th>
-                    <th className="px-3.5 py-2.5 font-bold uppercase tracking-wider text-slate-500 text-[10px]">Assigned to</th>
-                    <th className="px-3.5 py-2.5 font-bold uppercase tracking-wider text-slate-500 text-[10px]">Status</th>
-                    <th className="px-3.5 py-2.5 font-bold uppercase tracking-wider text-slate-500 text-[10px] text-right">Action</th>
+                    <th className="px-3.5 py-2.5 font-extrabold uppercase tracking-wider text-slate-900 text-[10px]">ID</th>
+                    <th className="px-3.5 py-2.5 font-extrabold uppercase tracking-wider text-slate-900 text-[10px]">Customer Name</th>
+                    <th className="px-3.5 py-2.5 font-extrabold uppercase tracking-wider text-slate-900 text-[10px]">Assigned to</th>
+                    <th className="px-3.5 py-2.5 font-extrabold uppercase tracking-wider text-slate-900 text-[10px]">Status</th>
+                    <th className="px-3.5 py-2.5 font-extrabold uppercase tracking-wider text-slate-900 text-[10px] text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100/80">

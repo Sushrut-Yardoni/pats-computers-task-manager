@@ -1,6 +1,6 @@
 # PATS Computer Task Manager
 
-An intelligent full-stack tasks and dispatch management platform tailored for field engineers, computer hardware repair technicians, and administrative operators of **PATS Computers Pvt Ltd**. 
+An intelligent full-stack tasks and dispatch management platform tailored for field engineers, computer hardware repair technicians, and administrative operators of **PATS Computers Pvt Ltd**.
 
 The system provides separate workspaces for administrators and field engineers under a responsive, sleek, and high-performance user interface. It combines task delegation, status tracking, travel expense logging, petrol rate adjustments, and a visual transactional SQL logging terminal for audit compliance.
 
@@ -19,12 +19,19 @@ The system provides separate workspaces for administrators and field engineers u
 - **Queue Administration**: Create, reassign, and delegate service tickets.
 - **Engineers Control**: Live overview of engineer statuses, active assignments, and contact details.
 - **Reports Terminal**: Aggregated metrics on service task completion rates, fuel expenditures, and individual performer summaries.
-- **System Control Panel**: Update universal variables like standard petrol prices per kilometer and reset/populate seed data instantly.
+- **Travel & Petrol Logistics Panel**: 
+  - Manage universal variables like standard petrol prices per kilometer.
+  - Full synchronization of travel logs with **"Repeat Call" logic**—zero petrol allowances are generated for tickets marked as Repeat Calls to ensure zero budget leakage.
+  - Reset and populate seed database entities instantly.
 
 ### 2. 🔧 Service Engineer Workspace (Employee Dashboard)
 - **Active Task Feed**: Engineers receive task details including customer name, physical address, reported problem, and priority level.
 - **Lifecycle Progression**: Change statuses from *Assigned* to *Accepted* and *Finished* with integrated remark capture.
-- **Travel Fuel log**: Calculate distance travelled and submit local petrol allowance receipts tracked in real time.
+- **Travel Fuel Log**: Calculate distance travelled and submit local petrol allowance receipts tracked in real time.
+- **My Professional Identity (Profile Management)**:
+  - Complete identity profile form allowing employees to view and update crucial personal/technical metadata (Contact Phone, Personal Skills, Experience, Blood Group, Emergency Contact, Physical Address, and Notes).
+  - Keeps all administrative records instantly synchronized.
+  - Consolidated Portal Security options with password updates directly embedded on the profile page.
 
 ### 3. 🔍 Relational SQL Console & Database Explorer
 - **Interactive SQL Client**: Run custom raw SQL statements directly in the client panel to edit state or extract metrics.
@@ -36,7 +43,7 @@ The system provides separate workspaces for administrators and field engineers u
 ## 🛠️ Technical Architecture
 
 ### Core Stack
-- **Frontend library**: React 19
+- **Frontend Library**: React 19
 - **Bundler & Dev Server**: Vite 6
 - **Styling**: Tailwind CSS v4 with modern postprocessing engine
 - **Transitions and Physics**: Motion 12
@@ -54,11 +61,13 @@ The system provides separate workspaces for administrators and field engineers u
     ├── App.tsx                # Client structural entryway
     ├── index.css              # Main global stylesheet utilizing @import tailwindcss
     ├── types.ts               # Shared internal relational model schemas
-    └── components/            # High-performance react views
+    └── components/            # High-performance React views
         ├── LoginScreen.tsx
         ├── Header.tsx
         ├── AdminDashboard.tsx
         ├── EmployeeDashboard.tsx
+        ├── TravelPetrolSection.tsx
+        ├── EmployeeTravelSection.tsx
         ├── DatabaseExplorerSection.tsx
         └── ... (other design views)
 ```

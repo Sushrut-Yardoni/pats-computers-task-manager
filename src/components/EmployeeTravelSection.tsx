@@ -159,7 +159,7 @@ export default function EmployeeTravelSection({ myTasks, employeeId, petrolPrice
         
         <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
           <table className="w-full text-left font-sans text-xs">
-            <thead className="bg-slate-50 border-b border-slate-200 uppercase text-slate-500 font-extrabold tracking-wider">
+            <thead className="bg-slate-100 border-b border-slate-200 uppercase text-slate-900 font-extrabold tracking-wider">
               <tr>
                 <th className="px-4 py-3">Log ID</th>
                 <th className="px-4 py-3 w-1/3">Task Details</th>
