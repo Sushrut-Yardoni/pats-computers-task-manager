@@ -60,6 +60,17 @@ export default function AnalyticsSection({ tasks, employees }: AnalyticsSectionP
     return Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0])).map(([name, count]) => ({ name, value: count }));
   }, [filteredTasks]);
 
+  const tasksPerCustomer = useMemo(() => {
+    const counts: Record<string, number> = {};
+    filteredTasks.forEach(t => {
+      const name = t.customer_name || "Unknown";
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([name, count]) => ({ name, value: count }));
+  }, [filteredTasks]);
+
+  const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'];
+
   return (
     <div className="space-y-6 animate-fade-in p-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -112,24 +123,20 @@ export default function AnalyticsSection({ tasks, employees }: AnalyticsSectionP
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* 1. Status Pie Chart */}
+        {/* 1. Customer Wise Tasks Pie Chart */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <h4 className="text-sm font-bold text-slate-700 uppercase tracking-tight mb-4">Task Status Distribution</h4>
+          <h4 className="text-sm font-bold text-slate-700 uppercase tracking-tight mb-4">Customer Wise Tasks Distribution</h4>
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={[
-                  { name: "Pending", value: pendingCount, color: "#f59e0b" },
-                  { name: "In Progress", value: inProgressCount, color: "#2563eb" },
-                  { name: "Finished", value: finishedCount, color: "#10b981" }
-                ]}
+                data={tasksPerCustomer}
                 innerRadius={70}
                 outerRadius={100}
-                paddingAngle={5}
+                paddingAngle={2}
                 dataKey="value"
               >
-                {[ { color: "#f59e0b" }, { color: "#2563eb" }, { color: "#10b981" } ].map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
+                {tasksPerCustomer.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />
