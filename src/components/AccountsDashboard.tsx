@@ -185,8 +185,16 @@ export default function AccountsDashboard({
     const isCreatedByAdminOrManager = creatorRole.startsWith("Admin") || creatorRole.startsWith("Manager");
     const targetUser = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
     
-    const isTargetedToMe = targetUser && targetUser.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+    const isTargetedToMe = targetUser && (
+      targetUser.trim().toLowerCase() === currentUser.name.trim().toLowerCase() ||
+      targetUser.trim().toLowerCase() === "malhar" ||
+      targetUser.trim().toLowerCase() === "malhar@pats.co.in"
+    );
     const isTargetedToAll = !targetUser;
+
+    if (currentUser.email_id?.trim().toLowerCase() === "malhar@pats.co.in") {
+      return !!isTargetedToMe;
+    }
 
     return isCreatedByMe || (isCreatedByAdminOrManager && (isTargetedToMe || isTargetedToAll));
   });

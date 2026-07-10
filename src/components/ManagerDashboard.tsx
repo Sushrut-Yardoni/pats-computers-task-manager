@@ -238,6 +238,18 @@ export default function ManagerDashboard({
     const matchesAccountsUser = !selectedAccountsUser || 
       todo.created_by_name.toLowerCase() === selectedAccountsUser.toLowerCase();
 
+    const creatorRole = todo.created_by_role || "";
+    const targetUser = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
+    const isTargetedToMe = targetUser && (
+      targetUser.trim().toLowerCase() === currentUser.name.trim().toLowerCase() ||
+      targetUser.trim().toLowerCase() === "malhar" ||
+      targetUser.trim().toLowerCase() === "malhar@pats.co.in"
+    );
+
+    if (currentUser.email_id?.trim().toLowerCase() === "malhar@pats.co.in") {
+      return matchesTab && matchesSearch && matchesAccountsUser && !!isTargetedToMe;
+    }
+
     return matchesTab && matchesSearch && matchesAccountsUser;
   });
 
@@ -251,6 +263,18 @@ export default function ManagerDashboard({
 
     const matchesAccountsUser = !selectedAccountsUser || 
       todo.created_by_name.toLowerCase() === selectedAccountsUser.toLowerCase();
+
+    const creatorRole = todo.created_by_role || "";
+    const targetUser = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
+    const isTargetedToMe = targetUser && (
+      targetUser.trim().toLowerCase() === currentUser.name.trim().toLowerCase() ||
+      targetUser.trim().toLowerCase() === "malhar" ||
+      targetUser.trim().toLowerCase() === "malhar@pats.co.in"
+    );
+
+    if (currentUser.email_id?.trim().toLowerCase() === "malhar@pats.co.in") {
+      return matchesSearch && matchesAccountsUser && !!isTargetedToMe;
+    }
 
     return matchesSearch && matchesAccountsUser;
   });
