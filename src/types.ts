@@ -15,6 +15,33 @@ export interface Employee {
   notes?: string | null;
 }
 
+export interface TaskHistoryEntry {
+  timestamp: string;
+  edited_by: string;
+  before: {
+    customer_name: string;
+    contact_details: string;
+    problem_reported: string;
+    address?: string;
+    assigned_to?: number;
+    employee_name?: string;
+    remarks?: string | null;
+    materials_carried?: string | null;
+    status?: string;
+  };
+  after: {
+    customer_name: string;
+    contact_details: string;
+    problem_reported: string;
+    address?: string;
+    assigned_to?: number;
+    employee_name?: string;
+    remarks?: string | null;
+    materials_carried?: string | null;
+    status?: string;
+  };
+}
+
 export interface Task {
   id: number;
   customer_name: string;
@@ -32,6 +59,37 @@ export interface Task {
   is_repeat?: boolean; // Set a task as a Repeat call
   km_travelled?: number;
   materials_carried?: string | null;
+  history?: TaskHistoryEntry[];
+}
+
+export interface TodoTaskHistoryEntry {
+  timestamp: string;
+  edited_by: string;
+  before: {
+    title: string;
+    description: string;
+    status: string;
+    remarks?: string | null;
+  };
+  after: {
+    title: string;
+    description: string;
+    status: string;
+    remarks?: string | null;
+  };
+  rawChanges?: string[];
+}
+
+export interface TodoTask {
+  id: number;
+  title: string;
+  description: string;
+  status: "Assigned" | "Finished";
+  created_at: string;
+  created_by_name: string;
+  created_by_role: string;
+  remarks?: string | null;
+  history?: TodoTaskHistoryEntry[];
 }
 
 export interface SqlLog {

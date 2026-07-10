@@ -5,6 +5,8 @@ import Header from "./components/Header";
 import LoginScreen from "./components/LoginScreen";
 import AdminDashboard from "./components/AdminDashboard";
 import EmployeeDashboard from "./components/EmployeeDashboard";
+import AccountsDashboard from "./components/AccountsDashboard";
+import ManagerDashboard from "./components/ManagerDashboard";
 
 export default function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -329,6 +331,18 @@ export default function App() {
               onUpdateTaskDetails={handleUpdateTaskDetails}
               onTogglePriority={handleTogglePriority}
               onUpdatePassword={handleUpdatePassword}
+            />
+          ) : currentUser.role.toLowerCase() === "accounts" ? (
+            <AccountsDashboard
+              currentUser={currentUser}
+              employees={employees}
+              refreshLogs={() => fetchData(true)}
+            />
+          ) : currentUser.role.toLowerCase() === "manager" ? (
+            <ManagerDashboard
+              currentUser={currentUser}
+              employees={employees}
+              refreshLogs={() => fetchData(true)}
             />
           ) : (
             // Employee servicing dashboard panel

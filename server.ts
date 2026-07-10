@@ -12,6 +12,17 @@ const app = express();
 const PORT = 3000;
 app.use(express.json());
 
+// Custom CORS middleware to allow cross-origin requests from mobile applications or external previews
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // Database File Path
 const IS_VERCEL = !!process.env.VERCEL;
 const BUNDLED_DB_FILE = path.join(process.cwd(), "pats_database.json");
@@ -74,6 +85,33 @@ interface Employee {
   notes?: string | null;
 }
 
+interface TaskHistoryEntry {
+  timestamp: string;
+  edited_by: string;
+  before: {
+    customer_name: string;
+    contact_details: string;
+    problem_reported: string;
+    address?: string;
+    assigned_to?: number;
+    employee_name?: string;
+    remarks?: string | null;
+    materials_carried?: string | null;
+    status?: string;
+  };
+  after: {
+    customer_name: string;
+    contact_details: string;
+    problem_reported: string;
+    address?: string;
+    assigned_to?: number;
+    employee_name?: string;
+    remarks?: string | null;
+    materials_carried?: string | null;
+    status?: string;
+  };
+}
+
 interface Task {
   id: number;
   customer_name: string;
@@ -90,6 +128,7 @@ interface Task {
   is_repeat?: boolean;
   km_travelled?: number;
   materials_carried?: string | null;
+  history?: TaskHistoryEntry[];
 }
 
 interface OfflineTravel {
@@ -101,11 +140,42 @@ interface OfflineTravel {
   created_at: string;
 }
 
+interface TodoTaskHistoryEntry {
+  timestamp: string;
+  edited_by: string;
+  before: {
+    title: string;
+    description: string;
+    status: string;
+    remarks?: string | null;
+  };
+  after: {
+    title: string;
+    description: string;
+    status: string;
+    remarks?: string | null;
+  };
+}
+
+interface TodoTask {
+  id: number;
+  title: string;
+  description: string;
+  status: "Assigned" | "Finished";
+  created_at: string;
+  created_by_name: string;
+  created_by_role: string;
+  remarks?: string | null;
+  history?: TodoTaskHistoryEntry[];
+}
+
 interface DatabaseSchema {
   employees: Employee[];
   tasks: Task[];
   offline_travels?: OfflineTravel[];
+  todos?: TodoTask[];
   nextTaskId: number;
+  nextTodoId?: number;
   nextOfflineTravelId?: number;
   settings?: {
     petrol_price: number;
@@ -194,10 +264,18 @@ function initDb(): DatabaseSchema {
           return emp;
         });
       }
+      if (!data.todos) {
+        data.todos = [];
+        migrated = true;
+      }
+      if (typeof data.nextTodoId !== "number") {
+        data.nextTodoId = data.todos.length > 0 ? Math.max(...data.todos.map(t => t.id)) + 1 : 101;
+        migrated = true;
+      }
       if (migrated) {
         try {
           fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-          console.log("Database employees migrated with clean access credentials and joining date successfully.");
+          console.log("Database employees and todos migrated with clean credentials successfully.");
         } catch (writeErr: any) {
           console.error("⚠️ Failed to write migrated database to filesystem:", writeErr?.message || writeErr);
         }
@@ -266,7 +344,32 @@ function initDb(): DatabaseSchema {
       }
     ],
     nextTaskId: 1004,
+    nextTodoId: 101,
     nextOfflineTravelId: 2,
+    todos: [
+      {
+        id: 101,
+        title: "Reconcile June fuel allowance slips",
+        description: "Reconcile petrol allowance slips submitted by Nilesh Yadav and Rahul Sharma with Google Maps estimates.",
+        status: "Assigned",
+        created_at: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
+        created_by_name: "Meera Sen",
+        created_by_role: "Accounts",
+        remarks: null,
+        history: []
+      },
+      {
+        id: 102,
+        title: "Audit motherboard stock level in storage",
+        description: "Count available LGA1700 and AM4 motherboards in the main warehouse cupboard.",
+        status: "Assigned",
+        created_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
+        created_by_name: "Amit Kapur",
+        created_by_role: "Manager",
+        remarks: null,
+        history: []
+      }
+    ],
     offline_travels: [
       {
         id: 1,
@@ -378,6 +481,10 @@ app.post("/api/login", async (req, res) => {
 
       if (employees && employees.length > 0) {
         const employee = employees[0];
+        const endedDate = employee.ended_at ? new Date(employee.ended_at) : null;
+        if (endedDate && !isNaN(endedDate.getTime()) && endedDate <= new Date()) {
+          return res.status(401).json({ error: "Access denied. Account is deactivated." });
+        }
         logSQL(queryEmp, 1);
         const isAdminRole = employee.role === "Admin" || employee.role === "System Administrator" || employee.role === "Admin Engineer";
         return res.json({
@@ -396,9 +503,13 @@ app.post("/api/login", async (req, res) => {
     }
   } else {
     // Local memory search
-    const employee = db.employees.find(
-      e => e.email_id?.toLowerCase() === email_id_clean.toLowerCase() && e.password === password_clean
-    );
+    const employee = db.employees.find(e => {
+      const matches = e.email_id?.toLowerCase() === email_id_clean.toLowerCase() && e.password === password_clean;
+      if (!matches) return false;
+      const endedDate = e.ended_at ? new Date(e.ended_at) : null;
+      if (endedDate && !isNaN(endedDate.getTime()) && endedDate <= new Date()) return false;
+      return true;
+    });
 
     if (employee) {
       logSQL(queryEmp, 1);
@@ -621,6 +732,57 @@ app.post("/api/employees/:id/promote", async (req, res) => {
 
     res.json({
       message: `Engineer ${employee.name} promoted to Admin role successfully.`,
+      employee
+    });
+  }
+});
+
+// Update employee role
+app.post("/api/employees/:id/role", async (req, res) => {
+  const empId = Number(req.params.id);
+  const { role } = req.body;
+
+  if (!role || role.trim().length === 0) {
+    return res.status(400).json({ error: "Role cannot be empty" });
+  }
+
+  const roleClean = role.trim();
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: employee, error } = await supabase.from("employees").select("*").eq("id", empId).single();
+      if (error || !employee) {
+        return res.status(404).json({ error: "Employee/Engineer not found in relational query." });
+      }
+
+      await supabase.from("employees").update({ role: roleClean }).eq("id", empId);
+
+      const query = `UPDATE employees \nSET role = '${roleClean.replace(/'/g, "''")}' \nWHERE id = ${empId};`;
+      logSQL(query, 1);
+
+      employee.role = roleClean;
+      res.json({
+        message: `Employee ${employee.name} role updated to ${roleClean} successfully.`,
+        employee
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message || "Failed to update employee role in Supabase." });
+    }
+  } else {
+    const employee = db.employees.find(e => e.id === empId);
+
+    if (!employee) {
+      return res.status(404).json({ error: "Employee/Engineer not found in relational query." });
+    }
+
+    employee.role = roleClean;
+    saveDb();
+
+    const query = `UPDATE employees \nSET role = '${roleClean.replace(/'/g, "''")}' \nWHERE id = ${empId};`;
+    logSQL(query, 1);
+
+    res.json({
+      message: `Employee ${employee.name} role updated to ${roleClean} successfully.`,
       employee
     });
   }
@@ -1471,14 +1633,20 @@ app.post("/api/tasks/:id/reassign", async (req, res) => {
   }
 });
 
-// Admin updates task details
+// Admin/Manager/Accounts updates task details and records history
 app.post("/api/tasks/:id/update", async (req, res) => {
   const taskId = Number(req.params.id);
-  const { customer_name, contact_details, problem_reported, address } = req.body;
-
-  if (!customer_name || !contact_details || !problem_reported) {
-    return res.status(400).json({ error: "Customer name, contact details and problem reported are required." });
-  }
+  const { 
+    customer_name, 
+    contact_details, 
+    problem_reported, 
+    address, 
+    assigned_to, 
+    status, 
+    remarks, 
+    materials_carried, 
+    edited_by 
+  } = req.body;
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -1487,31 +1655,66 @@ app.post("/api/tasks/:id/update", async (req, res) => {
         return res.status(404).json({ error: "Task not found." });
       }
 
-      if (task.status === "Finished") {
-        return res.status(400).json({ error: "Once a task is finished, the details cannot be updated." });
+      const beforeState = {
+        customer_name: task.customer_name,
+        contact_details: task.contact_details,
+        problem_reported: task.problem_reported,
+        address: task.address || "",
+        assigned_to: task.assigned_to,
+        status: task.status,
+        remarks: task.remarks,
+        materials_carried: task.materials_carried
+      };
+
+      const updatedFields: any = {
+        customer_name: customer_name !== undefined ? customer_name : task.customer_name,
+        contact_details: contact_details !== undefined ? contact_details : task.contact_details,
+        problem_reported: problem_reported !== undefined ? problem_reported : task.problem_reported,
+        address: address !== undefined ? address : (task.address || ""),
+        assigned_to: assigned_to !== undefined ? Number(assigned_to) : task.assigned_to,
+        status: status !== undefined ? status : task.status,
+        remarks: remarks !== undefined ? remarks : task.remarks,
+        materials_carried: materials_carried !== undefined ? materials_carried : task.materials_carried
+      };
+
+      // Construct history if edited_by is provided
+      const historyEntry = edited_by ? {
+        timestamp: new Date().toISOString(),
+        edited_by,
+        before: beforeState,
+        after: updatedFields
+      } : null;
+
+      let historyArray = [];
+      try {
+        historyArray = Array.isArray(task.history) ? task.history : (typeof task.history === "string" ? JSON.parse(task.history) : []);
+      } catch (e) {
+        historyArray = [];
+      }
+      if (historyEntry) {
+        historyArray.push(historyEntry);
       }
 
-      await supabase.from("tasks").update({
-        customer_name,
-        contact_details,
-        problem_reported,
-        address: address || ""
-      }).eq("id", taskId);
+      updatedFields.history = JSON.stringify(historyArray);
 
-      const query = `UPDATE tasks \nSET customer_name = '${customer_name.replace(/'/g, "''")}', contact_details = '${contact_details.replace(/'/g, "''")}', problem_reported = '${problem_reported.replace(/'/g, "''")}', address = '${(address || "").replace(/'/g, "''")}' \nWHERE id = ${taskId};`;
+      // Omit the non-existent history column when updating the tasks table on Supabase
+      const supabaseFields = { ...updatedFields };
+      delete supabaseFields.history;
+
+      const { error: updateErr } = await supabase.from("tasks").update(supabaseFields).eq("id", taskId);
+      if (updateErr) throw updateErr;
+
+      const query = `UPDATE tasks \nSET customer_name = '${(updatedFields.customer_name).replace(/'/g, "''")}', contact_details = '${(updatedFields.contact_details).replace(/'/g, "''")}', status = '${updatedFields.status}' \nWHERE id = ${taskId};`;
       logSQL(query, 1);
 
-      const { data: employee } = await supabase.from("employees").select("name").eq("id", task.assigned_to).single();
-
-      task.customer_name = customer_name;
-      task.contact_details = contact_details;
-      task.problem_reported = problem_reported;
-      task.address = address || "";
+      const { data: employee } = await supabase.from("employees").select("name").eq("id", updatedFields.assigned_to).single();
 
       res.json({
         message: "Task details updated successfully.",
         task: {
           ...task,
+          ...updatedFields,
+          history: historyArray,
           employee_name: employee ? employee.name : "Unassigned"
         }
       });
@@ -1525,17 +1728,47 @@ app.post("/api/tasks/:id/update", async (req, res) => {
     }
 
     const task = db.tasks[taskIndex];
-    if (task.status === "Finished") {
-      return res.status(400).json({ error: "Once a task is finished, the details cannot be updated." });
+
+    const beforeState = {
+      customer_name: task.customer_name,
+      contact_details: task.contact_details,
+      problem_reported: task.problem_reported,
+      address: task.address || "",
+      assigned_to: task.assigned_to,
+      status: task.status,
+      remarks: task.remarks,
+      materials_carried: task.materials_carried
+    };
+
+    const updatedFields = {
+      customer_name: customer_name !== undefined ? customer_name : task.customer_name,
+      contact_details: contact_details !== undefined ? contact_details : task.contact_details,
+      problem_reported: problem_reported !== undefined ? problem_reported : task.problem_reported,
+      address: address !== undefined ? address : (task.address || ""),
+      assigned_to: assigned_to !== undefined ? Number(assigned_to) : task.assigned_to,
+      status: status !== undefined ? status : task.status,
+      remarks: remarks !== undefined ? remarks : task.remarks,
+      materials_carried: materials_carried !== undefined ? materials_carried : task.materials_carried
+    };
+
+    // Construct history if edited_by is provided
+    const historyEntry = edited_by ? {
+      timestamp: new Date().toISOString(),
+      edited_by,
+      before: beforeState,
+      after: updatedFields
+    } : null;
+
+    task.history = task.history || [];
+    if (historyEntry) {
+      task.history.push(historyEntry);
     }
 
-    task.customer_name = customer_name;
-    task.contact_details = contact_details;
-    task.problem_reported = problem_reported;
-    task.address = address || "";
+    // Apply updates
+    Object.assign(task, updatedFields);
     saveDb();
 
-    const query = `UPDATE tasks \nSET customer_name = '${customer_name.replace(/'/g, "''")}', contact_details = '${contact_details.replace(/'/g, "''")}', problem_reported = '${problem_reported.replace(/'/g, "''")}', address = '${(address || "").replace(/'/g, "''")}' \nWHERE id = ${taskId};`;
+    const query = `UPDATE tasks \nSET customer_name = '${task.customer_name.replace(/'/g, "''")}', contact_details = '${task.contact_details.replace(/'/g, "''")}', problem_reported = '${task.problem_reported.replace(/'/g, "''")}', address = '${(task.address || "").replace(/'/g, "''")}', status = '${task.status}' \nWHERE id = ${taskId};`;
     logSQL(query, 1);
 
     const emp = db.employees.find(e => e.id === task.assigned_to);
@@ -1546,6 +1779,45 @@ app.post("/api/tasks/:id/update", async (req, res) => {
         employee_name: emp ? emp.name : "Unassigned"
       }
     });
+  }
+});
+
+// Admin/Manager deletes a task
+app.delete("/api/tasks/:id", async (req, res) => {
+  const taskId = Number(req.params.id);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      // First delete dependent offline travels to avoid foreign key violations
+      const { error: travelErr } = await supabase.from("offline_travels").delete().eq("task_id", taskId);
+      if (travelErr) {
+        console.warn("Could not delete from offline_travels for task:", taskId, travelErr.message);
+      }
+
+      const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+      if (error) throw error;
+      
+      const query = `DELETE FROM tasks WHERE id = ${taskId};`;
+      logSQL(query, 1);
+      res.json({ success: true, message: `Task #${taskId} successfully deleted.` });
+    } catch (e: any) {
+      res.status(500).json({ error: e.message || "Failed to delete task from Supabase." });
+    }
+  } else {
+    // Delete from offline_travels in local db as well
+    if (db.offline_travels) {
+      db.offline_travels = db.offline_travels.filter(ot => ot.task_id !== taskId);
+    }
+    const taskIndex = db.tasks.findIndex(t => t.id === taskId);
+    if (taskIndex === -1) {
+      return res.status(404).json({ error: "Task not found." });
+    }
+    db.tasks.splice(taskIndex, 1);
+    saveDb();
+
+    const query = `DELETE FROM tasks WHERE id = ${taskId};`;
+    logSQL(query, 1);
+    res.json({ success: true, message: `Task #${taskId} successfully deleted.` });
   }
 });
 
@@ -1601,6 +1873,457 @@ app.post("/api/tasks/:id/materials", async (req, res) => {
       }
     });
   }
+});
+
+// FETCH ALL TODOS
+app.get("/api/todos", async (req, res) => {
+  const query = "SELECT * FROM todo ORDER BY created_at DESC;";
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: todos, error } = await supabase.from("todo").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+
+      const { data: historyRows } = await supabase.from("todos_history").select("*").order("modified_at", { ascending: false });
+      const { data: emps } = await supabase.from("employees").select("*");
+      const employees = emps || [];
+
+      const formattedTodos = (todos || []).map(todo => {
+        const todoHistory = (historyRows || [])
+          .filter(h => h.todo_id === todo.id)
+          .map(h => {
+            const modifier = employees.find(e => e.id === h.modified_by);
+            const edited_by = modifier ? modifier.name : (h.modified_by_name || "System Admin");
+
+            let before = {};
+            let after = {};
+            let rawChanges: string[] = [];
+
+            let parsedChanges: any = null;
+            if (h.changes) {
+              if (typeof h.changes === 'string') {
+                try {
+                  parsedChanges = JSON.parse(h.changes);
+                } catch (e) {
+                  parsedChanges = h.changes;
+                }
+              } else {
+                parsedChanges = h.changes;
+              }
+            }
+
+            if (parsedChanges) {
+              if (parsedChanges.before || parsedChanges.after) {
+                before = parsedChanges.before || {};
+                after = parsedChanges.after || {};
+              } else if (Array.isArray(parsedChanges)) {
+                rawChanges = parsedChanges.map(c => String(c));
+              } else if (typeof parsedChanges === 'string') {
+                rawChanges = [parsedChanges];
+              } else {
+                before = parsedChanges;
+              }
+            }
+
+            return {
+              timestamp: h.modified_at,
+              edited_by,
+              before,
+              after,
+              rawChanges
+            };
+          });
+
+        // Lookup employee creator details based on integer created_by
+        const creator = employees.find(e => e.id === todo.created_by);
+        const created_by_name = creator ? creator.name : (todo.created_by_name || "System Admin");
+        const savedPriority = todo.priority || "";
+        const created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority === "Accounts")
+          ? savedPriority
+          : (creator ? creator.role : "Admin");
+
+        return {
+          id: todo.id,
+          title: todo.title,
+          description: todo.details || "",
+          priority: todo.priority || "low",
+          status: todo.status ? (todo.status.toLowerCase() === "finished" || todo.status.toLowerCase() === "completed" ? "Finished" : "Assigned") : "Assigned",
+          created_at: todo.created_at,
+          created_by_name,
+          created_by_role,
+          remarks: todo.remarks || null,
+          history: todoHistory
+        };
+      });
+
+      logSQL(query, formattedTodos.length);
+      return res.json(formattedTodos);
+    } catch (e: any) {
+      console.error("Failed to fetch todos from Supabase:", e);
+    }
+  }
+
+  const todos = db.todos || [];
+  logSQL(query, todos.length);
+  res.json(todos);
+});
+
+// CREATE A NEW TODO
+app.post("/api/todos", async (req, res) => {
+  const { title, description, created_by_name, created_by_role } = req.body;
+
+  if (!title || !description || !created_by_name || !created_by_role) {
+    return res.status(400).json({ error: "Missing required fields for todo task." });
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: emps } = await supabase.from("employees").select("*");
+      const employees = emps || [];
+      const creator = employees.find(e => e.name.toLowerCase() === created_by_name.toLowerCase());
+      const created_by = creator ? creator.id : null;
+
+      const { data: allTodos } = await supabase.from("todo").select("id");
+      const maxId = allTodos && allTodos.length > 0 ? Math.max(...allTodos.map(t => t.id)) : 100;
+      const nextId = maxId + 1;
+
+      const newTodoData = {
+        id: nextId,
+        title,
+        details: description,
+        priority: created_by_role, // Save the role with assignment target in priority column
+        status: "Assigned",
+        created_by,
+        created_at: new Date().toISOString()
+      };
+
+      const { data: insertedRows, error: insertErr } = await supabase
+        .from("todo")
+        .insert(newTodoData)
+        .select();
+      if (insertErr) throw insertErr;
+
+      const insertedTodo = insertedRows && insertedRows[0];
+      if (!insertedTodo) throw new Error("No data returned from insert.");
+
+      const query = `INSERT INTO todo (id, title, details, priority, status, created_at, created_by)\nVALUES (${nextId}, '${title.replace(/'/g, "''")}', '${description.replace(/'/g, "''")}', '${created_by_role}', 'Assigned', '${newTodoData.created_at}', ${created_by || 'NULL'});`;
+      logSQL(query, 1);
+
+      return res.json({
+        message: "To-Do task created successfully.",
+        todo: {
+          id: insertedTodo.id,
+          title: insertedTodo.title,
+          description: insertedTodo.details || "",
+          status: insertedTodo.status,
+          created_at: insertedTodo.created_at,
+          created_by_name: creator ? creator.name : "System Admin",
+          created_by_role: created_by_role,
+          remarks: insertedTodo.remarks || null,
+          history: []
+        }
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message || "Failed to create to-do in Supabase." });
+    }
+  }
+
+  const nextId = db.nextTodoId || (db.todos && db.todos.length > 0 ? Math.max(...db.todos.map(t => t.id)) + 1 : 101);
+  db.nextTodoId = nextId + 1;
+
+  const newTodo: TodoTask = {
+    id: nextId,
+    title,
+    description,
+    status: "Assigned",
+    created_at: new Date().toISOString(),
+    created_by_name,
+    created_by_role,
+    remarks: null,
+    history: []
+  };
+
+  db.todos = db.todos || [];
+  db.todos.push(newTodo);
+  saveDb();
+
+  const query = `INSERT INTO todos (id, title, description, status, created_at, created_by_name, created_by_role)\nVALUES (${nextId}, '${title.replace(/'/g, "''")}', '${description.replace(/'/g, "''")}', 'Assigned', '${newTodo.created_at}', '${created_by_name.replace(/'/g, "''")}', '${created_by_role}');`;
+  logSQL(query, 1);
+
+  res.json({ message: "To-Do task created successfully.", todo: newTodo });
+});
+
+// UPDATE A TODO AND RECORD HISTORY
+app.post("/api/todos/:id/update", async (req, res) => {
+  const todoIdParam = req.params.id;
+  const { title, description, status, remarks, edited_by } = req.body;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: todo, error: fetchErr } = await supabase.from("todo").select("*").eq("id", todoIdParam).single();
+      if (fetchErr || !todo) {
+        return res.status(404).json({ error: "To-Do task not found in Supabase." });
+      }
+
+      const beforeState = {
+        title: todo.title,
+        description: todo.details || "",
+        status: todo.status ? (todo.status.toLowerCase() === "finished" || todo.status.toLowerCase() === "completed" ? "Finished" : "Assigned") : "Assigned",
+        remarks: todo.remarks || null
+      };
+
+      const originalStatus = beforeState.status;
+      const isOriginallyFinished = originalStatus === "Finished";
+      const isChangingStatus = status !== undefined && status !== originalStatus;
+      
+      if (isOriginallyFinished && isChangingStatus) {
+        const isManagerOrAdmin = edited_by && (edited_by.includes("Manager") || edited_by.includes("Admin"));
+        if (!isManagerOrAdmin) {
+          return res.status(403).json({ error: "Only Managers and Admins can change the status of finished To-Do tasks." });
+        }
+      }
+
+      const isEditingDescription = description !== undefined && description !== beforeState.description;
+      const targetStatus = status !== undefined ? status : originalStatus;
+      
+      if (targetStatus === "Finished" && isEditingDescription) {
+        return res.status(403).json({ error: "Description cannot be edited while status is Finished. Change status to Assigned first." });
+      }
+
+      const updatedFields: any = {
+        title: title !== undefined ? title : todo.title,
+        details: description !== undefined ? description : todo.details,
+        status: status !== undefined ? status : todo.status,
+        remarks: remarks !== undefined ? remarks : todo.remarks,
+        updated_at: new Date().toISOString()
+      };
+
+      const hasChanges = 
+        beforeState.title !== updatedFields.title ||
+        beforeState.description !== (description !== undefined ? description : beforeState.description) ||
+        beforeState.status !== updatedFields.status ||
+        beforeState.remarks !== updatedFields.remarks;
+
+      const { data: emps } = await supabase.from("employees").select("*");
+      const employees = emps || [];
+
+      let modified_by: number | null = null;
+      if (edited_by) {
+        const cleanEditorName = edited_by.split(" (")[0].trim();
+        const foundEmp = employees.find(e => e.name.toLowerCase() === cleanEditorName.toLowerCase());
+        if (foundEmp) {
+          modified_by = foundEmp.id;
+        }
+      }
+
+      if (edited_by && hasChanges) {
+        const { data: allHistory } = await supabase.from("todos_history").select("id");
+        const maxHistId = allHistory && allHistory.length > 0 ? Math.max(...allHistory.map(h => h.id)) : 0;
+        const nextHistId = maxHistId + 1;
+
+        const historyEntryData = {
+          id: nextHistId,
+          todo_id: todoIdParam,
+          modified_by,
+          modified_by_name: edited_by,
+          modified_at: new Date().toISOString(),
+          changes: {
+            before: beforeState,
+            after: {
+              title: updatedFields.title,
+              description: description !== undefined ? description : beforeState.description,
+              status: updatedFields.status,
+              remarks: updatedFields.remarks
+            }
+          }
+        };
+
+        const { error: histInsertErr } = await supabase.from("todos_history").insert(historyEntryData);
+        if (histInsertErr) {
+          console.warn("⚠️ Failed to write to todos_history table in Supabase:", histInsertErr.message);
+        }
+      }
+
+      const { error: updateErr } = await supabase.from("todo").update(updatedFields).eq("id", todoIdParam);
+      if (updateErr) throw updateErr;
+
+      const query = `UPDATE todo\nSET title = '${updatedFields.title.replace(/'/g, "''")}', details = '${updatedFields.details.replace(/'/g, "''")}', status = '${updatedFields.status}', remarks = '${(updatedFields.remarks || "").replace(/'/g, "''")}'\nWHERE id = '${todoIdParam}';`;
+      logSQL(query, 1);
+
+      const { data: updatedHistoryRows } = await supabase
+        .from("todos_history")
+        .select("*")
+        .eq("todo_id", todoIdParam)
+        .order("modified_at", { ascending: false });
+
+      const finalHistory = (updatedHistoryRows || []).map(h => {
+        const modifier = employees.find(e => e.id === h.modified_by);
+        const ed_by = modifier ? modifier.name : (h.modified_by_name || "System Admin");
+
+        let before = {};
+        let after = {};
+        let rawChanges: string[] = [];
+
+        let parsedChanges: any = null;
+        if (h.changes) {
+          if (typeof h.changes === 'string') {
+            try {
+              parsedChanges = JSON.parse(h.changes);
+            } catch (e) {
+              parsedChanges = h.changes;
+            }
+          } else {
+            parsedChanges = h.changes;
+          }
+        }
+
+        if (parsedChanges) {
+          if (parsedChanges.before || parsedChanges.after) {
+            before = parsedChanges.before || {};
+            after = parsedChanges.after || {};
+          } else if (Array.isArray(parsedChanges)) {
+            rawChanges = parsedChanges.map(c => String(c));
+          } else if (typeof parsedChanges === 'string') {
+            rawChanges = [parsedChanges];
+          } else {
+            before = parsedChanges;
+          }
+        }
+
+        return {
+          timestamp: h.modified_at,
+          edited_by: ed_by,
+          before,
+          after,
+          rawChanges
+        };
+      });
+
+      // Look up employee creator details based on integer created_by
+      const creator = employees.find(e => e.id === todo.created_by);
+      const created_by_name = creator ? creator.name : "System Admin";
+      const savedPriority = todo.priority || "";
+      const created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority === "Accounts")
+        ? savedPriority
+        : (creator ? creator.role : "Admin");
+
+      return res.json({
+        message: "To-Do task updated successfully.",
+        todo: {
+          id: todo.id,
+          title: updatedFields.title,
+          description: description !== undefined ? description : beforeState.description,
+          status: updatedFields.status,
+          remarks: updatedFields.remarks,
+          created_at: todo.created_at,
+          created_by_name,
+          created_by_role,
+          history: finalHistory
+        }
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message || "Failed to update To-Do in Supabase." });
+    }
+  }
+
+  const todoId = isNaN(Number(todoIdParam)) ? todoIdParam : Number(todoIdParam);
+  const todos = db.todos || [];
+  const todoIndex = todos.findIndex(t => t.id === todoId);
+  if (todoIndex === -1) {
+    return res.status(404).json({ error: "To-Do task not found." });
+  }
+
+  const todo = todos[todoIndex];
+
+  const beforeState = {
+    title: todo.title,
+    description: todo.description,
+    status: todo.status ? (todo.status.toLowerCase() === "finished" || todo.status.toLowerCase() === "completed" ? "Finished" : "Assigned") : "Assigned",
+    remarks: todo.remarks || null
+  };
+
+  const originalStatus = beforeState.status;
+  const isOriginallyFinished = originalStatus === "Finished";
+  const isChangingStatus = status !== undefined && status !== originalStatus;
+  
+  if (isOriginallyFinished && isChangingStatus) {
+    const isManagerOrAdmin = edited_by && (edited_by.includes("Manager") || edited_by.includes("Admin"));
+    if (!isManagerOrAdmin) {
+      return res.status(403).json({ error: "Only Managers and Admins can change the status of finished To-Do tasks." });
+    }
+  }
+
+  const isEditingDescription = description !== undefined && description !== beforeState.description;
+  const targetStatus = status !== undefined ? status : originalStatus;
+  
+  if (targetStatus === "Finished" && isEditingDescription) {
+    return res.status(403).json({ error: "Description cannot be edited while status is Finished. Change status to Assigned first." });
+  }
+
+  const updatedFields = {
+    title: title !== undefined ? title : todo.title,
+    description: description !== undefined ? description : todo.description,
+    status: status !== undefined ? status : todo.status,
+    remarks: remarks !== undefined ? remarks : todo.remarks
+  };
+
+  const hasChanges = 
+    beforeState.title !== updatedFields.title ||
+    beforeState.description !== updatedFields.description ||
+    beforeState.status !== updatedFields.status ||
+    beforeState.remarks !== updatedFields.remarks;
+
+  if (edited_by && hasChanges) {
+    const historyEntry: TodoTaskHistoryEntry = {
+      timestamp: new Date().toISOString(),
+      edited_by,
+      before: beforeState,
+      after: updatedFields
+    };
+    todo.history = todo.history || [];
+    todo.history.push(historyEntry);
+  }
+
+  Object.assign(todo, updatedFields);
+  saveDb();
+
+  const query = `UPDATE todos\nSET title = '${todo.title.replace(/'/g, "''")}', description = '${todo.description.replace(/'/g, "''")}', status = '${todo.status}', remarks = '${(todo.remarks || "").replace(/'/g, "''")}'\nWHERE id = ${todoId};`;
+  logSQL(query, 1);
+
+  res.json({ message: "To-Do task updated successfully.", todo });
+});
+
+// DELETE A TODO
+app.delete("/api/todos/:id", async (req, res) => {
+  const todoIdParam = req.params.id;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { error } = await supabase.from("todo").delete().eq("id", todoIdParam);
+      if (error) throw error;
+
+      const query = `DELETE FROM todo WHERE id = '${todoIdParam}';`;
+      logSQL(query, 1);
+
+      return res.json({ success: true, message: `To-Do task #${todoIdParam} successfully deleted in Supabase.` });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message || "Failed to delete To-Do in Supabase." });
+    }
+  }
+
+  const todoId = isNaN(Number(todoIdParam)) ? todoIdParam : Number(todoIdParam);
+  const todos = db.todos || [];
+  const todoIndex = todos.findIndex(t => t.id === todoId);
+  if (todoIndex === -1) {
+    return res.status(404).json({ error: "To-Do task not found." });
+  }
+
+  todos.splice(todoIndex, 1);
+  saveDb();
+
+  const query = `DELETE FROM todos WHERE id = ${todoId};`;
+  logSQL(query, 1);
+
+  res.json({ success: true, message: `To-Do task #${todoId} successfully deleted.` });
 });
 
 // Fetch Offline travels
@@ -2119,15 +2842,17 @@ app.post("/api/sql/reset", async (req, res) => {
 app.post("/api/sql/clear", async (req, res) => {
   if (isSupabaseConfigured && supabase) {
     try {
-      await supabase.from("sql_logs").delete().neq("id", 0);
-      await supabase.from("offline_travels").delete().neq("id", 0);
-      await supabase.from("tasks").delete().neq("id", 0);
-      await supabase.from("employees").delete().neq("id", 0);
+      await supabase.from("sql_logs").delete().not("id", "is", null);
+      await supabase.from("offline_travels").delete().not("id", "is", null);
+      await supabase.from("tasks").delete().not("id", "is", null);
+      await supabase.from("employees").delete().not("id", "is", null);
+      await supabase.from("todos_history").delete().not("id", "is", null);
+      await supabase.from("todo").delete().not("id", "is", null);
 
-      logSQL("DELETE FROM tasks;\nDELETE FROM employees;\nDELETE FROM sql_logs;", 0);
+      logSQL("DELETE FROM tasks;\nDELETE FROM employees;\nDELETE FROM sql_logs;\nDELETE FROM todos_history;\nDELETE FROM todo;", 0);
 
       return res.json({
-        message: "All tasks, engineers, and logs have been successfully removed from your Supabase database.",
+        message: "All tasks, engineers, logs, and to-dos have been successfully removed from your Supabase database.",
         data: { employees: [], tasks: [] }
       });
     } catch (e: any) {
@@ -2136,10 +2861,12 @@ app.post("/api/sql/clear", async (req, res) => {
   } else {
     db.employees = [];
     db.tasks = [];
+    db.todos = [];
     db.nextTaskId = 1001;
+    db.nextTodoId = 101;
     saveDb();
-    logSQL("DELETE FROM tasks;\nDELETE FROM employees;", 0);
-    res.json({ message: "All tasks and engineers have been successfully removed from the database.", data: db });
+    logSQL("DELETE FROM tasks;\nDELETE FROM employees;\nDELETE FROM todos;", 0);
+    res.json({ message: "All tasks, engineers, and to-do tasks have been successfully removed from the database.", data: db });
   }
 });
 

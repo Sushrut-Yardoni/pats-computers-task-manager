@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { 
-  PlusCircle, Search, Cpu, Clock, CheckCircle2, ShieldCheck, Layers, Phone, Mail, X, ArrowRight, Calendar, BookmarkCheck, AlertCircle, Package
+  PlusCircle, Search, Cpu, Clock, CheckCircle2, ShieldCheck, Layers, Phone, Mail, X, ArrowRight, Calendar, BookmarkCheck, AlertCircle, Package, Trash2
 } from "lucide-react";
 import { Task, Employee } from "../types";
 
@@ -121,6 +121,11 @@ export default function TaskManagementSection({
   const [editProblemReported, setEditProblemReported] = useState("");
   const [savingDetails, setSavingDetails] = useState(false);
 
+  // Admin delete state
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   // States for re-assigning task as a Repeat call
   const [isReassigning, setIsReassigning] = useState(false);
   const [reassignSuccess, setReassignSuccess] = useState<string | null>(null);
@@ -188,6 +193,31 @@ export default function TaskManagementSection({
     setReassignSuccess(null);
     setReassignError(null);
     setIsEditingDetails(false);
+    setIsConfirmingDelete(false);
+    setDeleteError(null);
+  };
+
+  const handleDeleteTask = async (taskId: number) => {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const resp = await fetch(`/api/tasks/${taskId}`, {
+        method: "DELETE"
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || "Failed to delete task.");
+      }
+
+      setIsConfirmingDelete(false);
+      handleCloseInspector();
+      refreshLogs();
+    } catch (err: any) {
+      setDeleteError(err.message || "Deletion failed.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleSaveDetails = async () => {
@@ -459,7 +489,7 @@ export default function TaskManagementSection({
                     <option value="" className="text-slate-400">
                       -- Select Service Engineer --
                     </option>
-                    {employees.filter(emp => !emp.ended_at).map((emp) => (
+                    {[...employees].filter(emp => !emp.ended_at).sort((a, b) => a.id - b.id).map((emp) => (
                       <option key={emp.id} value={emp.id} className="text-slate-700">
                         {emp.name} ({emp.role}) - ID: {emp.id}
                       </option>
@@ -791,7 +821,7 @@ export default function TaskManagementSection({
                     <div className="flex flex-col sm:flex-row gap-2 pt-2 text-xs text-slate-600 font-sans">
                       <a href={`tel:${selectedTask.contact_details.split("|")[0].trim()}`} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
                         <Phone className="h-3.5 w-3.5 text-slate-400" />
-                        <span>{selectedTask.contact_details.split("|")[0].trim()}</span>
+                        <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-all">{selectedTask.contact_details.split("|")[0].trim()}</span>
                       </a>
                       {selectedTask.contact_details.includes("|") && (
                         <span className="hidden sm:inline text-slate-300">|</span>
@@ -955,8 +985,9 @@ export default function TaskManagementSection({
                       required
                     >
                       <option value="">-- Choose New Technical Engineer --</option>
-                      {employees
+                      {[...employees]
                         .filter(emp => !emp.ended_at && emp.id !== selectedTask.assigned_to)
+                        .sort((a, b) => a.id - b.id)
                         .map(emp => (
                           <option key={emp.id} value={emp.id}>
                             {emp.name} ({emp.role}) - ID: {emp.id}
@@ -1028,13 +1059,69 @@ export default function TaskManagementSection({
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row gap-2 justify-between items-center w-full">
+              <div className="w-full sm:w-auto">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => setIsConfirmingDelete(true)}
+                  className="px-4 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 hover:text-red-700 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50 w-full sm:w-auto"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Delete Task</span>
+                </button>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto justify-end mt-2 sm:mt-0">
+                <button
+                  type="button"
+                  onClick={handleCloseInspector}
+                  className="px-4 py-2 border border-slate-300 text-slate-700 bg-white hover:bg-slate-100 hover:text-slate-950 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                >
+                  Close Inspector
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isConfirmingDelete && selectedTask && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-51 animate-fade-in">
+          <div className="bg-white border border-slate-200 w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl relative flex flex-col p-6 space-y-4">
+            <div className="flex items-center gap-2.5 text-red-600">
+              <Trash2 className="h-6 w-6" />
+              <h3 className="font-extrabold text-slate-900 text-base uppercase tracking-tight">Delete Service Ticket?</h3>
+            </div>
+            
+            <p className="text-xs text-slate-600 leading-relaxed select-text">
+              Are you absolutely sure you want to permanently delete service ticket <strong>#{selectedTask.id}</strong> for <strong>{selectedTask.customer_name}</strong>? This action is irreversible.
+            </p>
+
+            {deleteError && (
+              <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-lg text-[11px] font-medium leading-relaxed select-text">
+                ✗ {deleteError}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2">
               <button
                 type="button"
-                onClick={handleCloseInspector}
-                className="px-4 py-2 border border-slate-300 text-slate-700 bg-white hover:bg-slate-100 hover:text-slate-950 rounded-xl text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                disabled={isDeleting}
+                onClick={() => {
+                  setIsConfirmingDelete(false);
+                  setDeleteError(null);
+                }}
+                className="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-xl text-xs font-bold transition-all cursor-pointer"
               >
-                Close Inspector
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => handleDeleteTask(selectedTask.id)}
+                className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                {isDeleting ? "Deleting..." : "Yes, Delete Task"}
               </button>
             </div>
           </div>

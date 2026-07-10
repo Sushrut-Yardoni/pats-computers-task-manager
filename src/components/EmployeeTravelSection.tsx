@@ -278,7 +278,7 @@ export default function EmployeeTravelSection({ myTasks, employeeId, petrolPrice
                         <span className="text-slate-500 font-semibold block">Contact Details</span>
                         <div className="font-extrabold text-slate-800 flex items-center gap-1.5 font-mono">
                           <Phone className="h-3.5 w-3.5 text-slate-400" />
-                          {activeTaskDetails.contact_details}
+                          <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200/60 shadow-xs">{activeTaskDetails.contact_details.split("|")[0].trim()}</span>
                         </div>
                       </div>
                     </div>

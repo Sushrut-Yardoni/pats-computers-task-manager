@@ -623,7 +623,7 @@ export default function ReportsSection({
                 <div className="flex flex-col sm:flex-row gap-2 pt-2 text-xs font-sans text-slate-600">
                   <a href={`tel:${selectedTask.contact_details.split("|")[0].trim()}`} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
                     <Phone className="h-3.5 w-3.5 text-slate-400" />
-                    <span>{selectedTask.contact_details.split("|")[0].trim()}</span>
+                    <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-all">{selectedTask.contact_details.split("|")[0].trim()}</span>
                   </a>
                   {selectedTask.contact_details.includes("|") && (
                     <span className="hidden sm:inline text-slate-300">|</span>

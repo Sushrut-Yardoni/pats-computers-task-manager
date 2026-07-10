@@ -36,6 +36,12 @@ export default function EmployeeManagementSection({
   const [newPasswordValue, setNewPasswordValue] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
+  // Role assignment modification state
+  const [changeRoleTarget, setChangeRoleTarget] = useState<Employee | null>(null);
+  const [selectedRoleType, setSelectedRoleType] = useState<string>("Admin");
+  const [customRoleValue, setCustomRoleValue] = useState<string>("");
+  const [isChangingRole, setIsChangingRole] = useState(false);
+
   // Popup details modal state
   const [selectedEmpDetails, setSelectedEmpDetails] = useState<Employee | null>(null);
 
@@ -70,6 +76,8 @@ export default function EmployeeManagementSection({
   const filteredEmployees = React.useMemo(() => {
     return employees
       .filter(emp => {
+        const endedDate = emp.ended_at ? new Date(emp.ended_at) : null;
+        if (endedDate && !isNaN(endedDate.getTime()) && endedDate <= new Date()) return false;
         if (selectedMonth === "All") return true;
         return emp.joined_at && emp.joined_at.startsWith(selectedMonth);
       })
@@ -104,6 +112,57 @@ export default function EmployeeManagementSection({
       alert(err.message || "Failed to update engineer password.");
     } finally {
       setIsChangingPassword(false);
+    }
+  };
+
+  const handleOpenAssignRole = (emp: Employee) => {
+    setChangeRoleTarget(emp);
+    const predefined = ["Admin", "Accounts", "Manager", "Desktop Engineer", "Network Specialist", "Software Support Expert"];
+    if (predefined.includes(emp.role)) {
+      setSelectedRoleType(emp.role);
+      setCustomRoleValue("");
+    } else {
+      setSelectedRoleType("Custom");
+      setCustomRoleValue(emp.role);
+    }
+  };
+
+  const handleChangeRoleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!changeRoleTarget) return;
+
+    let finalRole = selectedRoleType;
+    if (selectedRoleType === "Custom") {
+      if (!customRoleValue.trim()) {
+        alert("Please specify a custom role title.");
+        return;
+      }
+      finalRole = customRoleValue.trim();
+    }
+
+    setIsChangingRole(true);
+    try {
+      const resp = await fetch(`/api/employees/${changeRoleTarget.id}/role`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: finalRole })
+      });
+
+      if (!resp.ok) {
+        const data = await resp.json();
+        throw new Error(data.error || "Failed to assign role.");
+      }
+
+      setChangeRoleTarget(null);
+      setSelectedRoleType("Admin");
+      setCustomRoleValue("");
+      alert(`Role for ${changeRoleTarget.name} has been updated to "${finalRole}" successfully!`);
+      refreshLogs();
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || "Failed to update employee role.");
+    } finally {
+      setIsChangingRole(false);
     }
   };
 
@@ -309,6 +368,87 @@ export default function EmployeeManagementSection({
         </div>
       )}
 
+      {/* 🛡️ Change Role Modal */}
+      {changeRoleTarget && (
+        <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in select-text text-slate-800">
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4 relative">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-t-2xl" />
+            
+            <div className="space-y-1">
+              <h4 className="font-extrabold text-slate-900 text-sm uppercase tracking-wide flex items-center gap-1.5">
+                <span>Assign Access Role</span>
+              </h4>
+              <p className="text-xs text-slate-500 font-sans">
+                Update the role for <strong className="text-slate-800 font-bold">{changeRoleTarget.name}</strong> (Staff ID: #{changeRoleTarget.id}) to grant them appropriate dashboard privileges.
+              </p>
+            </div>
+
+            <form onSubmit={handleChangeRoleSubmit} className="space-y-3 pt-1">
+              <div>
+                <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
+                  Select Predefined Role / Access Level
+                </label>
+                <select
+                  value={selectedRoleType}
+                  onChange={(e) => {
+                    setSelectedRoleType(e.target.value);
+                    if (e.target.value !== "Custom") {
+                      setCustomRoleValue("");
+                    }
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 text-slate-800 px-3 py-2.5 rounded-xl text-xs focus:outline-none transition-all font-sans"
+                >
+                  <option value="Admin">Admin (Accesses Admin Dashboard)</option>
+                  <option value="Accounts">Accounts (Accesses Accounts Dashboard)</option>
+                  <option value="Manager">Manager (Accesses Manager Dashboard)</option>
+                  <option value="Desktop Engineer">Desktop Engineer (Accesses Service Portal)</option>
+                  <option value="Network Specialist">Network Specialist (Accesses Service Portal)</option>
+                  <option value="Software Support Expert">Software Support Expert (Accesses Service Portal)</option>
+                  <option value="Custom">Custom Role...</option>
+                </select>
+              </div>
+
+              {selectedRoleType === "Custom" && (
+                <div className="animate-fade-in">
+                  <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
+                    Custom Role Title
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Helpdesk Coordinator"
+                    value={customRoleValue}
+                    onChange={(e) => setCustomRoleValue(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors"
+                    required
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChangeRoleTarget(null);
+                    setSelectedRoleType("Admin");
+                    setCustomRoleValue("");
+                  }}
+                  className="flex-1 py-2 px-3 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl text-xs font-extrabold text-slate-700 transition-colors shadow-sm cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isChangingRole}
+                  className="flex-1 py-2 px-3 rounded-xl text-white font-extrabold text-xs bg-indigo-700 hover:bg-indigo-800 transition-all border border-indigo-800 active:scale-95 uppercase tracking-wide shadow-md cursor-pointer"
+                >
+                  {isChangingRole ? "Updating..." : "Assign Role"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* 🔑 Change Password Modal */}
       {changePasswordTarget && (
         <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in select-text text-slate-800">
@@ -427,7 +567,7 @@ export default function EmployeeManagementSection({
                 {/* Contact phone number */}
                 <div className="space-y-1">
                   <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Contact Phone</span>
-                  <span className="text-xs text-slate-800 font-mono select-all font-semibold block">
+                  <span className="text-xs text-blue-700 font-mono select-all font-extrabold tracking-wider bg-blue-50 px-2 py-0.5 rounded border border-blue-100 inline-block">
                     {selectedEmpDetails.phone || "-"}
                   </span>
                 </div>
@@ -443,7 +583,7 @@ export default function EmployeeManagementSection({
                 {/* Emergency Contact */}
                 <div className="space-y-1">
                   <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Emergency Contact info</span>
-                  <span className="text-xs text-slate-800 select-all font-semibold block">
+                  <span className="text-xs text-blue-700 font-mono select-all font-extrabold tracking-wider bg-blue-50 px-2 py-0.5 rounded border border-blue-100 inline-block">
                     {selectedEmpDetails.emergency_contact || "-"}
                   </span>
                 </div>
@@ -724,22 +864,15 @@ export default function EmployeeManagementSection({
                     <td className="px-2.5 py-2 text-right">
                       {!isDecomm ? (
                         <div className="flex items-center justify-end gap-1 flex-wrap">
-                          {emp.role !== "Admin" ? (
-                            <button
-                              type="button"
-                              onClick={() => setPromoteTarget(emp)}
-                              className="px-1.5 py-0.5 bg-blue-50 text-blue-600 hover:bg-blue-100 text-[8.5px] font-bold rounded border border-blue-200 transition-all active:scale-95 flex items-center gap-0.5 cursor-pointer"
-                              title="Promote to admin"
-                            >
-                              <ShieldCheck className="h-2.5 w-2.5" />
-                              <span>Admin</span>
-                            </button>
-                          ) : (
-                            <span className="text-blue-600 bg-blue-50/50 px-1.5 py-0.5 rounded border border-blue-200 text-[8px] font-bold uppercase font-mono flex items-center gap-0.5" title="Admin level owner">
-                              <ShieldCheck className="h-2.5 w-2.5" />
-                              <span>Owner</span>
-                            </span>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAssignRole(emp)}
+                            className="px-1.5 py-0.5 bg-blue-50 text-blue-600 hover:bg-blue-100 text-[8.5px] font-bold rounded border border-blue-200 transition-all active:scale-95 flex items-center gap-0.5 cursor-pointer"
+                            title="Assign access role / dashboard level"
+                          >
+                            <ShieldCheck className="h-2.5 w-2.5" />
+                            <span>Role</span>
+                          </button>
                           <button
                             type="button"
                             onClick={() => {

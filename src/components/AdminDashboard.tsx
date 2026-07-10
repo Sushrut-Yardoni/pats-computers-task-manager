@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { Task, Employee, SqlLog } from "../types";
 import TaskManagementSection from "./TaskManagementSection";
+import TodoManagementSection from "./TodoManagementSection";
 import EmployeeManagementSection from "./EmployeeManagementSection";
 import ReportsSection from "./ReportsSection";
 import TravelPetrolSection from "./TravelPetrolSection";
@@ -47,8 +48,8 @@ export default function AdminDashboard({
   onTogglePriority,
   onUpdatePassword
 }: AdminDashboardProps) {
-  // Master navigation state: "tasks" | "employees" | "reports" | "travel" | "database" | "analytics"
-  const [activeTab, setActiveTab] = useState<"tasks" | "employees" | "reports" | "travel" | "database" | "analytics">("tasks");
+  // Master navigation state: "tasks" | "todos" | "employees" | "reports" | "travel" | "database" | "analytics"
+  const [activeTab, setActiveTab] = useState<"tasks" | "todos" | "employees" | "reports" | "travel" | "database" | "analytics">("tasks");
 
   // Synchronize active tab with the main header SQL trigger
   useEffect(() => {
@@ -98,8 +99,23 @@ export default function AdminDashboard({
             <span className="font-sans flex items-center justify-between w-full font-bold">
               <span>Tasks & Tickets</span>
               <span className="bg-blue-100/60 text-blue-805 px-1.5 py-0.5 rounded text-[9px] font-bold">
-                {tasks.length}
+                {tasks.filter(t => t.status === "Pending").length}
               </span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("todos")}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
+              activeTab === "todos"
+                ? "bg-blue-50 text-blue-800 border border-blue-100 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-805 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <LayoutDashboard className="h-4 w-4 text-slate-550 shrink-0" />
+            <span className="font-sans flex items-center justify-between w-full font-bold">
+              <span>To-Do Checklist</span>
             </span>
           </button>
 
@@ -116,7 +132,10 @@ export default function AdminDashboard({
             <span className="font-sans flex items-center justify-between w-full font-bold">
               <span>Engineers Hub</span>
               <span className="bg-indigo-100/60 text-indigo-805 px-1.5 py-0.5 rounded text-[9px] font-bold">
-                {employees.length}
+                {employees.filter(emp => {
+                  const endedDate = emp.ended_at ? new Date(emp.ended_at) : null;
+                  return !endedDate || isNaN(endedDate.getTime()) || endedDate > new Date();
+                }).length}
               </span>
             </span>
           </button>
@@ -184,6 +203,7 @@ export default function AdminDashboard({
               <Sparkles className="h-5 w-5 text-blue-600 animate-pulse" />
               <span>
                 {activeTab === "tasks" && "Tasks & Tickets"}
+                {activeTab === "todos" && "To-Do Checklist"}
                 {activeTab === "employees" && "Engineers Hub"}
                 {activeTab === "reports" && "Telemetry Reports"}
                 {activeTab === "analytics" && "Analytics"}
@@ -205,6 +225,13 @@ export default function AdminDashboard({
             onUpdateRemarks={onUpdateRemarks}
             onUpdateTaskDetails={onUpdateTaskDetails}
             onTogglePriority={onTogglePriority}
+          />
+        )}
+
+        {activeTab === "todos" && (
+          <TodoManagementSection 
+            employees={employees}
+            refreshLogs={refreshLogs}
           />
         )}
 

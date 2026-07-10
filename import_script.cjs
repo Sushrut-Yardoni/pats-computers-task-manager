@@ -1,0 +1,309 @@
+const todoCsv = `id,title,details,priority,status,created_by,created_at,updated_by,updated_at
+01d5f828-960f-4aa5-b507-558ac50c3c55,H.D. Firecon Techno Pvt. Ltd. AMC invoice,"(FROM 01 MAY 2026 TO 30 OCTOBER 2026)
+Second Installment",low,finished,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-23 04:57:37.282437+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-23 04:59:01.210671+00
+02f9eada-057b-41d2-bbf2-661146ffb3f4,tally final 25-26 PATS,"saket+ asmita madam finalization karne
+1-acess pt1856827 evde ka aahet, (Yogesh Sir)
+2-indirect exp adjustmentla 41/11tar 25-26 la 42.03 disat aahet kami ka distat
+3-current liabilities-25.26 la 37.33 - 38.78 kami ka zale/
+4-mF investment fixed asset kase dakhwat yeiel
+5-25-26 cash in hand 104492 disat aahe
+6-25-26 advance tax paid 20k opening bal dakhwal aahe/
+
+25-26
+a-purchase-36.99-36.80 kami ka zala
+b-gross 33.72 n 47.30 before adjustment aahe evada kami kasa kay zala
+c-derreref d tax 182212 aahe to 0 kasa karta yeiel
+d- stock -2l in servise settle karne
+e-acess pt stock621109 kami karawa lagel
+f- 24-1-26-45000 kotak, SIP entry",low,pending,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-07-08 10:56:30.001275+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-09 05:35:37.110188+00
+1a776d71-912a-474c-8f9c-5e438b9f4e80,Revati Madam (ITR & TCS Certificate),Revati ITR 25-26 paying kindly consider TCS certificate received from kesari tours,low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-06 07:47:36.236685+00,,
+1bee7788-70b4-4583-a2f2-4f514fb46bf9,Pinnac -Domain & Backup Software & Cloud Backup,"Proforma Inv Sign Copy -Done (Final Inv Copy Pending)
+1. Pinnac Consulting -R-043 (AMT-106037) (Domain)
+2. Pinnac Consulting -R-044 (AMT-105633) (Backup Software)
+3. Pinnac Consulting -R-045 (AMT-103840) (Cloud Backup)
+saket sir bole GST paid nahi karyacha mi tally madhe sagle inv 31.3.27 la transfer kele ahet",low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-01 06:43:54.714834+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 09:51:04.583063+00
+3261c1de-f8c0-473b-866c-100105e78fe9,Pinnac Cons-(QHEPS)Print Pending,"Proforma Invoice-22- (dt 17.06.2026)
+Inv checking karne pending and print pending
+QHEPS - 50 user
+",low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 09:53:15.58601+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-01 06:45:09.142688+00
+39fe162e-b23d-4ee9-a0a8-4ed317fe6703,Printer points utkarsha (Saket Sir W.P MSG),"Patch pannel -2 cat 6a,Patch cord, Rack, Switch 2,Acess pnt 8, Firewall",low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-23 05:01:56.349896+00,,
+3b867bfb-6ac5-42ac-a0c0-6446c2beeae3,payment to be done,"june 26
+
+lic netra-12k
+shilpa lic pre-41814
+skoda-16k
+skt/revti emi-52+58K
+
+
+JULY
+SKT LIC PRE-36515",low,pending,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-23 07:56:07.154168+00,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-23 08:19:15.194763+00
+43800d55-3dfa-4488-b839-d83db023d6b3,SUSHRUT lic NOMINEE REMAINDER,NOMINEE UPDATE,low,pending,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-23 08:19:41.309894+00,,
+4c7a06ac-c723-4881-8b70-8c7f2cc0a90b,Tally back  ITR-25-26 & Statement,"Mutual fund statement
+Fd interest statement
+All Bank & loan statement
+Period - 01 April 2025 to 31 March 2026",low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 09:40:23.981438+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 11:18:59.172139+00
+4dbeb2a1-5ef1-4c90-be2c-948c6502b4c6,"Dhiraj Langote  ","Purchase Invoice Pending -
+June follow up Date -11,13,18,30",low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-30 07:13:09.737917+00,,
+54c258a8-cc58-4550-97b4-581f7398eabf,Nilesh,Call Nilesh Sir ani material return che update ghya,low,deleted,a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d,2026-06-19 12:02:00.771598+00,a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d,2026-06-22 08:49:41.645273+00
+69731e26-c370-4e55-9612-076699775f09,gayatri madam PC+ UPS,shrikant sir managing this work,low,pending,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-07-08 10:34:49.161392+00,,
+758e0b37-d846-49d3-bcca-327acd63f491,Pinnac/DCad/Maithalee - PRO G CAD,"All pinnac invoices prog cad value 20k ne kele print pending
+1. Pinnac Cons-R-046 (AMT-1199812)
+2. DCAD -R-047 (AMT-23600)
+3. Maithilee - R-048 (AMT-141600)
+saket sir bole GST paid nahi karyacha mi tally madhe sagle inv 31.3.27 la transfer kele ahet
+",low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 08:26:26.375147+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-04 07:20:40.223189+00
+7b52db47-8a22-40dd-a187-6c15ea55ce4f,AVK GREEN -Sign Pending,"Inv No-26-27/PATS/S-015
+Date :- 22.04.2026
+",low,finished,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:05:09.82655+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 11:04:31.944137+00
+7f000e65-9825-4f73-afc5-13d65e01517c,"MF investment ",MF चे investment fixed asset or Kontya asset la टाकू शकतो,low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 09:44:16.500182+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 09:46:30.322319+00
+8e7f48ac-8e97-4245-bced-df4d23c1743f,MCES-10 Users,"mcecostudio email bill
+google work place- std
+Sirani: 25-26 pramane final bill ready. Check/Print pending. 
+mcecostudio email bill 3-7-26 to 2-7-27 10 users , 10368/user print pending",low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-06 08:11:49.608164+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 09:50:29.724345+00
+9b171a58-7063-406e-9c33-98b6d747e174,Chiranjiv,CAll chiranjiv ani cheques deliver karayla sanga,low,deleted,a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d,2026-06-19 12:01:03.896468+00,a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d,2026-06-22 08:49:45.368856+00
+9b46abb6-35d7-46bb-949f-04047efce55f,"Gayatri madam - Monitor Details ",. Gayatri madam 2 mntr 27inch-kiti monitor dile,low,pending,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-19 11:52:31.479522+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:06:37.653245+00
+9daba38f-5cb9-4268-9514-cae6e7dc4c69,Pats-Pan Card,address change,low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 11:12:34.760108+00,,
+9e49b567-cabd-4131-9d4d-d21feeb6a1e2,Pinnac-final closing balance for 31.03.2026 and till date			,"Mail Send final closing balance dt 08.07.26  ",low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 09:44:53.620402+00,,
+a61567cb-7c80-4503-9e15-e4d87d31d3f7,AVK GREEN-Sign Pending,"Inv No-25-26/PATS/R-186/
+Inv Date :- 31.3.2026
+Pro G CAD",low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 09:58:58.316182+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:01:39.085765+00
+aaefbc68-e71d-4e64-a72b-b89c76cd6130,AC purchase add in task,saket sirani w.p msg,low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 09:46:13.472357+00,,
+ac1ce413-c9d9-40db-bc6e-c90a7b35569f,"BOB BANK ","Payment -Follow-up
+Two Invoice Amt: -12000
+Ankush Sir Final approval Amt :- 9800
+Payment che updated dhile ahe sir ankush siranshi  call zhala 
+payment done
+Banket javun aali madam aaj payment karnar ahet
+
+Sirana call sathi reminder kele 29.06.26 
+ki te sangnar ahet 
+Bob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe 
+Suman madam payment  transfer aaj kiva udya karnar ahet ",low,finished,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 11:11:27.493984+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 08:48:15.835149+00
+e47bcc37-c682-49a9-803f-84959d590306,"Pinnac all AMC -4th Inst-Not confirmed ","1. Pinnac Cons-Proforma Invoice-14 (35400)
+2. Pinnac HSG-Proforma Invoice-15 (17700)
+3.  Maithilee-Proforma Invoice-16 (Amt- 17700)
+4. DCAD- Proforma Invoice-17 (Amt- 8850)
+5. DCA-Proforma Invoice-18 (Amt -17700)
+6. EnvoNest (company name che vichrane pending)
+   Proforma Invoice-19 (Amt- 8850)
+
+ Saket  Sir na vicharne- bifurcate as per company
+pinnac AMc bill fro JAn 26 to march 26- 40000/mobth
+apr 26 to june 26-40000/month
+",low,pending,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-01 06:59:46.329598+00,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 11:06:10.542901+00
+fcc77349-344b-4eb1-a1bd-317b6d5d384c,dhiraj opus GST bill,GST bill,low,deleted,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-22 07:51:32.966768+00,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-22 11:35:08.185841+00`;
+
+const historyCsv = `id,task_id,modified_by,modified_at,changes
+00d1dbeb-2b20-45db-b6c0-2de9a6855142,4dbeb2a1-5ef1-4c90-be2c-948c6502b4c6,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-30 07:13:10.027811+00,"[""Task created""]"
+02e11603-bd75-4af0-9f97-c32442e58242,e47bcc37-c682-49a9-803f-84959d590306,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 11:06:10.826932+00,"[""Details updated from \""1. Pinnac Cons-Proforma Invoice-14 (35400)\n2. Pinnac HSG-Proforma Invoice-15 (17700)\n3.  Maithilee-Proforma Invoice-16 (Amt- 17700)\n4. DCAD- Proforma Invoice-17 (Amt- 8850)\n5. DCA-Proforma Invoice-18 (Amt -17700)\n6. EnvoNest (company name che vichrane pending)\n   Proforma Invoice-19 (Amt- 8850)\"" to \""1. Pinnac Cons-Proforma Invoice-14 (35400)\n2. Pinnac HSG-Proforma Invoice-15 (17700)\n3.  Maithilee-Proforma Invoice-16 (Amt- 17700)\n4. DCAD- Proforma Invoice-17 (Amt- 8850)\n5. DCA-Proforma Invoice-18 (Amt -17700)\n6. EnvoNest (company name che vichrane pending)\n   Proforma Invoice-19 (Amt- 8850)\n\n Saket  Sir na vicharne- bifurcate as per company\npinnac AMc bill fro JAn 26 to march 26- 40000/mobth\napr 26 to june 26-40000/month\n\""""]"
+03902ac5-1f4a-4643-8103-c364798f94fd,ac1ce413-c9d9-40db-bc6e-c90a7b35569f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-29 11:42:57.882524+00,"[""Details updated from \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \"" to \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \""""]"
+17d72e30-d66f-4ea4-8707-5dd0bd8937ea,ac1ce413-c9d9-40db-bc6e-c90a7b35569f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 11:11:27.754468+00,"[""Task created""]"
+17e1730a-8632-4f38-a01f-8bcdedf7037e,1a776d71-912a-474c-8f9c-5e438b9f4e80,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-06 07:47:36.457102+00,"[""Task created""]"
+190b48c2-9a9d-4d4d-959e-53d16ab890d4,e47bcc37-c682-49a9-803f-84959d590306,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-01 06:59:46.563732+00,"[""Task created""]"
+1b3d8919-8477-4046-b936-cf43741010ae,ac1ce413-c9d9-40db-bc6e-c90a7b35569f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-24 09:46:13.269928+00,"[""Details updated from \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nupdated dhile ahe sirancha call zhala ki te sangnar ahet \"" to \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala ki te sangnar ahet \""""]"
+224d94c4-5513-43b1-a6fd-6879aa9f0202,ac1ce413-c9d9-40db-bc6e-c90a7b35569f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-02 06:36:44.945587+00,"[""Details updated from \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \"" to \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \nSuman madam payment  transfer aaj kiva udya karnar ahet \""""]"
+24dd2b78-5f0a-4871-b33a-cfb22782b8b4,8e7f48ac-8e97-4245-bced-df4d23c1743f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-06 09:27:48.291787+00,"[""Details updated from \""mcecostudio email bill\ngoogle work place- stD\"" to \""mcecostudio email bill\ngoogle work place- std\nSirani: 25-26 pramane final bill ready. Check/Print pending. Amt\""""]"
+24ee6164-017e-4c70-b3ec-6a98501d2fff,8e7f48ac-8e97-4245-bced-df4d23c1743f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 08:49:57.236325+00,"[""Details updated from \""mcecostudio email bill\ngoogle work place- std\nSirani: 25-26 pramane final bill ready. Check/Print pending. Amt\"" to \""mcecostudio email bill\ngoogle work place- std\nSirani: 25-26 pramane final bill ready. Check/Print pending. \nmcecostudio email bill 3-7-26 to 2-7-27 10 users , 10368/user print pending\""""]"
+272a59e7-fa7b-4a93-9b7c-6b0f0b29c30e,758e0b37-d846-49d3-bcca-327acd63f491,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 08:26:26.60953+00,"[""Task created""]"
+2da30ca8-b1c4-4e77-946a-224657f3a52a,01d5f828-960f-4aa5-b507-558ac50c3c55,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-23 04:59:01.446439+00,"[""Status changed from pending to finished""]"
+2ef6e624-a18a-486e-98a5-5164bf3086c0,ac1ce413-c9d9-40db-bc6e-c90a7b35569f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 08:48:16.055593+00,"[""Status changed from pending to finished""]"
+2ff026e9-0c35-4f8a-836a-3847cc217dca,758e0b37-d846-49d3-bcca-327acd63f491,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 09:37:44.912111+00,"[""Title updated from \""saket sir \"" to \""pinnac - prog cad invoice\""""]"
+329b63ec-ef7f-4aeb-aeed-bc1d7a86e8c0,758e0b37-d846-49d3-bcca-327acd63f491,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 08:30:57.187343+00,"[""Details updated from \""1. all pinnac invoices progcad value 20k ne kele print pending\n2. Tally backup mail send 25-26 pending\n3. Gayatri madam 2 mntr 27inch\n4. MF चे investment fixed asset or Kontya asset la टाकू शकतो\n\"" to \""1. all pinnac invoices progcad value 20k ne kele print pending\n2. Tally backup mail send 25-26 pending\n3. Gayatri madam 2 mntr 27inch\n4. MF चे investment fixed asset or Kontya asset la टाकू शकतो\n5. Dhiraj opus GST bill\n\""""]"
+35e1ee3d-564a-48b3-b226-6d6cab11fbcd,758e0b37-d846-49d3-bcca-327acd63f491,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-22 08:51:27.925408+00,"[""Details updated from \""1. all pinnac invoices progcad value 20k ne kele print pending\n2. Tally backup mail send 25-26 pending\n3. Gayatri madam 2 mntr 27inch\n4. MF चे investment fixed asset or Kontya asset la टाकू शकतो\n5. Dhiraj opus GST bill\n\"" to \""1. all pinnac invoices progcad value 20k ne kele print pending\n2. Tally backup mail send 25-26 pending\n3. Gayatri madam 2 mntr 27inch-kiti monitor dile\n4. MF चे investment fixed asset or Kontya asset la टाकू शकतो\n5. Dhiraj opus GST bill\n\""""]"
+3753a327-392f-4a0e-8b3b-da090cfbc42f,02f9eada-057b-41d2-bbf2-661146ffb3f4,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-07-08 11:08:17.428695+00,"[""Details updated from \""saket+ asmita madam finalization karne\n\"" to \""saket+ asmita madam finalization karne\n1-acess pt1856827 evde ka aahet, \n2-indirect exp adjustmentla 41/11tar 25-26 la 42.03 disat aahet kami ka distat\n3-current liabilities-25.26 la 37.33 - 38.78 kami ka zale/\n4-mF investment fixed asset kase dakhwat yeiel\n5-25-26 cash in hand 104492 disat aahe\n6-25-26 advance tax paid 20k opening bal dakhwal aahe/\n\n25-26\na-purchase-36.99-36.80 kami ka zala\nb-gross 33.72 n 47.30 before adjustment aahe evada kami kasa kay zala\nc-derreref d tax 182212 aahe to 0 kasa karta yeiel\nd- stock -2l in servise settle karne\ne-acess pt stock621109 kami karawa lagel\nf- 24-1-26-45000 kotak, SIP entry\""""]"
+3a2fdc46-ccc2-4a42-b60b-83de8d1c43c1,8e7f48ac-8e97-4245-bced-df4d23c1743f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 09:50:30.437478+00,"[""Title updated from \""MCES-10 USERS\"" to \""MCES-10 Users\""""]"
+4131e072-cfa5-4c88-8124-dcf7f0d5e63a,43800d55-3dfa-4488-b839-d83db023d6b3,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-23 08:19:41.571627+00,"[""Task created""]"
+45a9c430-b50d-40aa-b43b-3424eaa1143e,9b46abb6-35d7-46bb-949f-04047efce55f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 09:41:22.604625+00,"[""Title updated from \""call yogesh sir\"" to \""Gayatri madam \"""",""Details updated from \""yogesh sirana itr 25-26 tally backup dene\"" to \"". Gayatri madam 2 mntr 27inch-kiti monitor dile\""""]"
+47f6e7f4-b9c2-4413-82e6-af1c8aba9204,758e0b37-d846-49d3-bcca-327acd63f491,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:09:23.989806+00,"[""Title updated from \""Pinnac/DCad/Maithalee - prog cad \"" to \""Pinnac/DCad/Maithalee - PRO G CAD\""""]"
+4af6f365-9183-45df-a8a2-b78cd171f2d0,4c7a06ac-c723-4881-8b70-8c7f2cc0a90b,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 11:18:59.46947+00,"[""Title updated from \""Tally back -25-26\"" to \""Tally back  ITR-25-26 & Statement\"""",""Details updated from \""Tally backup mail send 25-26 pending\n\"" to \""Mutual fund statement\nFd interest statement\nAll Bank & loan statement\nPeriod - 01 April 2025 to 31 March 2026\""""]"
+55528c0c-aa26-4407-9e0f-02a261428b10,1bee7788-70b4-4583-a2f2-4f514fb46bf9,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 09:51:04.873124+00,"[""Title updated from \""Pinnac -Domain Invoice & Backup Software & Cloud Backup\"" to \""Pinnac -Domain & Backup Software & Cloud Backup\""""]"
+5768563a-747d-4d85-843c-06c50667bf12,aaefbc68-e71d-4e64-a72b-b89c76cd6130,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 09:46:13.754471+00,"[""Task created""]"
+5d2e192f-f9ce-4efe-a7f8-5b74fd2ad302,3261c1de-f8c0-473b-866c-100105e78fe9,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-01 06:45:09.362809+00,"[""Details updated from \""Proforma Invoice-22- (dt 17.06.2026)\nInv checking pending karne and print pending\nQHEPS - 50 user\n\"" to \""Proforma Invoice-22- (dt 17.06.2026)\nInv checking karne pending and print pending\nQHEPS - 50 user\n\""""]"
+6225eaf3-c38c-4e3c-8e6e-041d726f08c5,02f9eada-057b-41d2-bbf2-661146ffb3f4,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-09 05:35:37.385394+00,"[""Details updated from \""saket+ asmita madam finalization karne\n1-acess pt1856827 evde ka aahet, \n2-indirect exp adjustmentla 41/11tar 25-26 la 42.03 disat aahet kami ka distat\n3-current liabilities-25.26 la 37.33 - 38.78 kami ka zale/\n4-mF investment fixed asset kase dakhwat yeiel\n5-25-26 cash in hand 104492 disat aahe\n6-25-26 advance tax paid 20k opening bal dakhwal aahe/\n\n25-26\na-purchase-36.99-36.80 kami ka zala\nb-gross 33.72 n 47.30 before adjustment aahe evada kami kasa kay zala\nc-derreref d tax 182212 aahe to 0 kasa karta yeiel\nd- stock -2l in servise settle karne\ne-acess pt stock621109 kami karawa lagel\nf- 24-1-26-45000 kotak, SIP entry\"" to \""saket+ asmita madam finalization karne\n1-acess pt1856827 evde ka aahet, (Yogesh Sir)\n2-indirect exp adjustmentla 41/11tar 25-26 la 42.03 disat aahet kami ka distat\n3-current liabilities-25.26 la 37.33 - 38.78 kami ka zale/\n4-mF investment fixed asset kase dakhwat yeiel\n5-25-26 cash in hand 104492 disat aahe\n6-25-26 advance tax paid 20k opening bal dakhwal aahe/\n\n25-26\na-purchase-36.99-36.80 kami ka zala\nb-gross 33.72 n 47.30 before adjustment aahe evada kami kasa kay zala\nc-derreref d tax 182212 aahe to 0 kasa karta yeiel\nd- stock -2l in servise settle karne\ne-acess pt stock621109 kami karawa lagel\nf- 24-1-26-45000 kotak, SIP entry\""""]"
+65f9825c-f24c-407c-9de4-057513a93ebc,1bee7788-70b4-4583-a2f2-4f514fb46bf9,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-01 06:43:55.005681+00,"[""Task created""]"
+76ffa2f7-4924-4515-92f1-db2d9d06a987,ac1ce413-c9d9-40db-bc6e-c90a7b35569f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 08:47:51.835377+00,"[""Details updated from \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nBanket javun aali madam aaj payment karnar ahet\n\nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \nSuman madam payment  transfer aaj kiva udya karnar ahet \"" to \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \npayment done\nBanket javun aali madam aaj payment karnar ahet\n\nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \nSuman madam payment  transfer aaj kiva udya karnar ahet \""""]"
+771e2d4f-8741-4544-a2bd-344018e25d6e,9e49b567-cabd-4131-9d4d-d21feeb6a1e2,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 09:44:54.334948+00,"[""Task created""]"
+822005c9-1be0-4726-9823-09b2111ab48f,02f9eada-057b-41d2-bbf2-661146ffb3f4,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-07-08 10:56:30.288827+00,"[""Task created""]"
+84f2e9bf-031d-4cc1-b1bb-4b27637c42ec,54c258a8-cc58-4550-97b4-581f7398eabf,a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d,2026-06-22 08:49:41.883258+00,"[""Status changed from pending to deleted""]"
+8caf5b79-e7dd-40d6-9f6e-1b3b8a7bbbea,8e7f48ac-8e97-4245-bced-df4d23c1743f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-06 08:11:49.859061+00,"[""Task created""]"
+8ef67adc-ddb3-4667-8db0-44646546b8bb,ac1ce413-c9d9-40db-bc6e-c90a7b35569f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-24 09:44:58.141475+00,"[""Details updated from \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\"" to \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nupdated dhile ahe sirancha call zhala ki te sangnar ahet \""""]"
+8fbe86f1-a948-49ba-9314-41af4842a0c8,fcc77349-344b-4eb1-a1bd-317b6d5d384c,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-22 11:35:08.300998+00,"[""Status changed from pending to deleted""]"
+991245e4-a89f-4d89-8e1a-c1410f6c1cdf,758e0b37-d846-49d3-bcca-327acd63f491,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:09:04.958439+00,"[""Title updated from \""pinnac - prog cad amt confirmation pending\"" to \""Pinnac/DCad/Maithalee - prog cad \""""]"
+9a631a8b-b762-454b-a96d-4ea2b41be1cb,7f000e65-9825-4f73-afc5-13d65e01517c,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 09:44:16.738935+00,"[""Task created""]"
+9fc33547-4fd0-4934-8878-e381dfbc45fb,758e0b37-d846-49d3-bcca-327acd63f491,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-04 07:20:40.463179+00,"[""Details updated from \""All pinnac invoices prog cad value 20k ne kele print pending\n1. Pinnac Cons-R-046 (AMT-1199812)\n2. DCAD -R-047 (AMT-23600)\n3. Maithilee - R-048 (AMT-141600)\n\n\"" to \""All pinnac invoices prog cad value 20k ne kele print pending\n1. Pinnac Cons-R-046 (AMT-1199812)\n2. DCAD -R-047 (AMT-23600)\n3. Maithilee - R-048 (AMT-141600)\nsaket sir bole GST paid nahi karyacha mi tally madhe sagle inv 31.3.27 la transfer kele ahet\n\""""]"
+a032f023-de20-47d7-9490-766d47909732,7b52db47-8a22-40dd-a187-6c15ea55ce4f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 11:04:32.205119+00,"[""Status changed from pending to finished""]"
+a8269bed-75f9-4b50-baee-00cbb0273d46,e47bcc37-c682-49a9-803f-84959d590306,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-02 07:35:46.317156+00,"[""Title updated from \""Pinnac ALL AMC -4th Installment  -Not confirmed \"" to \""Pinnac all AMC -4th Inst-Not confirmed \""""]"
+a8c469c7-3175-4797-a682-c24d0a99b47f,758e0b37-d846-49d3-bcca-327acd63f491,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 09:36:58.678302+00,"[""Details updated from \""1. all pinnac invoices progcad value 20k ne kele print pending\n2. Tally backup mail send 25-26 pending\n3. Gayatri madam 2 mntr 27inch-kiti monitor dile\n4. MF चे investment fixed asset or Kontya asset la टाकू शकतो\n5. Dhiraj opus GST bill\n\"" to \""All pinnac invoices progcad value 20k ne kele print pending\n\""""]"
+ab047a27-e7e6-4658-ab24-61dd765d4f81,4c7a06ac-c723-4881-8b70-8c7f2cc0a90b,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 09:40:24.285665+00,"[""Task created""]"
+aca65a68-6050-445b-a9c6-fe86121ce580,9b171a58-7063-406e-9c33-98b6d747e174,a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d,2026-06-22 08:49:45.575653+00,"[""Status changed from pending to deleted""]"
+b401e1fa-a99d-438b-b9eb-4d8b6ff6df2c,01d5f828-960f-4aa5-b507-558ac50c3c55,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-23 04:57:37.535316+00,"[""Task created""]"
+b442fcb3-e04f-45d6-9928-02596872004c,3261c1de-f8c0-473b-866c-100105e78fe9,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:07:45.721711+00,"[""Title updated from \""Pinnac Cons\"" to \""Pinnac Cons-(QHEPS)Print Pending\""""]"
+b9ba9b24-91bb-4da3-9c06-a46174b912de,7b52db47-8a22-40dd-a187-6c15ea55ce4f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:05:10.116747+00,"[""Task created""]"
+bc678722-1be8-4748-821f-fd2db32cb060,3261c1de-f8c0-473b-866c-100105e78fe9,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:05:34.074138+00,"[""Title updated from \""Pinnac Cons\"" to \""Pinnac Cons-Print Pending\""""]"
+c0a17236-7431-40c7-8b0a-d5bb35f014c9,fcc77349-344b-4eb1-a1bd-317b6d5d384c,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-22 07:51:33.226962+00,"[""Task created""]"
+c220c231-d6d9-4796-96ab-1ff79fb9de1e,3261c1de-f8c0-473b-866c-100105e78fe9,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 09:53:15.81794+00,"[""Task created""]"
+c9147552-10a2-4464-954c-c0563e364765,ac1ce413-c9d9-40db-bc6e-c90a7b35569f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-24 06:46:34.425757+00,"[""Details updated from \""Payment -Follow-up\"" to \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\""""]"
+c9b028e3-cf57-4783-9678-f12e5a409c1d,8e7f48ac-8e97-4245-bced-df4d23c1743f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-08 09:50:16.7022+00,"[""Title updated from \""Maithilee Chandratre Eco Studio-Bill\"" to \""MCES-10 USERS\""""]"
+cb48d44c-fe6b-49cb-b50b-4422fb07dcc1,9b46abb6-35d7-46bb-949f-04047efce55f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-19 12:06:03.88467+00,"[""Details updated from \""ITR \"" to \""yogesh sirana itr 25-26 tally backup dene\""""]"
+d02beaf8-3c56-48a9-8a57-cb460a4246d8,9b171a58-7063-406e-9c33-98b6d747e174,a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d,2026-06-19 12:01:04.179325+00,"[""Task created""]"
+d30da646-5d31-4e99-81ab-ac5f38fc971a,9daba38f-5cb9-4268-9514-cae6e7dc4c69,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 11:12:35.026933+00,"[""Task created""]"
+d7252031-628f-4310-a24b-9a6c6b187c94,a61567cb-7c80-4503-9e15-e4d87d31d3f7,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:01:39.363715+00,"[""Details updated from \""Inv No-25-26/PATS/R-186\nInv Date :- 31.3.2026\nPro G CAD\"" to \""Inv No-25-26/PATS/R-186/\nInv Date :- 31.3.2026\nPro G CAD\""""]"
+d777d81d-8c6f-4b87-87de-abb7d8073118,758e0b37-d846-49d3-bcca-327acd63f491,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:06:13.168496+00,"[""Title updated from \""pinnac - prog cad invoice\"" to \""pinnac - prog cad amt confirmation pending\""""]"
+e37227ed-c821-4940-8a9c-2f190933ad5d,758e0b37-d846-49d3-bcca-327acd63f491,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-01 06:31:36.766047+00,"[""Details updated from \""All pinnac invoices progcad value 20k ne kele print pending\n\"" to \""All pinnac invoices prog cad value 20k ne kele print pending\n1. Pinnac Cons-R-046 (AMT-1199812)\n2. DCAD -R-047 (AMT-23600)\n3. Maithilee - R-048 (AMT-141600)\n\n\""""]"
+e6bf9542-c222-49e6-a9e3-2eb445ca3562,a61567cb-7c80-4503-9e15-e4d87d31d3f7,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:01:39.085765+00,"[""Task created""]"
+ea959814-a5eb-4e87-a758-fec5c1fe512b,1bee7788-70b4-4583-a2f2-4f514fb46bf9,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-04 07:23:20.422898+00,"[""Details updated from \""Proforma Inv Sign Copy -Done (Final Inv Copy Pending)\n1. Pinnac Consulting -R-043 (AMT-106037) (Domain)\n2. Pinnac Consulting -R-044 (AMT-105633) (Backup Software)\n3. Pinnac Consulting -R-045 (AMT-103840) (Cloud Backup)\"" to \""Proforma Inv Sign Copy -Done (Final Inv Copy Pending)\n1. Pinnac Consulting -R-043 (AMT-106037) (Domain)\n2. Pinnac Consulting -R-044 (AMT-105633) (Backup Software)\n3. Pinnac Consulting -R-045 (AMT-103840) (Cloud Backup)\nsaket sir bole GST paid nahi karyacha mi tally madhe sagle inv 31.3.27 la transfer kele ahet\""""]"
+ebcef288-2332-4bb8-90f4-89969e249318,69731e26-c370-4e55-9612-076699775f09,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-07-08 10:34:49.434266+00,"[""Task created""]"
+ef9e3738-1825-4a07-acf4-c80a7455b309,9b46abb6-35d7-46bb-949f-04047efce55f,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-19 11:52:31.738435+00,"[""Task created""]"
+f25e0d2f-5713-4bb6-8224-5ee97f369025,54c258a8-cc58-4550-97b4-581f7398eabf,a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d,2026-06-19 12:02:01.041426+00,"[""Task created""]"
+f57bc75c-f213-4be3-9485-215fbf471cae,39fe162e-b23d-4ee9-a0a8-4ed317fe6703,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-23 05:01:56.569163+00,"[""Task created""]"
+f63c435d-0d55-4ef8-86da-3202ffe5b57f,9b46abb6-35d7-46bb-949f-04047efce55f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-22 10:06:37.900736+00,"[""Title updated from \""Gayatri madam \"" to \""Gayatri madam - Monitor Details \""""]"
+f872fd97-9d04-47fc-bf2f-2ebec03e0732,ac1ce413-c9d9-40db-bc6e-c90a7b35569f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-07-04 04:46:44.161157+00,"[""Details updated from \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nBanket javun aali madam aaj payment karnar ahet\n\nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \nSuman madam payment  transfer aaj kiva udya karnar ahet \"" to \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \npayment done\nBanket javun aali madam aaj payment karnar ahet\n\nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \nSuman madam payment  transfer aaj kiva udya karnar ahet \""""]"
+fa87ad07-96be-400d-bfda-ae7a93cf1cc1,3b867bfb-6ac5-42ac-a0c0-6446c2beeae3,d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d,2026-06-23 07:56:07.91127+00,"[""Task created""]"
+fdca5e21-5ec1-4528-bf2a-867b5d0d8b93,ac1ce413-c9d9-40db-bc6e-c90a7b35569f,a3b4b31b-599e-43bd-814f-fb1eff428a3e,2026-06-24 11:51:00.338653+00,"[""Details updated from \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala ki te sangnar ahet \"" to \""Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \""""]"`;
+
+function parseMultiLineCSV(csv) {
+  const result = [];
+  let row = [];
+  let cell = "";
+  let insideQuotes = false;
+  let i = 0;
+  while (i < csv.length) {
+    const char = csv[i];
+    if (char === '"') {
+      if (insideQuotes && csv[i+1] === '"') {
+        cell += '"';
+        i += 2;
+      } else {
+        insideQuotes = !insideQuotes;
+        i++;
+      }
+    } else if (char === ',' && !insideQuotes) {
+      row.push(cell);
+      cell = "";
+      i++;
+    } else if ((char === '\n' || char === '\r') && !insideQuotes) {
+      row.push(cell);
+      cell = "";
+      result.push(row);
+      row = [];
+      if (char === '\r' && csv[i+1] === '\n') {
+        i += 2;
+      } else {
+        i++;
+      }
+    } else {
+      cell += char;
+      i++;
+    }
+  }
+  if (cell || row.length > 0) {
+    row.push(cell);
+    result.push(row);
+  }
+  return result;
+}
+
+const parsedTodos = parseMultiLineCSV(todoCsv);
+const parsedHistory = parseMultiLineCSV(historyCsv);
+
+// Build maps for employee UUID to ID
+const empMap = {
+  "a3b4b31b-599e-43bd-814f-fb1eff428a3e": 112, // Accounts Pats
+  "d6e4aea8-08ea-45ac-8449-b1f4fc4ee27d": 108, // Saket Shaligram
+  "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d": 110  // Placeholder other employee
+};
+
+// Build maps for todo UUID to ID
+const todoIds = [];
+parsedTodos.slice(1).forEach(row => {
+  if (row[0]) todoIds.push(row[0]);
+});
+const todoMap = {};
+todoIds.forEach((uuid, idx) => {
+  todoMap[uuid] = idx + 1;
+});
+
+// Build maps for history UUID to ID
+const historyIds = [];
+parsedHistory.slice(1).forEach(row => {
+  if (row[0]) historyIds.push(row[0]);
+});
+const historyMap = {};
+historyIds.forEach((uuid, idx) => {
+  historyMap[uuid] = idx + 1;
+});
+
+const fs = require('fs');
+
+let sqlOutput = "";
+sqlOutput += "-- =============================================\n";
+sqlOutput += "-- 1. CREATE TABLES FOR 'todo' & 'todos_history'\n";
+sqlOutput += "-- =============================================\n\n";
+
+sqlOutput += "CREATE TABLE IF NOT EXISTS todo (\n";
+sqlOutput += "  id INT PRIMARY KEY,\n";
+sqlOutput += "  title VARCHAR(255) NOT NULL,\n";
+sqlOutput += "  details TEXT,\n";
+sqlOutput += "  priority VARCHAR(50) DEFAULT 'low',\n";
+sqlOutput += "  status VARCHAR(50) DEFAULT 'pending',\n";
+sqlOutput += "  remarks TEXT,\n";
+sqlOutput += "  created_by INT,\n";
+sqlOutput += "  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n";
+sqlOutput += "  updated_by INT,\n";
+sqlOutput += "  updated_at TIMESTAMP WITH TIME ZONE\n";
+sqlOutput += ");\n\n";
+
+sqlOutput += "CREATE TABLE IF NOT EXISTS todos_history (\n";
+sqlOutput += "  id INT PRIMARY KEY,\n";
+sqlOutput += "  todo_id INT REFERENCES todo(id) ON DELETE CASCADE,\n";
+sqlOutput += "  modified_by INT,\n";
+sqlOutput += "  modified_by_name VARCHAR(255),\n";
+sqlOutput += "  modified_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,\n";
+sqlOutput += "  changes TEXT\n";
+sqlOutput += ");\n\n";
+
+sqlOutput += "-- =============================================\n";
+sqlOutput += "-- 2. INSERTS FOR 'todo' TABLE\n";
+sqlOutput += "-- =============================================\n\n";
+
+parsedTodos.slice(1).forEach(row => {
+  if (row.length < 9) return;
+  const [uuid, title, details, priority, status, created_by, created_at, updated_by, updated_at] = row;
+  const intId = todoMap[uuid];
+  if (!intId) return;
+
+  const cb = empMap[created_by] || "NULL";
+  const ub = empMap[updated_by] || "NULL";
+  const cat = created_at ? ("'" + created_at + "'") : "NULL";
+  const uat = updated_at ? ("'" + updated_at + "'") : "NULL";
+
+  const titleEscaped = title.replace(/'/g, "''");
+  const detailsEscaped = details.replace(/'/g, "''");
+  const priorityEscaped = priority.replace(/'/g, "''");
+  const statusEscaped = status.replace(/'/g, "''");
+
+  sqlOutput += "INSERT INTO todo (id, title, details, priority, status, created_by, created_at, updated_by, updated_at) VALUES (" + intId + ", '" + titleEscaped + "', '" + detailsEscaped + "', '" + priorityEscaped + "', '" + statusEscaped + "', " + cb + ", " + cat + ", " + ub + ", " + uat + ");\n";
+});
+
+sqlOutput += "\n-- =============================================\n";
+sqlOutput += "-- 3. INSERTS FOR 'todos_history' TABLE\n";
+sqlOutput += "-- =============================================\n\n";
+
+parsedHistory.slice(1).forEach(row => {
+  if (row.length < 5) return;
+  const [uuid, task_uuid, modified_by, modified_at, changes] = row;
+  const intId = historyMap[uuid];
+  if (!intId) return;
+
+  const todoIdInt = todoMap[task_uuid] || "NULL";
+  const mb = empMap[modified_by] || "NULL";
+  const mat = modified_at ? ("'" + modified_at + "'") : "NULL";
+
+  const changesEscaped = changes.replace(/'/g, "''");
+
+  sqlOutput += "INSERT INTO todos_history (id, todo_id, modified_by, modified_at, changes) VALUES (" + intId + ", " + todoIdInt + ", " + mb + ", " + mat + ", '" + changesEscaped + "');\n";
+});
+
+fs.writeFileSync('import_queries.sql', sqlOutput);
+console.log("SQL successfully written to import_queries.sql");
+

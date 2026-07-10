@@ -504,7 +504,7 @@ export default function EmployeeDashboard({
                   placeholder="e.g. Spouse / Parent Contact info"
                   value={profEmergencyContact}
                   onChange={(e) => setProfEmergencyContact(e.target.value)}
-                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-850 text-slate-805 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all"
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all font-mono"
                 />
               </div>
 
@@ -717,13 +717,6 @@ export default function EmployeeDashboard({
                   <h3 className="font-display font-extrabold text-slate-900 text-sm select-all">
                     {task.customer_name}
                   </h3>
-                  <p className="text-[10px] text-slate-400 font-mono select-all mt-1">
-                    {task.contact_details.split("|")[0].trim()}
-                  </p>
-                  
-                  <p className="text-xs text-slate-600 font-sans mt-3 line-clamp-3 select-all leading-relaxed">
-                    {task.problem_reported}
-                  </p>
                 </div>
 
                 <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono">
@@ -779,7 +772,7 @@ export default function EmployeeDashboard({
                 <div className="flex flex-col sm:flex-row gap-2 pt-1 text-xs text-slate-600 font-sans">
                   <a href={`tel:${selectedTask.contact_details.split("|")[0].trim()}`} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
                     <Phone className="h-3.5 w-3.5 text-slate-400" />
-                    <span>{selectedTask.contact_details.split("|")[0].trim()}</span>
+                    <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-all">{selectedTask.contact_details.split("|")[0].trim()}</span>
                   </a>
                   {selectedTask.contact_details.includes("|") && (
                     <span className="hidden sm:inline text-slate-300">|</span>

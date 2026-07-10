@@ -66,6 +66,8 @@ Copy and run the following queries in your Supabase SQL Editor. This SQL block c
 
 ```sql
 -- =========== DATABASE CLEANUP / IDEMPOTENCY ===========
+DROP TABLE IF EXISTS todos_history CASCADE;
+DROP TABLE IF EXISTS todos CASCADE;
 DROP TABLE IF EXISTS offline_travels CASCADE;
 DROP TABLE IF EXISTS tasks CASCADE;
 DROP TABLE IF EXISTS employees CASCADE;
@@ -138,6 +140,46 @@ CREATE TABLE sql_logs (
   sql TEXT NOT NULL,
   rows_affected INT NOT NULL DEFAULT 0
 );
+
+-- =========== 6. CREATE TODOS TABLE ===========
+CREATE TABLE todos (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  details TEXT NOT NULL,
+  priority VARCHAR(50) NOT NULL DEFAULT 'low',
+  status VARCHAR(50) NOT NULL DEFAULT 'Assigned',
+  created_by INT NULL REFERENCES employees(id) ON DELETE SET NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_by INT NULL REFERENCES employees(id) ON DELETE SET NULL,
+  updated_at TIMESTAMP WITH TIME ZONE,
+  created_by_name VARCHAR(100),
+  created_by_role VARCHAR(100),
+  remarks TEXT NULL
+);
+
+-- =========== 7. CREATE TODOS HISTORY TABLE ===========
+CREATE TABLE todos_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  todo_id UUID NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+  modified_by INT NULL REFERENCES employees(id) ON DELETE SET NULL,
+  modified_by_name VARCHAR(100),
+  modified_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  changes JSONB NOT NULL DEFAULT '[]'::jsonb
+);
+
+-- =========== 8. SET TIMESTAMP FUNCTION & TRIGGERS ===========
+CREATE OR REPLACE FUNCTION trigger_set_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = CURRENT_TIMESTAMP;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_timestamp 
+BEFORE UPDATE ON todos 
+FOR EACH ROW 
+EXECUTE FUNCTION trigger_set_timestamp();
 
 -- =======================================================
 -- =========== 5. SEED INITIAL STANDARD DATA ===========
