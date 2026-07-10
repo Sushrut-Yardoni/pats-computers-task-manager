@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { 
   PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Trash2, AlertCircle, Eye
 } from "lucide-react";
-import { TodoTask, Employee } from "../types";
+import { TodoTask, Employee, DeletedTodoTask } from "../types";
 import TodoHistoryModal from "./TodoHistoryModal";
 
 interface ManagerDashboardProps {
@@ -17,8 +17,9 @@ export default function ManagerDashboard({
   refreshLogs
 }: ManagerDashboardProps) {
   const [todos, setTodos] = useState<TodoTask[]>([]);
+  const [deletedTodos, setDeletedTodos] = useState<DeletedTodoTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"todo" | "finished">("todo");
+  const [activeTab, setActiveTab] = useState<"todo" | "finished" | "deleted">("todo");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAccountsUser, setSelectedAccountsUser] = useState("");
 
@@ -58,10 +59,17 @@ export default function ManagerDashboard({
   const fetchTodos = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch("/api/todos");
-      if (res.ok) {
-        const data = await res.json();
+      const [todosRes, deletedRes] = await Promise.all([
+        fetch("/api/todos"),
+        fetch("/api/todos/deleted")
+      ]);
+      if (todosRes.ok) {
+        const data = await todosRes.ok ? await todosRes.json() : [];
         setTodos(data);
+      }
+      if (deletedRes.ok) {
+        const deletedData = await deletedRes.json();
+        setDeletedTodos(deletedData);
       }
     } catch (err) {
       console.error("Failed to fetch to-do tasks:", err);
@@ -196,7 +204,8 @@ export default function ManagerDashboard({
 
     setIsDeletingSubmitting(true);
     try {
-      const res = await fetch(`/api/todos/${deletingTodo.id}`, {
+      const deletedBy = `${currentUser.name} (Manager)`;
+      const res = await fetch(`/api/todos/${deletingTodo.id}?deleted_by=${encodeURIComponent(deletedBy)}`, {
         method: "DELETE"
       });
 
@@ -232,6 +241,20 @@ export default function ManagerDashboard({
     return matchesTab && matchesSearch && matchesAccountsUser;
   });
 
+  const filteredDeletedTodos = deletedTodos.filter(todo => {
+    const matchesSearch = 
+      todo.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      todo.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      todo.created_by_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (todo.deleted_by || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(todo.id).includes(searchQuery);
+
+    const matchesAccountsUser = !selectedAccountsUser || 
+      todo.created_by_name.toLowerCase() === selectedAccountsUser.toLowerCase();
+
+    return matchesSearch && matchesAccountsUser;
+  });
+
   const formatDate = (isoString: string) => {
     try {
       const date = new Date(isoString);
@@ -249,34 +272,46 @@ export default function ManagerDashboard({
     <div className="space-y-6 text-slate-800 animate-fade-in font-sans">
       
       {/* Banner */}
-      <div className="bg-gradient-to-r from-indigo-750 to-purple-800 text-white p-6 rounded-3xl shadow-lg border border-purple-950 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-xl translate-x-10 -translate-y-10" />
-        <span className="text-[10px] font-bold uppercase tracking-widest bg-purple-600/60 px-2.5 py-1 rounded-md border border-purple-400/30">
-          Management Department
-        </span>
-        <h2 className="text-xl font-extrabold mt-3 font-display">Welcome, {currentUser.name}! (Manager)</h2>
-        <p className="text-xs text-purple-100/90 mt-1 max-w-lg">
-          Complete administrative command over internal checklists, task creations, audit logs history, and permanent deletions of To-Do items.
-        </p>
+      <div className="bg-gradient-to-br from-teal-50 via-teal-50/60 to-emerald-50 text-slate-800 p-6 sm:p-7 rounded-3xl shadow-xs border border-teal-100/80 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-48 h-48 bg-teal-200/20 rounded-full blur-3xl translate-x-12 -translate-y-12" />
+        <div className="absolute bottom-0 left-1/3 w-36 h-36 bg-emerald-200/20 rounded-full blur-2xl translate-y-10" />
+        <h2 className="text-2xl font-black font-display tracking-tight text-teal-950">
+          Welcome, {currentUser.name}!
+        </h2>
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
-          <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Assigned To-Do Tasks</span>
-            <p className="text-xl font-bold text-indigo-600 font-mono mt-0.5">{todos.filter(t => t.status === "Assigned").length}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white border border-slate-200/80 hover:border-teal-200 rounded-2xl p-4 flex items-center justify-between shadow-xs transition-all">
+          <div className="space-y-1">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold block">Assigned Active Tasks</span>
+            <p className="text-2xl font-extrabold text-teal-600 font-mono tracking-tight">{todos.filter(t => t.status === "Assigned").length}</p>
           </div>
-          <ListFilter className="h-5 w-5 text-indigo-500" />
+          <div className="p-3 bg-teal-50 rounded-xl">
+            <ListFilter className="h-5 w-5 text-teal-600" />
+          </div>
         </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
-          <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Finished To-Do Tasks</span>
-            <p className="text-xl font-bold text-emerald-600 font-mono mt-0.5">
+        <div className="bg-white border border-slate-200/80 hover:border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-xs transition-all">
+          <div className="space-y-1">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold block">Archived Completed Tasks</span>
+            <p className="text-2xl font-extrabold text-emerald-600 font-mono tracking-tight">
               {todos.filter(t => t.status === "Finished").length}
             </p>
           </div>
-          <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+          <div className="p-3 bg-emerald-50 rounded-xl">
+            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+          </div>
+        </div>
+        <div className="bg-white border border-slate-200/80 hover:border-red-200 rounded-2xl p-4 flex items-center justify-between shadow-xs transition-all">
+          <div className="space-y-1">
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold block">Archived Deleted Tasks</span>
+            <p className="text-2xl font-extrabold text-red-600 font-mono tracking-tight">
+              {deletedTodos.length}
+            </p>
+          </div>
+          <div className="p-3 bg-red-50 rounded-xl">
+            <Trash2 className="h-5 w-5 text-red-600" />
+          </div>
         </div>
       </div>
 
@@ -287,12 +322,12 @@ export default function ManagerDashboard({
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-2">
           
           {/* Tabs */}
-          <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 w-max">
+          <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl border border-slate-200 w-max gap-1">
             <button
               onClick={() => setActiveTab("todo")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all cursor-pointer ${
                 activeTab === "todo" 
-                  ? "bg-white text-indigo-700 shadow-xs border border-slate-200" 
+                  ? "bg-white text-teal-700 shadow-xs border border-slate-200/80" 
                   : "text-slate-500 hover:text-slate-900"
               }`}
             >
@@ -301,14 +336,25 @@ export default function ManagerDashboard({
             </button>
             <button
               onClick={() => setActiveTab("finished")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all cursor-pointer ${
                 activeTab === "finished" 
-                  ? "bg-white text-indigo-700 shadow-xs border border-slate-200" 
+                  ? "bg-white text-teal-700 shadow-xs border border-slate-200/80" 
                   : "text-slate-500 hover:text-slate-900"
               }`}
             >
               <CheckSquare className="h-3.5 w-3.5" />
               <span>Task History / Finished</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("deleted")}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all cursor-pointer ${
+                activeTab === "deleted" 
+                  ? "bg-white text-red-700 shadow-xs border border-slate-200/80" 
+                  : "text-slate-500 hover:text-slate-950"
+              }`}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Deleted Tasks</span>
             </button>
           </div>
 
@@ -316,10 +362,10 @@ export default function ManagerDashboard({
             {/* Create ticket button */}
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="flex items-center gap-1.5 bg-indigo-700 hover:bg-indigo-800 text-white font-extrabold text-xs py-2.5 px-4 rounded-xl shadow-xs border border-indigo-900 active:scale-[0.98] uppercase tracking-wide cursor-pointer transition-all shrink-0"
+              className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl shadow-xs hover:shadow-md border border-teal-700/50 active:scale-[0.98] uppercase tracking-wider cursor-pointer transition-all shrink-0"
             >
-              <PlusCircle className="h-3.5 w-3.5" />
-              Add To-Do Task
+              <PlusCircle className="h-4 w-4 text-teal-100" />
+              <span>Add Checklist Task</span>
             </button>
           </div>
         </div>
@@ -336,7 +382,7 @@ export default function ManagerDashboard({
               placeholder="Search by ID, title, description, or creator..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-slate-300 focus:border-indigo-500 pl-9 pr-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all font-sans"
+              className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-slate-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 pl-9 pr-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all font-sans"
             />
           </div>
 
@@ -346,7 +392,7 @@ export default function ManagerDashboard({
             <select
               value={selectedAccountsUser}
               onChange={(e) => setSelectedAccountsUser(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 py-2 px-3 rounded-xl text-xs text-slate-700 font-medium focus:outline-none transition-all cursor-pointer"
+              className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-teal-500 py-2 px-3 rounded-xl text-xs text-slate-700 font-medium focus:outline-none transition-all cursor-pointer"
             >
               <option value="">All Creators</option>
               {accountsUsers.length === 0 ? (
@@ -367,34 +413,39 @@ export default function ManagerDashboard({
           <div className="bg-white border border-slate-200 rounded-2xl text-center py-12 text-slate-400 italic text-xs shadow-xs">
             Loading To-Do checklist tasks...
           </div>
-        ) : filteredTodos.length === 0 ? (
+        ) : (activeTab === "deleted" ? filteredDeletedTodos : filteredTodos).length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-400 italic text-xs shadow-xs">
             No To-Do tasks found matching your query.
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 animate-fade-in">
-            {filteredTodos.map(todo => (
+            {(activeTab === "deleted" ? filteredDeletedTodos : filteredTodos).map(todo => (
               <div 
                 key={todo.id} 
                 onClick={() => setViewingTodo(todo)}
-                className="bg-white border border-slate-200 hover:border-purple-400 rounded-xl shadow-3xs hover:shadow-sm transition-all duration-200 flex flex-col overflow-hidden cursor-pointer relative group"
+                className={`bg-white border rounded-xl shadow-3xs hover:shadow-md hover:translate-y-[-1px] transition-all duration-200 flex flex-col overflow-hidden cursor-pointer relative group ${
+                  activeTab === "deleted" ? "border-red-100 hover:border-red-400" : "border-slate-200 hover:border-teal-400"
+                }`}
               >
                 {/* Accent status line at top of card */}
                 <div className={`h-1 w-full ${
-                  todo.status === "Finished" ? "bg-emerald-500" : "bg-amber-500"
+                  activeTab === "deleted" ? "bg-red-500" : todo.status === "Finished" ? "bg-emerald-500" : "bg-amber-500"
                 }`} />
 
                 <div className="p-3.5 flex-grow flex flex-col justify-between space-y-3">
                   {/* Card Header: ID & Status Badge */}
                   <div className="flex items-center justify-between">
-                    <span className="font-mono font-extrabold text-purple-600 text-xs">#{todo.id}</span>
+                    <span className="font-mono font-extrabold text-teal-600 text-xs">#{todo.id}</span>
                     <div>
-                      {todo.status === "Assigned" && (
+                      {activeTab === "deleted" ? (
+                        <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.2 text-[8px] font-extrabold text-red-700 ring-1 ring-red-100 uppercase tracking-wide">
+                          Deleted
+                        </span>
+                      ) : todo.status === "Assigned" ? (
                         <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.2 text-[8px] font-extrabold text-amber-700 ring-1 ring-amber-100 uppercase tracking-wide">
                           Assigned
                         </span>
-                      )}
-                      {todo.status === "Finished" && (
+                      ) : (
                         <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.2 text-[8px] font-extrabold text-emerald-700 ring-1 ring-emerald-100 uppercase tracking-wide">
                           Finished
                         </span>
@@ -404,11 +455,19 @@ export default function ManagerDashboard({
 
                   {/* Title and Description */}
                   <div className="space-y-1">
-                    <h4 className="font-extrabold text-slate-800 text-[12.5px] leading-snug group-hover:text-purple-700 transition-colors line-clamp-1">{todo.title}</h4>
+                    <h4 className="font-extrabold text-slate-800 text-[12.5px] leading-snug group-hover:text-teal-700 transition-colors line-clamp-1">{todo.title}</h4>
                     <p className="text-[10.5px] text-slate-500 font-normal leading-relaxed line-clamp-2 break-words">
                       {todo.description}
                     </p>
                   </div>
+
+                  {/* Deletion details if activeTab is deleted */}
+                  {activeTab === "deleted" && (
+                    <div className="bg-red-50/40 border border-red-100/30 rounded-lg p-2 text-[9px] text-slate-600 space-y-0.5">
+                      <div className="truncate">Deleted by: <strong className="text-red-700">{(todo as any).deleted_by || "Manager"}</strong></div>
+                      <div className="truncate">Deleted at: <strong className="text-slate-700">{(todo as any).deleted_at ? formatDate((todo as any).deleted_at) : "N/A"}</strong></div>
+                    </div>
+                  )}
 
                   {/* Resolution remarks if finished (smaller) */}
                   {activeTab === "finished" && todo.remarks && (
@@ -422,7 +481,7 @@ export default function ManagerDashboard({
                     <span className="font-medium truncate max-w-[110px]" title={todo.created_by_role && todo.created_by_role.includes('|for:') ? `For ${todo.created_by_role.split('|for:')[1]}` : undefined}>
                       By <strong className="text-slate-600 font-bold">{todo.created_by_name}</strong>
                       {todo.created_by_role && todo.created_by_role.includes('|for:') && (
-                        <span className="ml-1 text-[8px] bg-indigo-50 text-indigo-600 font-extrabold px-1 py-0.5 rounded border border-indigo-100 uppercase">
+                        <span className="ml-1 text-[8px] bg-teal-50 text-teal-700 font-extrabold px-1.5 py-0.5 rounded border border-teal-100 uppercase">
                           ➔ {todo.created_by_role.split('|for:')[1].split(' ')[0]}
                         </span>
                       )}
@@ -442,7 +501,7 @@ export default function ManagerDashboard({
           <div className="bg-white border border-slate-200 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl relative flex flex-col">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
-                <PlusCircle className="h-5 w-5 text-indigo-600" />
+                <PlusCircle className="h-5 w-5 text-teal-600" />
                 <h3 className="font-extrabold text-slate-900 text-sm uppercase">Add To-Do Checklist Task</h3>
               </div>
               <button
@@ -461,7 +520,7 @@ export default function ManagerDashboard({
                   placeholder="e.g. Audit motherboard stock levels"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 hover:border-indigo-300 focus:border-indigo-500 px-3 py-2 rounded-xl focus:outline-none transition-colors"
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-teal-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 px-3 py-2 rounded-xl focus:outline-none transition-colors"
                   required
                 />
               </div>
@@ -471,7 +530,7 @@ export default function ManagerDashboard({
                 <select
                   value={targetAccountsUser}
                   onChange={(e) => setTargetAccountsUser(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 hover:border-indigo-300 focus:border-indigo-500 px-3 py-2 rounded-xl focus:outline-none transition-colors cursor-pointer"
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-teal-300 focus:border-teal-500 px-3 py-2 rounded-xl focus:outline-none transition-colors cursor-pointer"
                 >
                   <option value="">All Accounts Users</option>
                   {employees
@@ -492,7 +551,7 @@ export default function ManagerDashboard({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   rows={4}
-                  className="w-full bg-slate-50 border border-slate-200 hover:border-indigo-300 focus:border-indigo-500 px-3 py-2 rounded-xl focus:outline-none transition-colors resize-none"
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-teal-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 px-3 py-2 rounded-xl focus:outline-none transition-colors resize-none"
                   required
                 />
               </div>
@@ -508,7 +567,7 @@ export default function ManagerDashboard({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="py-2.5 px-5 bg-indigo-700 hover:bg-indigo-800 disabled:bg-slate-300 text-white rounded-xl text-[10px] font-extrabold uppercase tracking-widest shadow-xs border border-indigo-900 transition-all cursor-pointer"
+                  className="py-2.5 px-5 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 text-white rounded-xl text-[10px] font-extrabold uppercase tracking-widest shadow-xs border border-teal-700 transition-all cursor-pointer"
                 >
                   {isSubmitting ? "Creating..." : "Save To-Do"}
                 </button>
@@ -524,7 +583,7 @@ export default function ManagerDashboard({
           <div className="bg-white border border-slate-200 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl relative flex flex-col">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-2">
-                <Edit3 className="h-5 w-5 text-indigo-600" />
+                <Edit3 className="h-5 w-5 text-teal-600" />
                 <h3 className="font-extrabold text-slate-900 text-sm uppercase">Edit To-Do details</h3>
               </div>
               <button
@@ -542,7 +601,7 @@ export default function ManagerDashboard({
                   type="text"
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-slate-300 focus:border-indigo-500 px-3 py-2 rounded-xl focus:outline-none transition-all"
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-teal-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 px-3 py-2 rounded-xl focus:outline-none transition-all"
                   required
                 />
               </div>
@@ -553,7 +612,7 @@ export default function ManagerDashboard({
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   rows={4}
-                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-slate-300 focus:border-indigo-500 px-3 py-2 rounded-xl focus:outline-none transition-all resize-none disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-teal-300 focus:border-teal-500 focus:ring-1 focus:ring-teal-500/20 px-3 py-2 rounded-xl focus:outline-none transition-all resize-none disabled:opacity-70 disabled:cursor-not-allowed"
                   required
                   disabled={editStatus === "Finished"}
                 />
@@ -570,7 +629,7 @@ export default function ManagerDashboard({
                   <select
                     value={editStatus}
                     onChange={(e) => setEditStatus(e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-slate-300 focus:border-indigo-500 px-3 py-2.5 rounded-xl focus:outline-none transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-teal-300 focus:border-teal-500 px-3 py-2.5 rounded-xl focus:outline-none transition-all"
                   >
                     <option value="Assigned">Assigned</option>
                     <option value="Finished">Finished</option>
@@ -586,7 +645,7 @@ export default function ManagerDashboard({
                     value={editRemarks}
                     onChange={(e) => setEditRemarks(e.target.value)}
                     rows={2}
-                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-slate-300 focus:border-indigo-500 px-3 py-2 rounded-xl focus:outline-none transition-all resize-none"
+                    className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-teal-300 focus:border-teal-500 px-3 py-2 rounded-xl focus:outline-none transition-all resize-none"
                   />
                 </div>
               )}
@@ -602,7 +661,7 @@ export default function ManagerDashboard({
                 <button
                   type="submit"
                   disabled={isUpdating}
-                  className="py-2.5 px-5 bg-indigo-700 hover:bg-indigo-800 disabled:bg-slate-300 text-white rounded-xl text-[10px] font-extrabold uppercase tracking-widest shadow-xs border border-indigo-900 transition-all cursor-pointer"
+                  className="py-2.5 px-5 bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 text-white rounded-xl text-[10px] font-extrabold uppercase tracking-widest shadow-xs border border-teal-700 transition-all cursor-pointer"
                 >
                   {isUpdating ? "Saving..." : "Save Details"}
                 </button>
@@ -641,7 +700,7 @@ export default function ManagerDashboard({
                   value={finishRemarks}
                   onChange={(e) => setFinishRemarks(e.target.value)}
                   rows={3}
-                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-slate-300 focus:border-indigo-500 px-3 py-2 rounded-xl focus:outline-none transition-all resize-none"
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white hover:border-emerald-300 focus:border-emerald-500 px-3 py-2 rounded-xl focus:outline-none transition-all resize-none"
                 />
               </div>
 
@@ -733,7 +792,7 @@ export default function ManagerDashboard({
                 <div className={`h-2.5 w-2.5 rounded-full ${
                   viewingTodo.status === "Finished" ? "bg-emerald-500" : "bg-amber-500"
                 }`} />
-                <span className="font-mono font-extrabold text-purple-600 text-xs">TASK DETAILS - #{viewingTodo.id}</span>
+                <span className="font-mono font-extrabold text-teal-600 text-xs">TASK DETAILS - #{viewingTodo.id}</span>
               </div>
               <button
                 onClick={() => setViewingTodo(null)}
@@ -783,7 +842,7 @@ export default function ManagerDashboard({
                 <div className="space-y-1">
                   <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Assigned By</span>
                   <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded bg-purple-50 border border-purple-100 flex items-center justify-center font-extrabold text-purple-600 text-[10px]">
+                    <div className="h-6 w-6 rounded bg-teal-50 border border-teal-100/70 flex items-center justify-center font-extrabold text-teal-700 text-[10px]">
                       {viewingTodo.created_by_name ? viewingTodo.created_by_name.charAt(0) : "S"}
                     </div>
                     <div>
@@ -793,7 +852,7 @@ export default function ManagerDashboard({
                           {viewingTodo.created_by_role ? viewingTodo.created_by_role.split('|')[0] : ""}
                         </span>
                         {viewingTodo.created_by_role && viewingTodo.created_by_role.includes('|for:') && (
-                          <span className="text-[8px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-md px-1.5 py-0.5 uppercase tracking-wider leading-none">
+                          <span className="text-[8px] font-bold bg-teal-50 text-teal-700 border border-teal-100/70 rounded-md px-1.5 py-0.5 uppercase tracking-wider leading-none">
                             For: {viewingTodo.created_by_role.split('|for:')[1]}
                           </span>
                         )}
@@ -807,62 +866,77 @@ export default function ManagerDashboard({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-slate-100">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {/* Edit button */}
-                  <button
-                    onClick={() => {
-                      handleOpenEdit(viewingTodo);
-                      setViewingTodo(null);
-                    }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-purple-50 text-slate-700 hover:text-purple-700 rounded-xl border border-slate-200 hover:border-purple-200 transition-all font-bold text-[9px] uppercase tracking-wide cursor-pointer shadow-3xs"
-                    title="Edit task details"
-                  >
-                    <Edit3 className="h-3 w-3" />
-                    <span>Edit</span>
-                  </button>
-
-                  {/* Quick finish action for pending/in progress tasks */}
-                  {viewingTodo.status !== "Finished" && (
+              {activeTab === "deleted" ? (
+                <div className="bg-red-50 border border-red-100 rounded-xl p-3.5 space-y-1 text-[11px] text-slate-700 w-full animate-fade-in">
+                  <span className="text-[10px] font-bold text-red-800 uppercase tracking-wider block">Deletion Archive Details</span>
+                  <p className="leading-normal text-slate-500 italic">
+                    This task has been archived.
+                  </p>
+                  <p className="leading-normal pt-1.5 border-t border-red-100">
+                    Deleted by: <strong className="text-red-950 font-bold">{(viewingTodo as any).deleted_by || "Manager"}</strong>
+                  </p>
+                  <p className="leading-normal">
+                    Deleted at: <strong className="text-slate-800">{(viewingTodo as any).deleted_at ? formatDate((viewingTodo as any).deleted_at) : "N/A"}</strong>
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-slate-100 w-full">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {/* Edit button */}
                     <button
                       onClick={() => {
-                        setFinishingTodo(viewingTodo);
+                        handleOpenEdit(viewingTodo);
                         setViewingTodo(null);
                       }}
-                      className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl border border-slate-200 hover:border-emerald-200 transition-all font-bold text-[9px] uppercase tracking-wide cursor-pointer shadow-3xs"
-                      title="Mark resolved"
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-700 rounded-xl border border-slate-200 hover:border-teal-200 transition-all font-bold text-[9px] uppercase tracking-wide cursor-pointer shadow-3xs"
+                      title="Edit task details"
                     >
-                      <CheckSquare className="h-3 w-3" />
-                      <span>Mark Finish</span>
+                      <Edit3 className="h-3 w-3" />
+                      <span>Edit</span>
                     </button>
-                  )}
 
-                  {/* Task History audit log button */}
+                    {/* Quick finish action for pending/in progress tasks */}
+                    {viewingTodo.status !== "Finished" && (
+                      <button
+                        onClick={() => {
+                          setFinishingTodo(viewingTodo);
+                          setViewingTodo(null);
+                        }}
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-xl border border-slate-200 hover:border-emerald-200 transition-all font-bold text-[9px] uppercase tracking-wide cursor-pointer shadow-3xs"
+                        title="Mark resolved"
+                      >
+                        <CheckSquare className="h-3 w-3" />
+                        <span>Mark Finish</span>
+                      </button>
+                    )}
+
+                    {/* Task History audit log button */}
+                    <button
+                      onClick={() => {
+                        setHistoryTodo(viewingTodo);
+                        setViewingTodo(null);
+                      }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-teal-50 text-teal-700 hover:text-teal-700 rounded-xl border border-slate-200 hover:border-teal-200 transition-all font-bold text-[9px] uppercase tracking-wide cursor-pointer shadow-3xs"
+                      title="View history logs"
+                    >
+                      <span>History</span>
+                    </button>
+                  </div>
+
+                  {/* DELETE BUTTON - EXCLUSIVE TO MANAGER & ADMIN */}
                   <button
                     onClick={() => {
-                      setHistoryTodo(viewingTodo);
+                      setDeletingTodo(viewingTodo);
                       setViewingTodo(null);
                     }}
-                    className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-indigo-50 text-indigo-700 hover:text-indigo-700 rounded-xl border border-slate-200 hover:border-indigo-200 transition-all font-bold text-[9px] uppercase tracking-wide cursor-pointer shadow-3xs"
-                    title="View history logs"
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-red-50 text-red-600 hover:text-red-700 rounded-xl border border-slate-200 hover:border-red-100 transition-all font-bold text-[9px] uppercase tracking-wide cursor-pointer shadow-3xs"
+                    title="Delete To-Do completely"
                   >
-                    <span>History</span>
+                    <Trash2 className="h-3 w-3" />
+                    <span>Delete</span>
                   </button>
                 </div>
-
-                {/* DELETE BUTTON - EXCLUSIVE TO MANAGER & ADMIN */}
-                <button
-                  onClick={() => {
-                    setDeletingTodo(viewingTodo);
-                    setViewingTodo(null);
-                  }}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-white hover:bg-red-50 text-red-600 hover:text-red-700 rounded-xl border border-slate-200 hover:border-red-100 transition-all font-bold text-[9px] uppercase tracking-wide cursor-pointer shadow-3xs"
-                  title="Delete To-Do completely"
-                >
-                  <Trash2 className="h-3 w-3" />
-                  <span>Delete</span>
-                </button>
-              </div>
+              )}
             </div>
           </div>
         </div>

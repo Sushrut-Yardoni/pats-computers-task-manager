@@ -169,11 +169,17 @@ interface TodoTask {
   history?: TodoTaskHistoryEntry[];
 }
 
+interface DeletedTodoTask extends TodoTask {
+  deleted_at: string;
+  deleted_by: string;
+}
+
 interface DatabaseSchema {
   employees: Employee[];
   tasks: Task[];
   offline_travels?: OfflineTravel[];
   todos?: TodoTask[];
+  deletedTodos?: DeletedTodoTask[];
   nextTaskId: number;
   nextTodoId?: number;
   nextOfflineTravelId?: number;
@@ -266,6 +272,10 @@ function initDb(): DatabaseSchema {
       }
       if (!data.todos) {
         data.todos = [];
+        migrated = true;
+      }
+      if (!data.deletedTodos) {
+        data.deletedTodos = [];
         migrated = true;
       }
       if (typeof data.nextTodoId !== "number") {
@@ -380,6 +390,7 @@ function initDb(): DatabaseSchema {
         created_at: new Date(Date.now() - 45 * 3600 * 1000).toISOString()
       }
     ],
+    deletedTodos: [],
     settings: {
       petrol_price: 100
     }
@@ -2295,16 +2306,47 @@ app.post("/api/todos/:id/update", async (req, res) => {
 // DELETE A TODO
 app.delete("/api/todos/:id", async (req, res) => {
   const todoIdParam = req.params.id;
+  const deletedBy = req.query.deleted_by || req.body.deleted_by || "Manager";
+
+  let todoItemToArchive: any = null;
 
   if (isSupabaseConfigured && supabase) {
+    try {
+      const { data } = await supabase.from("todo").select("*").eq("id", todoIdParam).single();
+      if (data) {
+        todoItemToArchive = {
+          id: data.id,
+          title: data.title || data.details || "Untitled",
+          description: data.description || data.details || "",
+          status: data.status || "Assigned",
+          created_at: data.created_at || new Date().toISOString(),
+          created_by_name: data.created_by_name || "System Admin",
+          created_by_role: data.created_by_role || "Accounts",
+          remarks: data.remarks || ""
+        };
+      }
+    } catch (err) {
+      console.warn("Failed to pre-fetch todo for archiving:", err);
+    }
+
     try {
       const { error } = await supabase.from("todo").delete().eq("id", todoIdParam);
       if (error) throw error;
 
+      if (todoItemToArchive) {
+        db.deletedTodos = db.deletedTodos || [];
+        db.deletedTodos.push({
+          ...todoItemToArchive,
+          deleted_at: new Date().toISOString(),
+          deleted_by: deletedBy
+        });
+        saveDb();
+      }
+
       const query = `DELETE FROM todo WHERE id = '${todoIdParam}';`;
       logSQL(query, 1);
 
-      return res.json({ success: true, message: `To-Do task #${todoIdParam} successfully deleted in Supabase.` });
+      return res.json({ success: true, message: `To-Do task #${todoIdParam} successfully deleted and archived.` });
     } catch (e: any) {
       return res.status(500).json({ error: e.message || "Failed to delete To-Do in Supabase." });
     }
@@ -2317,13 +2359,29 @@ app.delete("/api/todos/:id", async (req, res) => {
     return res.status(404).json({ error: "To-Do task not found." });
   }
 
+  todoItemToArchive = todos[todoIndex];
+  if (todoItemToArchive) {
+    db.deletedTodos = db.deletedTodos || [];
+    db.deletedTodos.push({
+      ...todoItemToArchive,
+      deleted_at: new Date().toISOString(),
+      deleted_by: deletedBy
+    });
+  }
+
   todos.splice(todoIndex, 1);
   saveDb();
 
   const query = `DELETE FROM todos WHERE id = ${todoId};`;
   logSQL(query, 1);
 
-  res.json({ success: true, message: `To-Do task #${todoId} successfully deleted.` });
+  res.json({ success: true, message: `To-Do task #${todoId} successfully deleted and archived.` });
+});
+
+// FETCH DELETED TODOS
+app.get("/api/todos/deleted", (req, res) => {
+  const deletedTodos = db.deletedTodos || [];
+  res.json(deletedTodos);
 });
 
 // Fetch Offline travels

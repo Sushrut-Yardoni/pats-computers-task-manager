@@ -92,6 +92,11 @@ export interface TodoTask {
   history?: TodoTaskHistoryEntry[];
 }
 
+export interface DeletedTodoTask extends TodoTask {
+  deleted_at: string;
+  deleted_by: string;
+}
+
 export interface SqlLog {
   timestamp: string;
   sql: string;
