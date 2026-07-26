@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Laptop, Cpu, Terminal, Users, Shield, RefreshCw, AlertCircle, Database } from "lucide-react";
-import { Employee, Task, SqlLog } from "./types";
+import { Employee, Task, SqlLog, Company, CompanyAsset } from "./types";
 import Header from "./components/Header";
 import LoginScreen from "./components/LoginScreen";
 import AdminDashboard from "./components/AdminDashboard";
@@ -12,6 +12,8 @@ export default function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [sqlLogs, setSqlLogs] = useState<SqlLog[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [assets, setAssets] = useState<CompanyAsset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dbError, setDbError] = useState<string | null>(null);
 
@@ -42,6 +44,8 @@ export default function App() {
       setEmployees(data.employees || []);
       setTasks(data.tasks || []);
       setSqlLogs(data.sqlLogs || []);
+      setCompanies(data.companies || []);
+      setAssets(data.assets || []);
     } catch (err: any) {
       console.error(err);
       setDbError(err.message || "Failed to load database. Attempting reconnect...");
@@ -320,6 +324,8 @@ export default function App() {
             <AdminDashboard 
               tasks={tasks}
               employees={employees}
+              companies={companies}
+              assets={assets}
               onAssignTask={handleAssignTask}
               onResetDb={handleResetDb}
               onClearDb={handleClearDb}
@@ -350,6 +356,9 @@ export default function App() {
               currentEmployee={currentUser as any}
               employees={employees}
               tasks={tasks}
+              companies={companies}
+              assets={assets}
+              onSyncCompany={() => fetchData(true)}
               onAcceptTask={handleAcceptTask}
               onFinishTask={handleFinishTask}
               onUpdateRemarks={handleUpdateRemarks}

@@ -113,3 +113,75 @@ export interface OfflineTravel {
   remarks: string | null;
   created_at: string;
 }
+
+export interface Company {
+  id: number;
+  name: string;
+  type: "AMC" | "Non AMC";
+  created_at: string;
+  created_by: string;
+}
+
+export interface CompanyAsset {
+  id: number;
+  company_id: number;
+  asset: string;
+  asset_id: string;
+  location: string;
+  department: string;
+  monitor: string;
+  employee_name: string;
+  comp_name: string;
+  model_no: string;
+  configured_os: string;
+  os_key: string;
+  ms_office: string;
+  office_key: string;
+  other_app: string;
+  serial: string;
+  lan_ip: string;
+  mac_ip: string;
+  wifi_mac_ip: string;
+  antivirus_key: string;
+  key_val: string;
+  validity: string;
+  remarks: string;
+  created_at: string;
+}
+
+export function isTargetMatch(targetRaw: string, userNameRaw: string, userEmailRaw?: string): boolean {
+  if (!targetRaw || !userNameRaw) return false;
+
+  const target = targetRaw.trim().toLowerCase();
+  const userName = userNameRaw.trim().toLowerCase();
+  const userEmail = userEmailRaw ? userEmailRaw.trim().toLowerCase() : "";
+
+  if (!target || !userName) return false;
+
+  // 1. Exact match
+  if (target === userName) return true;
+
+  // 2. Email match
+  if (userEmail) {
+    if (target === userEmail) return true;
+    const emailPrefix = userEmail.split("@")[0];
+    if (target === emailPrefix) return true;
+  }
+
+  // 3. Initials match (e.g., "Sus Yardoni" -> "sy", "Saket Shaligram" -> "ss")
+  const nameWords = userName.split(/\s+/).filter(Boolean);
+  if (nameWords.length >= 2) {
+    const initials = nameWords.map(w => w[0]).join("");
+    if (target === initials) return true;
+  }
+
+  // 4. Word-level exact match (e.g. target "saket" matches "saket shaligram")
+  if (nameWords.some(w => w === target)) return true;
+
+  // 5. Substring match for longer search tokens (min 3 chars to prevent false matches)
+  if (target.length >= 3 && userName.includes(target)) return true;
+  if (userName.length >= 3 && target.includes(userName)) return true;
+
+  return false;
+}
+

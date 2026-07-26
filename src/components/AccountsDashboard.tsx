@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { 
   PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Calendar, ChevronRight, Eye
 } from "lucide-react";
-import { TodoTask, Employee } from "../types";
+import { TodoTask, Employee, isTargetMatch } from "../types";
 import TodoHistoryModal from "./TodoHistoryModal";
 
 interface AccountsDashboardProps {
@@ -31,6 +31,7 @@ export default function AccountsDashboard({
   // Form State - Add
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [targetAccountsUser, setTargetAccountsUser] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form State - Edit
@@ -72,6 +73,9 @@ export default function AccountsDashboard({
 
     setIsSubmitting(true);
     try {
+      const assignedTarget = targetAccountsUser.trim();
+      const finalRole = assignedTarget ? `Accounts|for:${assignedTarget}` : "Accounts";
+
       const res = await fetch("/api/todos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -79,7 +83,7 @@ export default function AccountsDashboard({
           title: title.trim(),
           description: description.trim(),
           created_by_name: currentUser.name,
-          created_by_role: "Accounts"
+          created_by_role: finalRole
         })
       });
 
@@ -90,6 +94,7 @@ export default function AccountsDashboard({
 
       setTitle("");
       setDescription("");
+      setTargetAccountsUser("");
       setIsAddModalOpen(false);
       fetchTodos();
       refreshLogs();
@@ -182,26 +187,27 @@ export default function AccountsDashboard({
   const visibleTodos = todos.filter(todo => {
     const isCreatedByMe = todo.created_by_name.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
     const creatorRole = todo.created_by_role || "";
-    const isCreatedByAdminOrManager = creatorRole.startsWith("Admin") || creatorRole.startsWith("Manager");
     const targetUser = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
+    const targetUsers = targetUser ? targetUser.split(",").map(u => u.trim()) : [];
     
-    const isTargetedToMe = targetUser && (
-      targetUser.trim().toLowerCase() === currentUser.name.trim().toLowerCase() ||
-      targetUser.trim().toLowerCase() === "malhar" ||
-      targetUser.trim().toLowerCase() === "malhar@pats.co.in"
+    const isTargetedToMe = targetUser && targetUsers.some(target => 
+      isTargetMatch(target, currentUser.name, currentUser.email_id) ||
+      target.toLowerCase() === "malhar" ||
+      target.toLowerCase() === "malhar@pats.co.in"
     );
-    const isTargetedToAll = !targetUser;
 
     if (currentUser.email_id?.trim().toLowerCase() === "malhar@pats.co.in") {
       return !!isTargetedToMe;
     }
 
-    return isCreatedByMe || (isCreatedByAdminOrManager && (isTargetedToMe || isTargetedToAll));
+    return isCreatedByMe || !!isTargetedToMe;
   });
 
   const filteredTodos = visibleTodos.filter(todo => {
-    const isTodo = todo.status !== "Finished";
-    const matchesTab = activeTab === "todo" ? isTodo : !isTodo;
+    if (todo.status === "Deleted" || todo.status?.toLowerCase() === "deleted") {
+      return false;
+    }
+    const matchesTab = activeTab === "todo" ? todo.status === "Assigned" : todo.status === "Finished";
     
     const matchesSearch = 
       todo.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -375,11 +381,11 @@ export default function AccountsDashboard({
 
                   {/* Metadata: Creator and Date (highly compact) */}
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="font-medium truncate max-w-[110px]" title={todo.created_by_role && todo.created_by_role.includes('|for:') ? `For ${todo.created_by_role.split('|for:')[1]}` : undefined}>
+                    <span className="font-medium flex-1 min-w-0 pr-2" title={todo.created_by_role && todo.created_by_role.includes('|for:') ? `For ${todo.created_by_role.split('|for:')[1]}` : undefined}>
                       By <strong className="text-slate-600 font-bold">{todo.created_by_name}</strong>
                       {todo.created_by_role && todo.created_by_role.includes('|for:') && (
-                        <span className="ml-1 text-[8px] bg-indigo-50 text-indigo-600 font-extrabold px-1 py-0.5 rounded border border-indigo-100 uppercase">
-                          ➔ {todo.created_by_role.split('|for:')[1].split(' ')[0]}
+                        <span className="ml-1 text-[8.5px] bg-indigo-50 text-indigo-600 font-extrabold px-1.5 py-0.5 rounded border border-indigo-100 uppercase inline-flex items-center gap-0.5">
+                          ➔ {todo.created_by_role.split('|for:')[1]}
                         </span>
                       )}
                     </span>
@@ -432,6 +438,45 @@ export default function AccountsDashboard({
                   className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 px-3 py-2 rounded-xl focus:outline-none transition-colors resize-none"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Assign / Display To User</label>
+                <select
+                  value={targetAccountsUser}
+                  onChange={(e) => setTargetAccountsUser(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-blue-300 focus:border-blue-500 px-3 py-2 rounded-xl focus:outline-none transition-colors cursor-pointer text-xs"
+                >
+                  <option value="">General Accounts Task (All Accounts Users)</option>
+                  {currentUser && currentUser.name && (
+                    <option value={currentUser.name}>Myself ({currentUser.name})</option>
+                  )}
+                  <optgroup label="Accounts Users">
+                    {employees
+                      .filter(emp => {
+                        const r = (emp.role || "").toLowerCase();
+                        return r.includes("accounts") && emp.name !== currentUser?.name;
+                      })
+                      .map(emp => (
+                        <option key={emp.id} value={emp.name}>
+                          {emp.name} (Accounts)
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="Managers & Admins">
+                    {employees
+                      .filter(emp => {
+                        const r = (emp.role || "").toLowerCase();
+                        return (r.includes("manager") || r.includes("admin")) && emp.name !== currentUser?.name;
+                      })
+                      .map(emp => (
+                        <option key={emp.id} value={emp.name}>
+                          {emp.name} ({emp.role})
+                        </option>
+                      ))}
+                  </optgroup>
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">Select a specific user to target this checklist item, or leave as General Accounts Task.</p>
               </div>
 
               <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">

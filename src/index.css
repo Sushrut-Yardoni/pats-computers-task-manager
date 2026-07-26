@@ -18,4 +18,19 @@
   .box-glow-indigo {
     box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
   }
+  .custom-scrollbar::-webkit-scrollbar {
+    height: 6px;
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(241, 245, 249, 0.8);
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.6);
+    border-radius: 9999px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.8);
+  }
 }

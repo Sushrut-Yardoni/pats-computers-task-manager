@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from "react";
 import { 
-  PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Trash2, AlertCircle, Eye
+  PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Trash2, AlertCircle, Eye, UserPlus, Users, Columns, LayoutGrid
 } from "lucide-react";
-import { TodoTask, Employee, DeletedTodoTask } from "../types";
+import { TodoTask, Employee, DeletedTodoTask, isTargetMatch } from "../types";
 import TodoHistoryModal from "./TodoHistoryModal";
 
 interface TodoManagementSectionProps {
+  currentUser?: { id: number; name: string; role: string; email_id?: string };
   employees: Employee[];
   refreshLogs: () => void;
 }
 
 export default function TodoManagementSection({
+  currentUser,
   employees,
   refreshLogs
 }: TodoManagementSectionProps) {
@@ -20,11 +22,26 @@ export default function TodoManagementSection({
   const [activeTab, setActiveTab] = useState<"todo" | "finished" | "deleted">("todo");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAccountsUser, setSelectedAccountsUser] = useState("");
+  const [viewMode, setViewMode] = useState<"userColumns" | "grid">("userColumns");
 
   const accountsUsers = Array.from(new Set([
-    ...employees.filter(emp => emp.role.toLowerCase() === "accounts" || emp.role.toLowerCase().includes("accounts")).map(emp => emp.name),
-    ...todos.filter(todo => todo.created_by_role?.toLowerCase() === "accounts" || todo.created_by_role?.toLowerCase().includes("accounts")).map(todo => todo.created_by_name)
-  ])).sort();
+    ...employees.filter(emp => {
+      const r = (emp.role || "").toLowerCase();
+      return r.includes("manager") || r.includes("accounts");
+    }).map(emp => emp.name.trim()),
+    ...todos.flatMap(todo => {
+      const role = todo.created_by_role || "";
+      const roleLower = role.toLowerCase();
+      if (roleLower.includes("manager") || roleLower.includes("accounts")) {
+        const names = [todo.created_by_name.trim()];
+        if (role.includes("|for:")) {
+          names.push(...role.split("|for:")[1].split(",").map(u => u.trim()));
+        }
+        return names;
+      }
+      return [];
+    })
+  ])).filter(Boolean).sort();
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -222,10 +239,66 @@ export default function TodoManagementSection({
     }
   };
 
+  // Viewer State
+  const [isAddingViewer, setIsAddingViewer] = useState(false);
+  const [selectedNewViewer, setSelectedNewViewer] = useState("");
+  const [isSubmittingViewer, setIsSubmittingViewer] = useState(false);
+
+  const handleAddViewerSubmit = async () => {
+    if (!viewingTodo || !selectedNewViewer) return;
+    setIsSubmittingViewer(true);
+    try {
+      const currentRole = viewingTodo.created_by_role || "Admin";
+      let newRole = "";
+      if (currentRole.includes("|for:")) {
+        const parts = currentRole.split("|for:");
+        const existingUsers = parts[1].split(",").map(u => u.trim());
+        if (!existingUsers.map(u => u.toLowerCase()).includes(selectedNewViewer.trim().toLowerCase())) {
+          existingUsers.push(selectedNewViewer.trim());
+        }
+        newRole = `${parts[0]}|for:${existingUsers.join(", ")}`;
+      } else {
+        newRole = `${currentRole}|for:${selectedNewViewer.trim()}`;
+      }
+
+      const res = await fetch(`/api/todos/${viewingTodo.id}/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          created_by_role: newRole,
+          edited_by: "System Admin"
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to grant view access.");
+      }
+
+      const updatedTodo = {
+        ...viewingTodo,
+        created_by_role: newRole
+      };
+
+      setViewingTodo(updatedTodo);
+      setTodos(prev => prev.map(t => t.id === viewingTodo.id ? updatedTodo : t));
+      setSelectedNewViewer("");
+      setIsAddingViewer(false);
+      fetchTodos();
+      refreshLogs();
+    } catch (err: any) {
+      alert(err.message || "Failed to add user view access.");
+    } finally {
+      setIsSubmittingViewer(false);
+    }
+  };
+
   // Filters
   const filteredTodos = todos.filter(todo => {
-    const isTodo = todo.status !== "Finished";
-    const matchesTab = activeTab === "todo" ? isTodo : !isTodo;
+    if (todo.status === "Deleted" || todo.status?.toLowerCase() === "deleted") {
+      return false;
+    }
+    const matchesTab = activeTab === "todo" ? todo.status === "Assigned" : todo.status === "Finished";
     
     const matchesSearch = 
       todo.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -233,8 +306,16 @@ export default function TodoManagementSection({
       todo.created_by_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       String(todo.id).includes(searchQuery);
 
-    const matchesAccountsUser = !selectedAccountsUser || 
-      todo.created_by_name.toLowerCase() === selectedAccountsUser.toLowerCase();
+    const selUserLower = selectedAccountsUser.trim().toLowerCase();
+    const isAssignedBy = todo.created_by_name.trim().toLowerCase() === selUserLower;
+    
+    const creatorRole = todo.created_by_role || "";
+    const targetUser = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
+    const targetUsers = targetUser ? targetUser.split(",").map(u => u.trim()) : [];
+    
+    const isAssignedTo = targetUsers.some(target => isTargetMatch(target, selectedAccountsUser));
+
+    const matchesAccountsUser = !selectedAccountsUser || isAssignedBy || isAssignedTo;
 
     return matchesTab && matchesSearch && matchesAccountsUser;
   });
@@ -247,8 +328,16 @@ export default function TodoManagementSection({
       (todo.deleted_by || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
       String(todo.id).includes(searchQuery);
 
-    const matchesAccountsUser = !selectedAccountsUser || 
-      todo.created_by_name.toLowerCase() === selectedAccountsUser.toLowerCase();
+    const selUserLower = selectedAccountsUser.trim().toLowerCase();
+    const isAssignedBy = todo.created_by_name.trim().toLowerCase() === selUserLower;
+    
+    const creatorRole = todo.created_by_role || "";
+    const targetUser = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
+    const targetUsers = targetUser ? targetUser.split(",").map(u => u.trim()) : [];
+    
+    const isAssignedTo = targetUsers.some(target => isTargetMatch(target, selectedAccountsUser));
+
+    const matchesAccountsUser = !selectedAccountsUser || isAssignedBy || isAssignedTo;
 
     return matchesSearch && matchesAccountsUser;
   });
@@ -264,6 +353,161 @@ export default function TodoManagementSection({
     } catch {
       return isoString;
     }
+  };
+
+  const renderTaskCard = (todo: TodoTask | DeletedTodoTask) => (
+    <div 
+      key={todo.id} 
+      onClick={() => setViewingTodo(todo as TodoTask)}
+      className={`bg-white border rounded-xl shadow-3xs hover:shadow-sm transition-all duration-200 flex flex-col shrink-0 overflow-hidden cursor-pointer relative group ${
+        activeTab === "deleted" ? "border-red-100 hover:border-red-400" : "border-slate-200 hover:border-indigo-400"
+      }`}
+    >
+      {/* Accent status line at top of card */}
+      <div className={`h-1 w-full ${
+        activeTab === "deleted" ? "bg-red-500" : todo.status === "Finished" ? "bg-emerald-500" : "bg-amber-500"
+      }`} />
+
+      <div className="p-3.5 flex-grow flex flex-col justify-between space-y-3">
+        {/* Card Header: ID & Status Badge */}
+        <div className="flex items-center justify-between">
+          <span className="font-mono font-extrabold text-indigo-600 text-xs">#{todo.id}</span>
+          <div>
+            {activeTab === "deleted" ? (
+              <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.2 text-[8px] font-extrabold text-red-700 ring-1 ring-red-100 uppercase tracking-wide">
+                Deleted
+              </span>
+            ) : todo.status === "Assigned" ? (
+              <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.2 text-[8px] font-extrabold text-amber-700 ring-1 ring-amber-100 uppercase tracking-wide">
+                Assigned
+              </span>
+            ) : (
+              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.2 text-[8px] font-extrabold text-emerald-700 ring-1 ring-emerald-100 uppercase tracking-wide">
+                Finished
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Title and Description */}
+        <div className="space-y-1">
+          <h4 className="font-extrabold text-slate-800 text-[12.5px] leading-snug group-hover:text-indigo-700 transition-colors line-clamp-2">{todo.title}</h4>
+          <p className="text-[10.5px] text-slate-500 font-normal leading-relaxed line-clamp-3 break-words">
+            {todo.description}
+          </p>
+        </div>
+
+        {/* Deletion details if activeTab is deleted */}
+        {activeTab === "deleted" && (
+          <div className="bg-red-50/40 border border-red-100/30 rounded-lg p-2 text-[9px] text-slate-600 space-y-0.5">
+            <div className="truncate">Deleted by: <strong className="text-red-700">{(todo as any).deleted_by || "Manager"}</strong></div>
+            <div className="truncate">Deleted at: <strong className="text-slate-700">{(todo as any).deleted_at ? formatDate((todo as any).deleted_at) : "N/A"}</strong></div>
+          </div>
+        )}
+
+        {/* Resolution remarks if finished (smaller) */}
+        {activeTab === "finished" && todo.remarks && (
+          <div className="bg-emerald-50/40 border border-emerald-100/40 rounded-lg p-2 text-[10px] text-slate-600 italic truncate">
+            {todo.remarks}
+          </div>
+        )}
+
+        {/* Metadata: Creator and Date */}
+        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+          <span className="font-medium flex-1 min-w-0 pr-2" title={todo.created_by_role && todo.created_by_role.includes('|for:') ? `For ${todo.created_by_role.split('|for:')[1]}` : undefined}>
+            By <strong className="text-slate-600 font-bold">{todo.created_by_name}</strong>
+            {todo.created_by_role && todo.created_by_role.includes('|for:') && (
+              <span className="ml-1 text-[8.5px] bg-indigo-50 text-indigo-600 font-extrabold px-1.5 py-0.5 rounded border border-indigo-100 uppercase inline-flex items-center gap-0.5">
+                ➔ {todo.created_by_role.split('|for:')[1]}
+              </span>
+            )}
+          </span>
+          <span className="font-mono">{formatDate(todo.created_at)}</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  const getUserGroups = () => {
+    const currentTodoList = activeTab === "deleted" ? filteredDeletedTodos : filteredTodos;
+
+    if (selectedAccountsUser) {
+      const selUserLower = selectedAccountsUser.trim().toLowerCase();
+      const userTodos = currentTodoList.filter(todo => {
+        const creatorRole = todo.created_by_role || "";
+        const targetUserStr = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
+        if (targetUserStr) {
+          const targets = targetUserStr.split(",").map(u => u.trim().toLowerCase());
+          return targets.some(u => u === selUserLower || (u.length >= 2 && selUserLower.includes(u)));
+        }
+        return todo.created_by_name.trim().toLowerCase() === selUserLower;
+      });
+      return [{ userName: selectedAccountsUser, todos: userTodos }];
+    }
+
+    const nameSet = new Set<string>();
+    if (currentUser && currentUser.name) {
+      nameSet.add(currentUser.name.trim());
+    }
+    accountsUsers.forEach(u => nameSet.add(u));
+
+    currentTodoList.forEach(todo => {
+      if (todo.created_by_name) nameSet.add(todo.created_by_name.trim());
+      const role = todo.created_by_role || "";
+      if (role.includes("|for:")) {
+        role.split("|for:")[1].split(",").forEach(u => {
+          if (u.trim()) nameSet.add(u.trim());
+        });
+      }
+    });
+
+    const myNameLower = currentUser && currentUser.name ? currentUser.name.trim().toLowerCase() : "";
+    const allUserNames = Array.from(nameSet).filter(Boolean);
+    const assignedTodoIds = new Set<number>();
+
+    const groups = allUserNames.map(userName => {
+      const uLower = userName.toLowerCase();
+      const userTodos = currentTodoList.filter(todo => {
+        const creatorRole = todo.created_by_role || "";
+        const targetUserStr = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
+        if (targetUserStr) {
+          const targets = targetUserStr.split(",").map(u => u.trim());
+          const matches = targets.some(target => isTargetMatch(target, userName));
+          if (matches) {
+            assignedTodoIds.add(todo.id);
+            return true;
+          }
+          return false;
+        } else {
+          const matches = todo.created_by_name.trim().toLowerCase() === uLower;
+          if (matches) {
+            assignedTodoIds.add(todo.id);
+            return true;
+          }
+          return false;
+        }
+      });
+
+      return { userName, todos: userTodos };
+    }).filter(group => group.todos.length > 0 || accountsUsers.includes(group.userName) || (myNameLower && group.userName.trim().toLowerCase() === myNameLower));
+
+    const unassignedTodos = currentTodoList.filter(t => !assignedTodoIds.has(t.id));
+    if (unassignedTodos.length > 0) {
+      groups.push({ userName: "General / Other", todos: unassignedTodos });
+    }
+
+    // Sort so self task column comes first, followed by other users, and General at the end
+    groups.sort((a, b) => {
+      const aIsMe = myNameLower && a.userName.trim().toLowerCase() === myNameLower;
+      const bIsMe = myNameLower && b.userName.trim().toLowerCase() === myNameLower;
+      if (aIsMe) return -1;
+      if (bIsMe) return 1;
+      if (a.userName === "General / Other") return 1;
+      if (b.userName === "General / Other") return -1;
+      return a.userName.localeCompare(b.userName);
+    });
+
+    return groups;
   };
 
   return (
@@ -342,6 +586,34 @@ export default function TodoManagementSection({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {/* View Mode Switcher */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
+              <button
+                onClick={() => setViewMode("userColumns")}
+                title="Display tasks divided user-wise"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "userColumns"
+                    ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <Columns className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">User-Wise</span>
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                title="Display all tasks in standard grid"
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  viewMode === "grid"
+                    ? "bg-white text-indigo-700 shadow-xs border border-slate-200"
+                    : "text-slate-500 hover:text-slate-900"
+                }`}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Grid View</span>
+              </button>
+            </div>
+
             {/* Create ticket button */}
             <button
               onClick={() => setIsAddModalOpen(true)}
@@ -369,17 +641,17 @@ export default function TodoManagementSection({
             />
           </div>
 
-          {/* Accounts User Filter Dropdown */}
+          {/* Accounts/Manager User Filter Dropdown */}
           <div className="flex items-center gap-2 min-w-[240px]">
-            <span className="text-xs text-slate-500 font-medium shrink-0">Filter Accounts User:</span>
+            <span className="text-xs text-slate-500 font-medium shrink-0">Filter User:</span>
             <select
               value={selectedAccountsUser}
               onChange={(e) => setSelectedAccountsUser(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 py-2 px-3 rounded-xl text-xs text-slate-700 font-medium focus:outline-none transition-all cursor-pointer"
             >
-              <option value="">All Creators</option>
+              <option value="">All Users (Assigned To / By)</option>
               {accountsUsers.length === 0 ? (
-                <option disabled>No Accounts users found</option>
+                <option disabled>No users found</option>
               ) : (
                 accountsUsers.map(name => (
                   <option key={name} value={name}>
@@ -391,7 +663,7 @@ export default function TodoManagementSection({
           </div>
         </div>
 
-        {/* Tasks List - Card View */}
+        {/* Tasks List */}
         {isLoading ? (
           <div className="bg-white border border-slate-200 rounded-2xl text-center py-12 text-slate-400 italic text-xs shadow-xs">
             Loading To-Do checklist tasks...
@@ -400,80 +672,64 @@ export default function TodoManagementSection({
           <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-400 italic text-xs shadow-xs">
             No To-Do tasks found matching your query.
           </div>
+        ) : viewMode === "userColumns" ? (
+          /* Horizontal scroll wrapper with fixed height scrollable user columns */
+          <div className="overflow-x-auto custom-scrollbar pb-4 pt-1 border-t border-slate-100">
+            <div className="flex gap-4 items-start animate-fade-in pb-1">
+              {getUserGroups().map(group => {
+                const isSelf = !!(currentUser && currentUser.name && group.userName.trim().toLowerCase() === currentUser.name.trim().toLowerCase());
+                return (
+                  <div 
+                    key={group.userName} 
+                    className={`w-72 sm:w-80 shrink-0 rounded-2xl p-3.5 flex flex-col h-[500px] shadow-xs transition-all ${
+                      isSelf 
+                        ? "bg-indigo-50/80 border-2 border-indigo-400 ring-2 ring-indigo-100/60" 
+                        : "bg-slate-50/80 border border-slate-200/90"
+                    }`}
+                  >
+                    {/* Column Header */}
+                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 shrink-0 mb-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className={`p-1.5 rounded-lg shrink-0 ${isSelf ? "bg-indigo-600 text-white" : "bg-indigo-100 text-indigo-800"}`}>
+                          <User className="h-4 w-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="font-extrabold text-xs text-slate-800 truncate" title={group.userName}>{group.userName}</h3>
+                            {isSelf && (
+                              <span className="bg-indigo-600 text-white font-black text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">
+                                My Tasks
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[9.5px] text-slate-400 font-medium block">
+                            {isSelf ? "Self & Assigned Tasks" : "User Tasks"}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="bg-indigo-600 text-white font-mono text-[10px] font-extrabold px-2 py-0.5 rounded-full shrink-0">
+                        {group.todos.length}
+                      </span>
+                    </div>
+
+                    {/* Dedicated Vertical Task Stack for this user */}
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-2.5">
+                      {group.todos.length === 0 ? (
+                        <div className="p-4 bg-white/60 border border-dashed border-slate-200 rounded-xl text-center text-[11px] text-slate-400 italic">
+                          No tasks assigned
+                        </div>
+                      ) : (
+                        group.todos.map(todo => renderTaskCard(todo))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 animate-fade-in">
-            {(activeTab === "deleted" ? filteredDeletedTodos : filteredTodos).map(todo => (
-              <div 
-                key={todo.id} 
-                onClick={() => setViewingTodo(todo)}
-                className={`bg-white border rounded-xl shadow-3xs hover:shadow-sm transition-all duration-200 flex flex-col overflow-hidden cursor-pointer relative group ${
-                  activeTab === "deleted" ? "border-red-100 hover:border-red-400" : "border-slate-200 hover:border-indigo-400"
-                }`}
-              >
-                {/* Accent status line at top of card */}
-                <div className={`h-1 w-full ${
-                  activeTab === "deleted" ? "bg-red-500" : todo.status === "Finished" ? "bg-emerald-500" : "bg-amber-500"
-                }`} />
-
-                <div className="p-3.5 flex-grow flex flex-col justify-between space-y-3">
-                  {/* Card Header: ID & Status Badge */}
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-extrabold text-indigo-600 text-xs">#{todo.id}</span>
-                    <div>
-                      {activeTab === "deleted" ? (
-                        <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.2 text-[8px] font-extrabold text-red-700 ring-1 ring-red-100 uppercase tracking-wide">
-                          Deleted
-                        </span>
-                      ) : todo.status === "Assigned" ? (
-                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.2 text-[8px] font-extrabold text-amber-700 ring-1 ring-amber-100 uppercase tracking-wide">
-                          Assigned
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.2 text-[8px] font-extrabold text-emerald-700 ring-1 ring-emerald-100 uppercase tracking-wide">
-                          Finished
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Title and Description */}
-                  <div className="space-y-1">
-                    <h4 className="font-extrabold text-slate-800 text-[12.5px] leading-snug group-hover:text-indigo-700 transition-colors line-clamp-1">{todo.title}</h4>
-                    <p className="text-[10.5px] text-slate-500 font-normal leading-relaxed line-clamp-2 break-words">
-                      {todo.description}
-                    </p>
-                  </div>
-
-                  {/* Deletion details if activeTab is deleted */}
-                  {activeTab === "deleted" && (
-                    <div className="bg-red-50/40 border border-red-100/30 rounded-lg p-2 text-[9px] text-slate-600 space-y-0.5">
-                      <div className="truncate">Deleted by: <strong className="text-red-700">{(todo as any).deleted_by || "Manager"}</strong></div>
-                      <div className="truncate">Deleted at: <strong className="text-slate-700">{(todo as any).deleted_at ? formatDate((todo as any).deleted_at) : "N/A"}</strong></div>
-                    </div>
-                  )}
-
-                  {/* Resolution remarks if finished (smaller) */}
-                  {activeTab === "finished" && todo.remarks && (
-                    <div className="bg-emerald-50/40 border border-emerald-100/40 rounded-lg p-2 text-[10px] text-slate-600 italic truncate">
-                      {todo.remarks}
-                    </div>
-                  )}
-
-                  {/* Metadata: Creator and Date (highly compact) */}
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="font-medium truncate max-w-[110px]" title={todo.created_by_role && todo.created_by_role.includes('|for:') ? `For ${todo.created_by_role.split('|for:')[1]}` : undefined}>
-                      By <strong className="text-slate-600 font-bold">{todo.created_by_name}</strong>
-                      {todo.created_by_role && todo.created_by_role.includes('|for:') && (
-                        <span className="ml-1 text-[8px] bg-indigo-50 text-indigo-600 font-extrabold px-1 py-0.5 rounded border border-indigo-100 uppercase">
-                          ➔ {todo.created_by_role.split('|for:')[1].split(' ')[0]}
-                        </span>
-                      )}
-                    </span>
-                    <span className="font-mono">{formatDate(todo.created_at)}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+            {(activeTab === "deleted" ? filteredDeletedTodos : filteredTodos).map(todo => renderTaskCard(todo))}
           </div>
         )}
       </div>
@@ -508,23 +764,34 @@ export default function TodoManagementSection({
                 />
               </div>
 
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Display to Accounts User (Optional)</label>
+               <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Assign / Display to User (Optional)</label>
                 <select
                   value={targetAccountsUser}
                   onChange={(e) => setTargetAccountsUser(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 hover:border-blue-300 focus:border-blue-500 px-3 py-2 rounded-xl focus:outline-none transition-colors cursor-pointer"
+                  className="w-full bg-slate-50 border border-slate-200 hover:border-blue-300 focus:border-blue-500 px-3 py-2 rounded-xl focus:outline-none transition-colors cursor-pointer text-xs"
                 >
-                  <option value="">All Accounts Users</option>
-                  {employees
-                    .filter(emp => emp.role.toLowerCase() === "accounts" || emp.role.toLowerCase().includes("accounts"))
-                    .map(emp => (
-                      <option key={emp.id} value={emp.name}>
-                        {emp.name}
-                      </option>
-                    ))}
+                  <option value="">All Users (Public)</option>
+                  <optgroup label="Accounts Users">
+                    {employees
+                      .filter(emp => emp.role.toLowerCase() === "accounts" || emp.role.toLowerCase().includes("accounts"))
+                      .map(emp => (
+                        <option key={emp.id} value={emp.name}>
+                          {emp.name} (Accounts)
+                        </option>
+                      ))}
+                  </optgroup>
+                  <optgroup label="Managers">
+                    {employees
+                      .filter(emp => emp.role.toLowerCase() === "manager" || emp.role.toLowerCase().includes("manager"))
+                      .map(emp => (
+                        <option key={emp.id} value={emp.name}>
+                          {emp.name} (Manager)
+                        </option>
+                      ))}
+                  </optgroup>
                 </select>
-                <p className="text-[10px] text-slate-400 mt-1">If specified, only this accounts user, plus managers and admins, can see this task.</p>
+                <p className="text-[10px] text-slate-400 mt-1">If specified, only this user (Accounts or Manager), plus admins, can see this task.</p>
               </div>
 
               <div>
@@ -847,6 +1114,67 @@ export default function TodoManagementSection({
                   <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Date Created</span>
                   <span className="font-semibold text-slate-700 text-xs block mt-1">{formatDate(viewingTodo.created_at)}</span>
                 </div>
+              </div>
+
+              {/* View Access & Users Section */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800">
+                    <Users className="h-3.5 w-3.5 text-blue-600" />
+                    <span>View Access & Assigned Users</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingViewer(!isAddingViewer)}
+                    className="text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 border border-blue-200/60 rounded-lg px-2 py-1 transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <UserPlus className="h-3 w-3" />
+                    <span>{isAddingViewer ? "Close" : "+ Add User/Manager"}</span>
+                  </button>
+                </div>
+
+                <div className="text-[11px] text-slate-600 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider">Access Granted To:</span>
+                  <span className="bg-white border border-slate-200 px-2 py-0.5 rounded-md font-semibold text-slate-700 text-[10.5px]">
+                    {viewingTodo.created_by_name} (Creator)
+                  </span>
+                  {viewingTodo.created_by_role && viewingTodo.created_by_role.includes('|for:') && (
+                    viewingTodo.created_by_role.split('|for:')[1].split(',').map((u, idx) => (
+                      <span key={idx} className="bg-blue-50 border border-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-md text-[10.5px] flex items-center gap-1">
+                        <User className="h-3 w-3 text-blue-600" />
+                        <span>{u.trim()}</span>
+                      </span>
+                    ))
+                  )}
+                </div>
+
+                {isAddingViewer && (
+                  <div className="pt-2 border-t border-slate-200 space-y-2 animate-fade-in">
+                    <span className="text-[9.5px] font-extrabold text-slate-500 uppercase block tracking-wider">
+                      Select User or Manager to grant task access:
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={selectedNewViewer}
+                        onChange={(e) => setSelectedNewViewer(e.target.value)}
+                        className="flex-1 bg-white border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 rounded-xl px-2.5 py-1.5 text-xs text-slate-800 font-medium focus:outline-none cursor-pointer"
+                      >
+                        <option value="">-- Choose User / Manager --</option>
+                        {accountsUsers.map(name => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!selectedNewViewer || isSubmittingViewer}
+                        onClick={handleAddViewerSubmit}
+                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition-all shadow-xs cursor-pointer shrink-0 flex items-center gap-1"
+                      >
+                        {isSubmittingViewer ? "Granting..." : "Add Access"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {activeTab === "deleted" ? (

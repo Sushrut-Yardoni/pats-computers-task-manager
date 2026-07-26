@@ -174,15 +174,54 @@ interface DeletedTodoTask extends TodoTask {
   deleted_by: string;
 }
 
+interface Company {
+  id: number;
+  name: string;
+  type: "AMC" | "Non AMC";
+  created_at: string;
+  created_by: string;
+}
+
+interface CompanyAsset {
+  id: number;
+  company_id: number;
+  asset: string;
+  asset_id: string;
+  location: string;
+  department: string;
+  monitor: string;
+  employee_name: string;
+  comp_name: string;
+  model_no: string;
+  configured_os: string;
+  os_key: string;
+  ms_office: string;
+  office_key: string;
+  other_app: string;
+  serial: string;
+  lan_ip: string;
+  mac_ip: string;
+  wifi_mac_ip: string;
+  antivirus_key: string;
+  key_val: string;
+  validity: string;
+  remarks: string;
+  created_at: string;
+}
+
 interface DatabaseSchema {
   employees: Employee[];
   tasks: Task[];
   offline_travels?: OfflineTravel[];
   todos?: TodoTask[];
   deletedTodos?: DeletedTodoTask[];
+  companies?: Company[];
+  assets?: CompanyAsset[];
   nextTaskId: number;
   nextTodoId?: number;
   nextOfflineTravelId?: number;
+  nextCompanyId?: number;
+  nextAssetId?: number;
   settings?: {
     petrol_price: number;
   };
@@ -280,6 +319,22 @@ function initDb(): DatabaseSchema {
       }
       if (typeof data.nextTodoId !== "number") {
         data.nextTodoId = data.todos.length > 0 ? Math.max(...data.todos.map(t => t.id)) + 1 : 101;
+        migrated = true;
+      }
+      if (!data.companies) {
+        data.companies = [];
+        migrated = true;
+      }
+      if (typeof data.nextCompanyId !== "number") {
+        data.nextCompanyId = data.companies.length > 0 ? Math.max(...data.companies.map(c => c.id)) + 1 : 1;
+        migrated = true;
+      }
+      if (!data.assets) {
+        data.assets = [];
+        migrated = true;
+      }
+      if (typeof data.nextAssetId !== "number") {
+        data.nextAssetId = data.assets.length > 0 ? Math.max(...data.assets.map(a => a.id)) + 1 : 1;
         migrated = true;
       }
       if (migrated) {
@@ -391,6 +446,10 @@ function initDb(): DatabaseSchema {
       }
     ],
     deletedTodos: [],
+    companies: [],
+    assets: [],
+    nextCompanyId: 1,
+    nextAssetId: 1,
     settings: {
       petrol_price: 100
     }
@@ -983,12 +1042,37 @@ app.get("/api/sync", async (req, res) => {
         mappedLogs = sqlLogs;
       }
 
+      let companiesList: Company[] = [];
+      let assetsList: CompanyAsset[] = [];
+      try {
+        if (isSupabaseConfigured && supabase) {
+          const { data: cos } = await supabase.from("companies").select("*").order("id", { ascending: true });
+          companiesList = cos || [];
+        } else {
+          companiesList = db.companies || [];
+        }
+      } catch (err) {
+        companiesList = db.companies || [];
+      }
+      try {
+        if (isSupabaseConfigured && supabase) {
+          const { data: ast } = await supabase.from("assets").select("*").order("id", { ascending: true });
+          assetsList = ast || [];
+        } else {
+          assetsList = db.assets || [];
+        }
+      } catch (err) {
+        assetsList = db.assets || [];
+      }
+
       logSQL("SELECT * FROM employees; SELECT * FROM tasks; SELECT * FROM sql_logs; -- (Unified Live Connection Sync)", employeesList.length + tasksList.length + mappedLogs.length);
 
       return res.json({
         employees: employeesList,
         tasks: tasksList,
-        sqlLogs: mappedLogs
+        sqlLogs: mappedLogs,
+        companies: companiesList,
+        assets: assetsList
       });
     } catch (e: any) {
       console.error("Failed to sync from Supabase, falling back to local memory DB:", e);
@@ -1015,8 +1099,123 @@ app.get("/api/sync", async (req, res) => {
   return res.json({
     employees: cleanEmployees,
     tasks: tasksWithEmployees,
-    sqlLogs: sqlLogs
+    sqlLogs: sqlLogs,
+    companies: db.companies || [],
+    assets: db.assets || []
   });
+});
+
+// Create a new company
+app.post("/api/companies", async (req, res) => {
+  const { name, type, created_by } = req.body;
+  if (!name || !type) {
+    return res.status(400).json({ error: "Company name and type (AMC / Non AMC) are required." });
+  }
+
+  const nextId = db.nextCompanyId || 1;
+  const newCompany = {
+    id: nextId,
+    name,
+    type: type === "AMC" ? ("AMC" as const) : ("Non AMC" as const),
+    created_by: created_by || "System",
+    created_at: new Date().toISOString()
+  };
+
+  if (!db.companies) db.companies = [];
+  db.companies.push(newCompany);
+  db.nextCompanyId = nextId + 1;
+  saveDb();
+
+  // Log SQL
+  logSQL(`INSERT INTO companies (id, name, type, created_by, created_at) VALUES (${nextId}, '${name}', '${type}', '${created_by || "System"}', NOW());`, 1);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from("companies").insert([newCompany]);
+    } catch (e) {
+      console.warn("Could not insert company to Supabase:", e);
+    }
+  }
+
+  res.status(201).json(newCompany);
+});
+
+// Create a new asset under a company
+app.post("/api/assets", async (req, res) => {
+  const {
+    company_id,
+    asset,
+    asset_id,
+    location,
+    department,
+    monitor,
+    employee_name,
+    comp_name,
+    model_no,
+    configured_os,
+    os_key,
+    ms_office,
+    office_key,
+    other_app,
+    serial,
+    lan_ip,
+    mac_ip,
+    wifi_mac_ip,
+    antivirus_key,
+    key_val,
+    validity,
+    remarks
+  } = req.body;
+
+  if (!company_id) {
+    return res.status(400).json({ error: "company_id is required." });
+  }
+
+  const nextId = db.nextAssetId || 1;
+  const newAsset = {
+    id: nextId,
+    company_id: Number(company_id),
+    asset: asset || "",
+    asset_id: asset_id || "",
+    location: location || "",
+    department: department || "",
+    monitor: monitor || "",
+    employee_name: employee_name || "",
+    comp_name: comp_name || "",
+    model_no: model_no || "",
+    configured_os: configured_os || "",
+    os_key: os_key || "",
+    ms_office: ms_office || "",
+    office_key: office_key || "",
+    other_app: other_app || "",
+    serial: serial || "",
+    lan_ip: lan_ip || "",
+    mac_ip: mac_ip || "",
+    wifi_mac_ip: wifi_mac_ip || "",
+    antivirus_key: antivirus_key || "",
+    key_val: key_val || "",
+    validity: validity || "",
+    remarks: remarks || "",
+    created_at: new Date().toISOString()
+  };
+
+  if (!db.assets) db.assets = [];
+  db.assets.push(newAsset);
+  db.nextAssetId = nextId + 1;
+  saveDb();
+
+  // Log SQL
+  logSQL(`INSERT INTO assets (id, company_id, asset, asset_id, serial, location, department) VALUES (${nextId}, ${company_id}, '${asset || ""}', '${asset_id || ""}', '${serial || ""}', '${location || ""}', '${department || ""}');`, 1);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from("assets").insert([newAsset]);
+    } catch (e) {
+      console.warn("Could not insert asset to Supabase:", e);
+    }
+  }
+
+  res.status(201).json(newAsset);
 });
 
 // Get list of employees
@@ -1957,14 +2156,14 @@ app.get("/api/todos", async (req, res) => {
           title: todo.title,
           description: todo.details || "",
           priority: todo.priority || "low",
-          status: todo.status ? (todo.status.toLowerCase() === "finished" || todo.status.toLowerCase() === "completed" ? "Finished" : "Assigned") : "Assigned",
+          status: todo.status ? (todo.status.toLowerCase() === "finished" || todo.status.toLowerCase() === "completed" ? "Finished" : todo.status.toLowerCase() === "deleted" ? "Deleted" : "Assigned") : "Assigned",
           created_at: todo.created_at,
           created_by_name,
           created_by_role,
           remarks: todo.remarks || null,
           history: todoHistory
         };
-      });
+      }).filter(todo => todo.status !== "Deleted");
 
       logSQL(query, formattedTodos.length);
       return res.json(formattedTodos);
@@ -2066,7 +2265,7 @@ app.post("/api/todos", async (req, res) => {
 // UPDATE A TODO AND RECORD HISTORY
 app.post("/api/todos/:id/update", async (req, res) => {
   const todoIdParam = req.params.id;
-  const { title, description, status, remarks, edited_by } = req.body;
+  const { title, description, status, remarks, edited_by, created_by_role: new_created_by_role } = req.body;
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -2107,6 +2306,10 @@ app.post("/api/todos/:id/update", async (req, res) => {
         remarks: remarks !== undefined ? remarks : todo.remarks,
         updated_at: new Date().toISOString()
       };
+
+      if (new_created_by_role !== undefined) {
+        updatedFields.priority = new_created_by_role;
+      }
 
       const hasChanges = 
         beforeState.title !== updatedFields.title ||
@@ -2270,12 +2473,16 @@ app.post("/api/todos/:id/update", async (req, res) => {
     return res.status(403).json({ error: "Description cannot be edited while status is Finished. Change status to Assigned first." });
   }
 
-  const updatedFields = {
+  const updatedFields: any = {
     title: title !== undefined ? title : todo.title,
     description: description !== undefined ? description : todo.description,
     status: status !== undefined ? status : todo.status,
     remarks: remarks !== undefined ? remarks : todo.remarks
   };
+
+  if (new_created_by_role !== undefined) {
+    updatedFields.created_by_role = new_created_by_role;
+  }
 
   const hasChanges = 
     beforeState.title !== updatedFields.title ||

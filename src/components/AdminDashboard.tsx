@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { 
-  PlusCircle, Database, Cpu, Terminal, Layers, Users, BarChart4, Sparkles, Fuel, ChevronLeft, ChevronRight, LayoutDashboard
+  PlusCircle, Database, Cpu, Terminal, Layers, Users, BarChart4, Sparkles, Fuel, ChevronLeft, ChevronRight, LayoutDashboard, Building
 } from "lucide-react";
-import { Task, Employee, SqlLog } from "../types";
+import { Task, Employee, SqlLog, Company, CompanyAsset } from "../types";
 import TaskManagementSection from "./TaskManagementSection";
 import TodoManagementSection from "./TodoManagementSection";
 import EmployeeManagementSection from "./EmployeeManagementSection";
@@ -10,10 +10,13 @@ import ReportsSection from "./ReportsSection";
 import TravelPetrolSection from "./TravelPetrolSection";
 import DatabaseExplorerSection from "./DatabaseExplorerSection";
 import AnalyticsSection from "./AnalyticsSection";
+import CompanySection from "./CompanySection";
 
 interface AdminDashboardProps {
   tasks: Task[];
   employees: Employee[];
+  companies: Company[];
+  assets: CompanyAsset[];
   onAssignTask: (taskData: {
     customer_name: string;
     contact_details: string;
@@ -36,6 +39,8 @@ interface AdminDashboardProps {
 export default function AdminDashboard({ 
   tasks, 
   employees, 
+  companies,
+  assets,
   onAssignTask, 
   onResetDb,
   onClearDb,
@@ -48,8 +53,8 @@ export default function AdminDashboard({
   onTogglePriority,
   onUpdatePassword
 }: AdminDashboardProps) {
-  // Master navigation state: "tasks" | "todos" | "employees" | "reports" | "travel" | "database" | "analytics"
-  const [activeTab, setActiveTab] = useState<"tasks" | "todos" | "employees" | "reports" | "travel" | "database" | "analytics">("tasks");
+  // Master navigation state: "tasks" | "todos" | "employees" | "reports" | "travel" | "database" | "analytics" | "companies"
+  const [activeTab, setActiveTab] = useState<"tasks" | "todos" | "employees" | "reports" | "travel" | "database" | "analytics" | "companies">("tasks");
 
   // Synchronize active tab with the main header SQL trigger
   useEffect(() => {
@@ -181,6 +186,19 @@ export default function AdminDashboard({
 
           <button
             type="button"
+            onClick={() => setActiveTab("companies")}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
+              activeTab === "companies"
+                ? "bg-indigo-50 text-indigo-805 border border-indigo-120 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-850 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <Building className="h-4 w-4 text-indigo-650 shrink-0" />
+            <span className="font-sans font-bold">Company Assets</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("database")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
               activeTab === "database"
@@ -208,6 +226,7 @@ export default function AdminDashboard({
                 {activeTab === "reports" && "Telemetry Reports"}
                 {activeTab === "analytics" && "Analytics"}
                 {activeTab === "travel" && "Travel & Fuel Cost"}
+                {activeTab === "companies" && "Company & Asset Registry"}
                 {activeTab === "database" && "Database Tables"}
               </span>
             </h2>
@@ -266,6 +285,16 @@ export default function AdminDashboard({
           <AnalyticsSection
             tasks={tasks}
             employees={employees}
+          />
+        )}
+        {activeTab === "companies" && (
+          <CompanySection
+            companies={companies}
+            assets={assets}
+            currentUser={{ name: "Admin Dashboard", type: "admin" }}
+            onRefresh={async () => {
+              refreshLogs();
+            }}
           />
         )}
       </div>

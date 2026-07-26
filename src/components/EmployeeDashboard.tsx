@@ -2,29 +2,36 @@ import React, { useState, useEffect } from "react";
 import { 
   CheckCircle, Clock, AlertTriangle, Phone, Mail, 
   X, Cpu, Calendar, CheckSquare, MessageSquare, ArrowRight, Play, Check, Navigation, Package,
-  User, ShieldAlert, ChevronLeft, ChevronRight, Menu, AlertCircle, Settings
+  User, ShieldAlert, ChevronLeft, ChevronRight, Menu, AlertCircle, Settings, Building
 } from "lucide-react";
 import EmployeeTravelSection from "./EmployeeTravelSection";
-import { Task, Employee } from "../types";
+import { Task, Employee, Company, CompanyAsset } from "../types";
+import CompanySection from "./CompanySection";
 
 interface EmployeeDashboardProps {
   currentEmployee: { id: number; name: string; role: string };
   employees: Employee[];
   tasks: Task[];
+  companies: Company[];
+  assets: CompanyAsset[];
+  onSyncCompany?: () => Promise<void>;
   onAcceptTask: (taskId: number) => Promise<void>;
   onFinishTask: (taskId: number, remarks: string, km_travelled?: number) => Promise<void>;
   onUpdateRemarks: (taskId: number, remarks: string) => Promise<void>;
   onUpdatePassword?: (employeeId: number, newPassword: string) => Promise<void>;
   onUpdateMaterials?: (taskId: number, materials: string | null) => Promise<void>;
   onUpdateProfile?: (employeeId: number, profileData: Partial<Employee>) => Promise<void>;
-  activeTab?: "active" | "completed" | "travel" | "profile";
-  onTabChange?: (tab: "active" | "completed" | "travel" | "profile") => void;
+  activeTab?: "active" | "completed" | "travel" | "profile" | "companies";
+  onTabChange?: (tab: "active" | "completed" | "travel" | "profile" | "companies") => void;
 }
 
 export default function EmployeeDashboard({
   currentEmployee,
   employees,
   tasks,
+  companies,
+  assets,
+  onSyncCompany,
   onAcceptTask,
   onFinishTask,
   onUpdateRemarks,
@@ -42,7 +49,7 @@ export default function EmployeeDashboard({
   const [showRemarksInput, setShowRemarksInput] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile">("active");
+  const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "companies">("active");
   const activeTab = propsActiveTab !== undefined ? propsActiveTab : internalActiveTab;
   const setActiveTab = onTabChange !== undefined ? onTabChange : setInternalActiveTab;
 
@@ -386,6 +393,19 @@ export default function EmployeeDashboard({
 
           <button
             type="button"
+            onClick={() => setActiveTab("companies")}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
+              activeTab === "companies"
+                ? "bg-blue-50 text-blue-850 border border-blue-100 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <Building className="h-4 w-4 text-blue-600 shrink-0" />
+            {!isSidebarCollapsed && <span className="font-sans">Company Assets</span>}
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("profile")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
               activeTab === "profile"
@@ -617,6 +637,17 @@ export default function EmployeeDashboard({
         </div>
       ) : activeTab === "travel" ? (
         <EmployeeTravelSection myTasks={myTasks} employeeId={currentEmployee.id} petrolPrice={petrolPrice} />
+      ) : activeTab === "companies" ? (
+        <CompanySection
+          companies={companies}
+          assets={assets}
+          currentUser={{ name: currentEmployee.name, type: "employee", id: currentEmployee.id }}
+          onRefresh={async () => {
+            if (onSyncCompany) {
+              await onSyncCompany();
+            }
+          }}
+        />
       ) : (
         <div className="space-y-4">
           {/* Month Filter and Record Limit row */}
