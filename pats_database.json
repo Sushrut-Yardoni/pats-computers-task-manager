@@ -1,0 +1,1024 @@
+{
+  "employees": [
+    {
+      "id": 101,
+      "name": "Chiranjiv Shinde",
+      "role": "Office Boy",
+      "joined_at": "2026-01-01",
+      "email_id": "chiranjiv_shinde@pats.co.in",
+      "password": "pats@101"
+    },
+    {
+      "id": 102,
+      "name": "Nilesh Yadav",
+      "role": "Service Engineer",
+      "joined_at": "2026-01-01",
+      "email_id": "nilesh_yadav@pats.co.in",
+      "password": "pats@102"
+    },
+    {
+      "id": 103,
+      "name": "Vikrant Helale",
+      "role": "Service Engineer",
+      "joined_at": "2026-01-01",
+      "email_id": "vikrant_helale@pats.co.in",
+      "password": "pats@103"
+    },
+    {
+      "id": 104,
+      "name": "Chetan Ghare",
+      "role": "Senior Service Engineer",
+      "joined_at": "2026-01-01",
+      "email_id": "chetan_ghare@pats.co.in",
+      "password": "pats@104"
+    },
+    {
+      "id": 106,
+      "name": "Sushrut Yardoni",
+      "role": "Admin",
+      "joined_at": "2026-06-16",
+      "email_id": "sushrut_yardoni@pats.co.in",
+      "password": "pats@106"
+    },
+    {
+      "id": 108,
+      "name": "Saket Shaligram",
+      "role": "Manager",
+      "joined_at": "2025-01-15",
+      "email_id": "saket@pats.co.in",
+      "password": "pats@108"
+    },
+    {
+      "id": 110,
+      "name": "System Admin",
+      "role": "Admin",
+      "joined_at": "2025-01-15",
+      "email_id": "admin@pats.co.in",
+      "password": "pats@110"
+    },
+    {
+      "id": 112,
+      "name": "Accounts Pats",
+      "role": "Accounts",
+      "joined_at": "2025-01-15",
+      "email_id": "accounts@pats.co.in",
+      "password": "pats@112"
+    }
+  ],
+  "tasks": [
+    {
+      "id": 1004,
+      "customer_name": "Priority Customer",
+      "contact_details": "+91 99999 99999 | priority@example.com",
+      "problem_reported": "Server down. Urgent fix needed.",
+      "assigned_to": 106,
+      "status": "Pending",
+      "assigned_at": "2026-05-31T05:00:00.000Z",
+      "accepted_at": null,
+      "finished_at": null,
+      "remarks": null,
+      "address": "Head Office, City Center",
+      "is_priority": true,
+      "km_travelled": 0,
+      "materials_carried": null
+    }
+  ],
+  "nextTaskId": 1005,
+  "settings": {
+    "petrol_price": 100
+  },
+  "offline_travels": [],
+  "nextOfflineTravelId": 1,
+  "todos": [
+    {
+      "id": 1,
+      "title": "H.D. Firecon Techno Pvt. Ltd. AMC invoice",
+      "description": "(FROM 01 MAY 2026 TO 30 OCTOBER 2026)\nSecond Installment",
+      "priority": "low",
+      "status": "Finished",
+      "created_at": "2026-06-23 04:57:37.282437+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-23 04:59:01.446439+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Status changed from pending to finished"
+          ]
+        },
+        {
+          "timestamp": "2026-06-23 04:57:37.535316+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "tally final 25-26 PATS",
+      "description": "saket+ asmita madam finalization karne\n1-acess pt1856827 evde ka aahet, (Yogesh Sir)\n2-indirect exp adjustmentla 41/11tar 25-26 la 42.03 disat aahet kami ka distat\n3-current liabilities-25.26 la 37.33 - 38.78 kami ka zale/\n4-mF investment fixed asset kase dakhwat yeiel\n5-25-26 cash in hand 104492 disat aahe\n6-25-26 advance tax paid 20k opening bal dakhwal aahe/\n\n25-26\na-purchase-36.99-36.80 kami ka zala\nb-gross 33.72 n 47.30 before adjustment aahe evada kami kasa kay zala\nc-derreref d tax 182212 aahe to 0 kasa karta yeiel\nd- stock -2l in servise settle karne\ne-acess pt stock621109 kami karawa lagel\nf- 24-1-26-45000 kotak, SIP entry",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-07-08 10:56:30.001275+00",
+      "created_by_name": "Saket Shaligram",
+      "created_by_role": "Manager",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-07-09 05:35:37.385394+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"saket+ asmita madam finalization karne\n1-acess pt1856827 evde ka aahet, \n2-indirect exp adjustmentla 41/11tar 25-26 la 42.03 disat aahet kami ka distat\n3-current liabilities-25.26 la 37.33 - 38.78 kami ka zale/\n4-mF investment fixed asset kase dakhwat yeiel\n5-25-26 cash in hand 104492 disat aahe\n6-25-26 advance tax paid 20k opening bal dakhwal aahe/\n\n25-26\na-purchase-36.99-36.80 kami ka zala\nb-gross 33.72 n 47.30 before adjustment aahe evada kami kasa kay zala\nc-derreref d tax 182212 aahe to 0 kasa karta yeiel\nd- stock -2l in servise settle karne\ne-acess pt stock621109 kami karawa lagel\nf- 24-1-26-45000 kotak, SIP entry\" to \"saket+ asmita madam finalization karne\n1-acess pt1856827 evde ka aahet, (Yogesh Sir)\n2-indirect exp adjustmentla 41/11tar 25-26 la 42.03 disat aahet kami ka distat\n3-current liabilities-25.26 la 37.33 - 38.78 kami ka zale/\n4-mF investment fixed asset kase dakhwat yeiel\n5-25-26 cash in hand 104492 disat aahe\n6-25-26 advance tax paid 20k opening bal dakhwal aahe/\n\n25-26\na-purchase-36.99-36.80 kami ka zala\nb-gross 33.72 n 47.30 before adjustment aahe evada kami kasa kay zala\nc-derreref d tax 182212 aahe to 0 kasa karta yeiel\nd- stock -2l in servise settle karne\ne-acess pt stock621109 kami karawa lagel\nf- 24-1-26-45000 kotak, SIP entry\""
+          ]
+        },
+        {
+          "timestamp": "2026-07-08 11:08:17.428695+00",
+          "edited_by": "Saket Shaligram",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"saket+ asmita madam finalization karne\n\" to \"saket+ asmita madam finalization karne\n1-acess pt1856827 evde ka aahet, \n2-indirect exp adjustmentla 41/11tar 25-26 la 42.03 disat aahet kami ka distat\n3-current liabilities-25.26 la 37.33 - 38.78 kami ka zale/\n4-mF investment fixed asset kase dakhwat yeiel\n5-25-26 cash in hand 104492 disat aahe\n6-25-26 advance tax paid 20k opening bal dakhwal aahe/\n\n25-26\na-purchase-36.99-36.80 kami ka zala\nb-gross 33.72 n 47.30 before adjustment aahe evada kami kasa kay zala\nc-derreref d tax 182212 aahe to 0 kasa karta yeiel\nd- stock -2l in servise settle karne\ne-acess pt stock621109 kami karawa lagel\nf- 24-1-26-45000 kotak, SIP entry\""
+          ]
+        },
+        {
+          "timestamp": "2026-07-08 10:56:30.288827+00",
+          "edited_by": "Saket Shaligram",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Revati Madam (ITR & TCS Certificate)",
+      "description": "Revati ITR 25-26 paying kindly consider TCS certificate received from kesari tours",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-07-06 07:47:36.236685+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-07-06 07:47:36.457102+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Pinnac -Domain & Backup Software & Cloud Backup",
+      "description": "Proforma Inv Sign Copy -Done (Final Inv Copy Pending)\n1. Pinnac Consulting -R-043 (AMT-106037) (Domain)\n2. Pinnac Consulting -R-044 (AMT-105633) (Backup Software)\n3. Pinnac Consulting -R-045 (AMT-103840) (Cloud Backup)\nsaket sir bole GST paid nahi karyacha mi tally madhe sagle inv 31.3.27 la transfer kele ahet",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-07-01 06:43:54.714834+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-07-08 09:51:04.873124+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"Pinnac -Domain Invoice & Backup Software & Cloud Backup\" to \"Pinnac -Domain & Backup Software & Cloud Backup\""
+          ]
+        },
+        {
+          "timestamp": "2026-07-04 07:23:20.422898+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"Proforma Inv Sign Copy -Done (Final Inv Copy Pending)\n1. Pinnac Consulting -R-043 (AMT-106037) (Domain)\n2. Pinnac Consulting -R-044 (AMT-105633) (Backup Software)\n3. Pinnac Consulting -R-045 (AMT-103840) (Cloud Backup)\" to \"Proforma Inv Sign Copy -Done (Final Inv Copy Pending)\n1. Pinnac Consulting -R-043 (AMT-106037) (Domain)\n2. Pinnac Consulting -R-044 (AMT-105633) (Backup Software)\n3. Pinnac Consulting -R-045 (AMT-103840) (Cloud Backup)\nsaket sir bole GST paid nahi karyacha mi tally madhe sagle inv 31.3.27 la transfer kele ahet\""
+          ]
+        },
+        {
+          "timestamp": "2026-07-01 06:43:55.005681+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Pinnac Cons-(QHEPS)Print Pending",
+      "description": "Proforma Invoice-22- (dt 17.06.2026)\nInv checking karne pending and print pending\nQHEPS - 50 user\n",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-06-22 09:53:15.58601+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-07-01 06:45:09.362809+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"Proforma Invoice-22- (dt 17.06.2026)\nInv checking pending karne and print pending\nQHEPS - 50 user\n\" to \"Proforma Invoice-22- (dt 17.06.2026)\nInv checking karne pending and print pending\nQHEPS - 50 user\n\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 10:07:45.721711+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"Pinnac Cons-Print Pending\" to \"Pinnac Cons-(QHEPS)Print Pending\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 10:05:34.074138+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"Pinnac Cons\" to \"Pinnac Cons-Print Pending\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 09:53:15.81794+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Printer points utkarsha (Saket Sir W.P MSG)",
+      "description": "Patch pannel -2 cat 6a,Patch cord, Rack, Switch 2,Acess pnt 8, Firewall",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-06-23 05:01:56.349896+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-23 05:01:56.569163+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "payment to be done",
+      "description": "june 26\n\nlic netra-12k\nshilpa lic pre-41814\nskoda-16k\nskt/revti emi-52+58K\n\n\nJULY\nSKT LIC PRE-36515",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-06-23 07:56:07.154168+00",
+      "created_by_name": "Saket Shaligram",
+      "created_by_role": "Manager",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-23 07:56:07.91127+00",
+          "edited_by": "Saket Shaligram",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "SUSHRUT lic NOMINEE REMAINDER",
+      "description": "NOMINEE UPDATE",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-06-23 08:19:41.309894+00",
+      "created_by_name": "Saket Shaligram",
+      "created_by_role": "Manager",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-23 08:19:41.571627+00",
+          "edited_by": "Saket Shaligram",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Tally back  ITR-25-26 & Statement",
+      "description": "Mutual fund statement\nFd interest statement\nAll Bank & loan statement\nPeriod - 01 April 2025 to 31 March 2026",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-06-22 09:40:23.981438+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-22 11:18:59.46947+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"Tally back -25-26\" to \"Tally back  ITR-25-26 & Statement\"",
+            "Details updated from \"Tally backup mail send 25-26 pending\n\" to \"Mutual fund statement\nFd interest statement\nAll Bank & loan statement\nPeriod - 01 April 2025 to 31 March 2026\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 09:40:24.285665+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Dhiraj Langote  ",
+      "description": "Purchase Invoice Pending -\nJune follow up Date -11,13,18,30",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-06-30 07:13:09.737917+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-30 07:13:10.027811+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "gayatri madam PC+ UPS",
+      "description": "shrikant sir managing this work",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-07-08 10:34:49.161392+00",
+      "created_by_name": "Saket Shaligram",
+      "created_by_role": "Manager",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-07-08 10:34:49.434266+00",
+          "edited_by": "Saket Shaligram",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Pinnac/DCad/Maithalee - PRO G CAD",
+      "description": "All pinnac invoices prog cad value 20k ne kele print pending\n1. Pinnac Cons-R-046 (AMT-1199812)\n2. DCAD -R-047 (AMT-23600)\n3. Maithilee - R-048 (AMT-141600)\nsaket sir bole GST paid nahi karyacha mi tally madhe sagle inv 31.3.27 la transfer kele ahet\n",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-06-22 08:26:26.375147+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-07-04 07:20:40.463179+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"All pinnac invoices prog cad value 20k ne kele print pending\n1. Pinnac Cons-R-046 (AMT-1199812)\n2. DCAD -R-047 (AMT-23600)\n3. Maithilee - R-048 (AMT-141600)\n\n\" to \"All pinnac invoices prog cad value 20k ne kele print pending\n1. Pinnac Cons-R-046 (AMT-1199812)\n2. DCAD -R-047 (AMT-23600)\n3. Maithilee - R-048 (AMT-141600)\nsaket sir bole GST paid nahi karyacha mi tally madhe sagle inv 31.3.27 la transfer kele ahet\n\""
+          ]
+        },
+        {
+          "timestamp": "2026-07-01 06:31:36.766047+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"All pinnac invoices progcad value 20k ne kele print pending\n\" to \"All pinnac invoices prog cad value 20k ne kele print pending\n1. Pinnac Cons-R-046 (AMT-1199812)\n2. DCAD -R-047 (AMT-23600)\n3. Maithilee - R-048 (AMT-141600)\n\n\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 10:09:23.989806+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"Pinnac/DCad/Maithalee - prog cad \" to \"Pinnac/DCad/Maithalee - PRO G CAD\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 10:09:04.958439+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"pinnac - prog cad amt confirmation pending\" to \"Pinnac/DCad/Maithalee - prog cad \""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 10:06:13.168496+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"pinnac - prog cad invoice\" to \"pinnac - prog cad amt confirmation pending\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 09:37:44.912111+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"saket sir \" to \"pinnac - prog cad invoice\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 09:36:58.678302+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"1. all pinnac invoices progcad value 20k ne kele print pending\n2. Tally backup mail send 25-26 pending\n3. Gayatri madam 2 mntr 27inch-kiti monitor dile\n4. MF चे investment fixed asset or Kontya asset la टाकू शकतो\n5. Dhiraj opus GST bill\n\" to \"All pinnac invoices progcad value 20k ne kele print pending\n\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 08:51:27.925408+00",
+          "edited_by": "Saket Shaligram",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"1. all pinnac invoices progcad value 20k ne kele print pending\n2. Tally backup mail send 25-26 pending\n3. Gayatri madam 2 mntr 27inch\n4. MF चे investment fixed asset or Kontya asset la टाकू शकतो\n5. Dhiraj opus GST bill\n\" to \"1. all pinnac invoices progcad value 20k ne kele print pending\n2. Tally backup mail send 25-26 pending\n3. Gayatri madam 2 mntr 27inch-kiti monitor dile\n4. MF चे investment fixed asset or Kontya asset la टाकू शकतो\n5. Dhiraj opus GST bill\n\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 08:30:57.187343+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"1. all pinnac invoices progcad value 20k ne kele print pending\n2. Tally backup mail send 25-26 pending\n3. Gayatri madam 2 mntr 27inch\n4. MF चे investment fixed asset or Kontya asset la टाकू शकतो\n\" to \"1. all pinnac invoices progcad value 20k ne kele print pending\n2. Tally backup mail send 25-26 pending\n3. Gayatri madam 2 mntr 27inch\n4. MF चे investment fixed asset or Kontya asset la टाकू शकतो\n5. Dhiraj opus GST bill\n\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 08:26:26.60953+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "AVK GREEN -Sign Pending",
+      "description": "Inv No-26-27/PATS/S-015\nDate :- 22.04.2026\n",
+      "priority": "low",
+      "status": "Finished",
+      "created_at": "2026-06-22 10:05:09.82655+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-22 11:04:32.205119+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Status changed from pending to finished"
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 10:05:10.116747+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "title": "MF investment ",
+      "description": "MF चे investment fixed asset or Kontya asset la टाकू शकतो",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-06-22 09:44:16.500182+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-22 09:44:16.738935+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "title": "MCES-10 Users",
+      "description": "mcecostudio email bill\ngoogle work place- std\nSirani: 25-26 pramane final bill ready. Check/Print pending. \nmcecostudio email bill 3-7-26 to 2-7-27 10 users , 10368/user print pending",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-07-06 08:11:49.608164+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-07-08 09:50:30.437478+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"MCES-10 USERS\" to \"MCES-10 Users\""
+          ]
+        },
+        {
+          "timestamp": "2026-07-08 09:50:16.7022+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"Maithilee Chandratre Eco Studio-Bill\" to \"MCES-10 USERS\""
+          ]
+        },
+        {
+          "timestamp": "2026-07-08 08:49:57.236325+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"mcecostudio email bill\ngoogle work place- std\nSirani: 25-26 pramane final bill ready. Check/Print pending. Amt\" to \"mcecostudio email bill\ngoogle work place- std\nSirani: 25-26 pramane final bill ready. Check/Print pending. \nmcecostudio email bill 3-7-26 to 2-7-27 10 users , 10368/user print pending\""
+          ]
+        },
+        {
+          "timestamp": "2026-07-06 09:27:48.291787+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"mcecostudio email bill\ngoogle work place- stD\" to \"mcecostudio email bill\ngoogle work place- std\nSirani: 25-26 pramane final bill ready. Check/Print pending. Amt\""
+          ]
+        },
+        {
+          "timestamp": "2026-07-06 08:11:49.859061+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "title": "Gayatri madam - Monitor Details ",
+      "description": ". Gayatri madam 2 mntr 27inch-kiti monitor dile",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-06-19 11:52:31.479522+00",
+      "created_by_name": "Saket Shaligram",
+      "created_by_role": "Manager",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-22 10:06:37.900736+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"Gayatri madam \" to \"Gayatri madam - Monitor Details \""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 09:41:22.604625+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"call yogesh sir\" to \"Gayatri madam \"",
+            "Details updated from \"yogesh sirana itr 25-26 tally backup dene\" to \". Gayatri madam 2 mntr 27inch-kiti monitor dile\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-19 12:06:03.88467+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"ITR \" to \"yogesh sirana itr 25-26 tally backup dene\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-19 11:52:31.738435+00",
+          "edited_by": "Saket Shaligram",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "title": "Pats-Pan Card",
+      "description": "address change",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-06-22 11:12:34.760108+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-22 11:12:35.026933+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "title": "Pinnac-final closing balance for 31.03.2026 and till date\t\t\t",
+      "description": "Mail Send final closing balance dt 08.07.26  ",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-07-08 09:44:53.620402+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-07-08 09:44:54.334948+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "title": "AVK GREEN-Sign Pending",
+      "description": "Inv No-25-26/PATS/R-186/\nInv Date :- 31.3.2026\nPro G CAD",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-06-22 09:58:58.316182+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-22 10:01:39.363715+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"Inv No-25-26/PATS/R-186\nInv Date :- 31.3.2026\nPro G CAD\" to \"Inv No-25-26/PATS/R-186/\nInv Date :- 31.3.2026\nPro G CAD\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 09:58:58.566004+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "title": "AC purchase add in task",
+      "description": "saket sirani w.p msg",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-07-08 09:46:13.472357+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-07-08 09:46:13.754471+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "title": "BOB BANK ",
+      "description": "Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \npayment done\nBanket javun aali madam aaj payment karnar ahet\n\nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \nSuman madam payment  transfer aaj kiva udya karnar ahet ",
+      "priority": "low",
+      "status": "Finished",
+      "created_at": "2026-06-22 11:11:27.493984+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-07-08 08:48:16.055593+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Status changed from pending to finished"
+          ]
+        },
+        {
+          "timestamp": "2026-07-08 08:47:51.835377+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nBanket javun aali madam aaj payment karnar ahet\n\nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \nSuman madam payment  transfer aaj kiva udya karnar ahet \" to \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \npayment done\nBanket javun aali madam aaj payment karnar ahet\n\nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \nSuman madam payment  transfer aaj kiva udya karnar ahet \""
+          ]
+        },
+        {
+          "timestamp": "2026-07-04 04:46:44.161157+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nBanket javun aali madam aaj payment karnar ahet\n\nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \nSuman madam payment  transfer aaj kiva udya karnar ahet \" to \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \npayment done\nBanket javun aali madam aaj payment karnar ahet\n\nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \nSuman madam payment  transfer aaj kiva udya karnar ahet \""
+          ]
+        },
+        {
+          "timestamp": "2026-07-02 06:36:44.945587+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \" to \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \nSuman madam payment  transfer aaj kiva udya karnar ahet \""
+          ]
+        },
+        {
+          "timestamp": "2026-06-29 11:42:57.882524+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \" to \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nSirana call sathi reminder kele 29.06.26 \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \""
+          ]
+        },
+        {
+          "timestamp": "2026-06-24 11:51:00.338653+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala ki te sangnar ahet \" to \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala \nki te sangnar ahet \nBob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe \""
+          ]
+        },
+        {
+          "timestamp": "2026-06-24 09:46:13.269928+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nupdated dhile ahe sirancha call zhala ki te sangnar ahet \" to \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nPayment che updated dhile ahe sir ankush siranshi  call zhala ki te sangnar ahet \""
+          ]
+        },
+        {
+          "timestamp": "2026-06-24 09:44:58.141475+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\" to \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\nupdated dhile ahe sirancha call zhala ki te sangnar ahet \""
+          ]
+        },
+        {
+          "timestamp": "2026-06-24 06:46:34.425757+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"Payment -Follow-up\" to \"Payment -Follow-up\nTwo Invoice Amt: -12000\nAnkush Sir Final approval Amt :- 9800\""
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 11:11:27.754468+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "title": "Pinnac all AMC -4th Inst-Not confirmed ",
+      "description": "1. Pinnac Cons-Proforma Invoice-14 (35400)\n2. Pinnac HSG-Proforma Invoice-15 (17700)\n3.  Maithilee-Proforma Invoice-16 (Amt- 17700)\n4. DCAD- Proforma Invoice-17 (Amt- 8850)\n5. DCA-Proforma Invoice-18 (Amt -17700)\n6. EnvoNest (company name che vichrane pending)\n   Proforma Invoice-19 (Amt- 8850)\n\n Saket  Sir na vicharne- bifurcate as per company\npinnac AMc bill fro JAn 26 to march 26- 40000/mobth\napr 26 to june 26-40000/month\n",
+      "priority": "low",
+      "status": "Assigned",
+      "created_at": "2026-07-01 06:59:46.329598+00",
+      "created_by_name": "Accounts Pats",
+      "created_by_role": "Accounts",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-07-08 11:06:10.826932+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Details updated from \"1. Pinnac Cons-Proforma Invoice-14 (35400)\n2. Pinnac HSG-Proforma Invoice-15 (17700)\n3.  Maithilee-Proforma Invoice-16 (Amt- 17700)\n4. DCAD- Proforma Invoice-17 (Amt- 8850)\n5. DCA-Proforma Invoice-18 (Amt -17700)\n6. EnvoNest (company name che vichrane pending)\n   Proforma Invoice-19 (Amt- 8850)\" to \"1. Pinnac Cons-Proforma Invoice-14 (35400)\n2. Pinnac HSG-Proforma Invoice-15 (17700)\n3.  Maithilee-Proforma Invoice-16 (Amt- 17700)\n4. DCAD- Proforma Invoice-17 (Amt- 8850)\n5. DCA-Proforma Invoice-18 (Amt -17700)\n6. EnvoNest (company name che vichrane pending)\n   Proforma Invoice-19 (Amt- 8850)\n\n Saket  Sir na vicharne- bifurcate as per company\npinnac AMc bill fro JAn 26 to march 26- 40000/mobth\napr 26 to june 26-40000/month\n\""
+          ]
+        },
+        {
+          "timestamp": "2026-07-02 07:35:46.317156+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Title updated from \"Pinnac ALL AMC -4th Installment  -Not confirmed \" to \"Pinnac all AMC -4th Inst-Not confirmed \""
+          ]
+        },
+        {
+          "timestamp": "2026-07-01 06:59:46.563732+00",
+          "edited_by": "Accounts Pats",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ]
+    }
+  ],
+  "nextTodoId": 26,
+  "deletedTodos": [
+    {
+      "id": 11,
+      "title": "Nilesh",
+      "description": "Call Nilesh Sir ani material return che update ghya",
+      "priority": "low",
+      "status": "Deleted",
+      "created_at": "2026-06-19 12:02:00.771598+00",
+      "created_by_name": "System Admin",
+      "created_by_role": "Admin",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-22 08:49:41.883258+00",
+          "edited_by": "System Admin",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Status changed from pending to deleted"
+          ]
+        },
+        {
+          "timestamp": "2026-06-19 12:02:01.041426+00",
+          "edited_by": "System Admin",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ],
+      "deleted_at": "2026-06-22 08:49:41.883258+00",
+      "deleted_by": "System Admin"
+    },
+    {
+      "id": 17,
+      "title": "Chiranjiv",
+      "description": "CAll chiranjiv ani cheques deliver karayla sanga",
+      "priority": "low",
+      "status": "Deleted",
+      "created_at": "2026-06-19 12:01:03.896468+00",
+      "created_by_name": "System Admin",
+      "created_by_role": "Admin",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-22 08:49:45.575653+00",
+          "edited_by": "System Admin",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Status changed from pending to deleted"
+          ]
+        },
+        {
+          "timestamp": "2026-06-19 12:01:04.179325+00",
+          "edited_by": "System Admin",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ],
+      "deleted_at": "2026-06-22 08:49:45.575653+00",
+      "deleted_by": "System Admin"
+    },
+    {
+      "id": 25,
+      "title": "dhiraj opus GST bill",
+      "description": "GST bill",
+      "priority": "low",
+      "status": "Deleted",
+      "created_at": "2026-06-22 07:51:32.966768+00",
+      "created_by_name": "Saket Shaligram",
+      "created_by_role": "Manager",
+      "remarks": null,
+      "history": [
+        {
+          "timestamp": "2026-06-22 11:35:08.300998+00",
+          "edited_by": "Saket Shaligram",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Status changed from pending to deleted"
+          ]
+        },
+        {
+          "timestamp": "2026-06-22 07:51:33.226962+00",
+          "edited_by": "Saket Shaligram",
+          "before": {},
+          "after": {},
+          "rawChanges": [
+            "Task created"
+          ]
+        }
+      ],
+      "deleted_at": "2026-06-22 11:35:08.300998+00",
+      "deleted_by": "Saket Shaligram"
+    }
+  ]
+}
