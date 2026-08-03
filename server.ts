@@ -312,6 +312,16 @@ function initDb(): DatabaseSchema {
       if (!data.todos) {
         data.todos = [];
         migrated = true;
+      } else {
+        data.todos.forEach(t => {
+          const creatorName = (t.created_by_name || "").toLowerCase();
+          if (creatorName.includes("accounts") || creatorName.includes("pats")) {
+            if (!t.created_by_role || !t.created_by_role.includes("|for:")) {
+              t.created_by_role = "Accounts|for:Saket Shaligram";
+              migrated = true;
+            }
+          }
+        });
       }
       if (!data.deletedTodos) {
         data.deletedTodos = [];
@@ -2147,9 +2157,13 @@ app.get("/api/todos", async (req, res) => {
         const creator = employees.find(e => e.id === todo.created_by);
         const created_by_name = creator ? creator.name : (todo.created_by_name || "System Admin");
         const savedPriority = todo.priority || "";
-        const created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority === "Accounts")
+        let created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority === "Accounts")
           ? savedPriority
           : (creator ? creator.role : "Admin");
+
+        if ((created_by_role.toLowerCase().startsWith("accounts") || (created_by_name && created_by_name.toLowerCase().includes("accounts"))) && !created_by_role.includes("|for:")) {
+          created_by_role = "Accounts|for:Saket Shaligram";
+        }
 
         return {
           id: todo.id,
@@ -2175,6 +2189,48 @@ app.get("/api/todos", async (req, res) => {
   const todos = db.todos || [];
   logSQL(query, todos.length);
   res.json(todos);
+});
+
+// REORDER TODOS
+app.post("/api/todos/reorder", async (req, res) => {
+  const { orderedIds, updatedTodo } = req.body;
+  if (!Array.isArray(orderedIds)) {
+    return res.status(400).json({ error: "Invalid orderedIds array" });
+  }
+
+  try {
+    if (db.todos && Array.isArray(db.todos)) {
+      if (updatedTodo && updatedTodo.id && updatedTodo.created_by_role) {
+        const item = db.todos.find(t => t.id === updatedTodo.id);
+        if (item) {
+          item.created_by_role = updatedTodo.created_by_role;
+        }
+      }
+
+      const idMap = new Map<number, number>();
+      orderedIds.forEach((id, index) => idMap.set(Number(id), index));
+
+      db.todos.sort((a, b) => {
+        const idxA = idMap.has(a.id) ? idMap.get(a.id)! : 999999;
+        const idxB = idMap.has(b.id) ? idMap.get(b.id)! : 999999;
+        return idxA - idxB;
+      });
+
+      saveDb();
+    }
+
+    if (isSupabaseConfigured && supabase && updatedTodo && updatedTodo.id && updatedTodo.created_by_role) {
+      await supabase
+        .from("todo")
+        .update({ priority: updatedTodo.created_by_role })
+        .eq("id", updatedTodo.id);
+    }
+
+    return res.json({ message: "To-Dos reordered successfully." });
+  } catch (err: any) {
+    console.error("Failed to reorder todos:", err);
+    return res.status(500).json({ error: "Failed to reorder todos" });
+  }
 });
 
 // CREATE A NEW TODO

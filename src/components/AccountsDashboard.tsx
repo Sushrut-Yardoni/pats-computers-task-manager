@@ -45,7 +45,7 @@ export default function AccountsDashboard({
   const [finishRemarks, setFinishRemarks] = useState("");
   const [isFinishingSubmitting, setIsFinishingSubmitting] = useState(false);
 
-  const [assignmentScope, setAssignmentScope] = useState<"all" | "toMe" | "byMe" | "saket" | "accountsPats">("all");
+  const [assignmentScope, setAssignmentScope] = useState<"all" | "toMe">("all");
 
   const fetchTodos = async () => {
     setIsLoading(true);
@@ -75,8 +75,8 @@ export default function AccountsDashboard({
 
     setIsSubmitting(true);
     try {
-      const assignedTarget = targetAccountsUser.trim();
-      const finalRole = assignedTarget ? `Accounts|for:${assignedTarget}` : "Accounts";
+      const assignedTarget = targetAccountsUser.trim() || "Saket Shaligram";
+      const finalRole = `Accounts|for:${assignedTarget}`;
 
       const res = await fetch("/api/todos", {
         method: "POST",
@@ -197,6 +197,19 @@ export default function AccountsDashboard({
     return n.includes("accounts") || n.includes("pats");
   };
 
+  const getTargetUserStr = (todo: TodoTask) => {
+    const role = todo.created_by_role || "";
+    if (role.includes("|for:")) {
+      return role.split("|for:")[1];
+    }
+    const creatorName = todo.created_by_name || "";
+    const isAccounts = role.toLowerCase().startsWith("accounts") || creatorName.toLowerCase().includes("accounts");
+    if (isAccounts) {
+      return "Saket Shaligram";
+    }
+    return null;
+  };
+
   // Helper to determine if a task is created by or assigned to Saket Shaligram or Accounts Pats
   const getTaskAssignmentInfo = (todo: TodoTask) => {
     const creatorName = todo.created_by_name?.trim() || "";
@@ -205,7 +218,8 @@ export default function AccountsDashboard({
     const isCreatedByAccountsPats = isAccountsPatsName(creatorName);
 
     const creatorRole = todo.created_by_role || "";
-    const targetUserStr = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
+    const isAccountsCreator = isCreatedByAccountsPats || creatorRole.toLowerCase().startsWith("accounts");
+    const targetUserStr = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : (isAccountsCreator ? "Saket Shaligram" : null);
     const targetUsers = targetUserStr ? targetUserStr.split(",").map(u => u.trim()) : [];
 
     const isSpecificallyTargetedToMe = targetUsers.some(target => 
@@ -218,9 +232,9 @@ export default function AccountsDashboard({
 
     const isGeneralAccountsTask = 
       (!targetUserStr && creatorRole.toLowerCase().includes("accounts")) ||
-      targetUsers.some(t => t.toLowerCase().includes("accounts"));
+      targetUsers.some(t => t.toLowerCase() === "accounts" || t.toLowerCase() === "all accounts");
 
-    const isAssignedToMe = isSpecificallyTargetedToMe || isGeneralAccountsTask;
+    const isAssignedToMe = isSpecificallyTargetedToMe || (isGeneralAccountsTask && targetUsers.length <= 1);
 
     return {
       isCreatedByMe,
@@ -235,31 +249,49 @@ export default function AccountsDashboard({
     };
   };
 
-  // Filters: Accounts Pats & Accounts users see all tasks of Saket Shaligram & Accounts Pats
+  // Visibility Filter for Accounts Dashboard:
+  // 1. Tasks assigned by any accounts role user are visible ONLY to manager and admin (and the creator themselves).
+  //    Other accounts role users CANNOT see tasks assigned/created by an accounts role user!
+  // 2. Accounts role users see tasks assigned to them by Managers/Admins.
   const visibleTodos = todos.filter(todo => {
     const { 
       isCreatedByMe, 
       isAssignedToMe, 
-      isCreatedBySaket, 
-      isCreatedByAccountsPats, 
-      isTargetedToSaket, 
-      isTargetedToAccountsPats 
+      isSpecificallyTargetedToMe,
+      isCreatedByAccountsPats,
+      targetUsers
     } = getTaskAssignmentInfo(todo);
 
-    const isAccountsUser = currentUser.role?.toLowerCase() === "accounts" || isAccountsPatsName(currentUser.name);
+    const creatorRoleLower = (todo.created_by_role || "").toLowerCase();
+    const isCreatedByAccountsUser = isCreatedByAccountsPats || creatorRoleLower.includes("accounts");
 
-    if (isAccountsUser) {
-      return (
-        isCreatedByMe ||
-        isAssignedToMe ||
-        isCreatedBySaket ||
-        isCreatedByAccountsPats ||
-        isTargetedToSaket ||
-        isTargetedToAccountsPats
-      );
+    // Tasks created/assigned by any accounts role user are visible ONLY to Manager & Admin (and the creator himself).
+    // Hide them from all other accounts users!
+    if (isCreatedByAccountsUser && !isCreatedByMe) {
+      return false;
     }
 
-    return isCreatedByMe || isAssignedToMe;
+    // If task is targeted to specific other individual user(s) (not me and not general accounts) -> hide!
+    if (targetUsers.length > 0) {
+      const targetsSpecificIndividual = targetUsers.some(u => {
+        const un = u.toLowerCase();
+        return un !== "accounts" && un !== "all accounts" && un !== "manager";
+      });
+      if (targetsSpecificIndividual && !isSpecificallyTargetedToMe) {
+        return false;
+      }
+    }
+
+    // If task is specifically targeted to the logged in user -> visible
+    if (isSpecificallyTargetedToMe) return true;
+
+    // If task was created by the logged in user -> visible
+    if (isCreatedByMe) return true;
+
+    // If general accounts task with no specific other individual -> visible
+    if (isAssignedToMe) return true;
+
+    return false;
   });
 
   const filteredTodos = visibleTodos.filter(todo => {
@@ -270,19 +302,12 @@ export default function AccountsDashboard({
     
     const { 
       isCreatedByMe, 
-      isAssignedToMe, 
-      isCreatedBySaket, 
-      isCreatedByAccountsPats, 
-      isTargetedToSaket, 
-      isTargetedToAccountsPats 
+      isAssignedToMe
     } = getTaskAssignmentInfo(todo);
 
     const matchesScope = 
       assignmentScope === "all" ? true :
-      assignmentScope === "toMe" ? isAssignedToMe :
-      assignmentScope === "byMe" ? isCreatedByMe :
-      assignmentScope === "saket" ? (isCreatedBySaket || isTargetedToSaket) :
-      assignmentScope === "accountsPats" ? (isCreatedByAccountsPats || isTargetedToAccountsPats) : true;
+      assignmentScope === "toMe" ? (isAssignedToMe && !isCreatedByMe) : true;
 
     const matchesSearch = 
       todo.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -319,7 +344,7 @@ export default function AccountsDashboard({
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
           <div>
             <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Total Active Tasks</span>
@@ -331,21 +356,12 @@ export default function AccountsDashboard({
         </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
           <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Saket Shaligram Tasks</span>
-            <p className="text-xl font-bold text-teal-600 font-mono mt-0.5">
-              {visibleTodos.filter(t => t.status === "Assigned" && (getTaskAssignmentInfo(t).isCreatedBySaket || getTaskAssignmentInfo(t).isTargetedToSaket)).length}
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Assigned To Me</span>
+            <p className="text-xl font-bold text-purple-600 font-mono mt-0.5">
+              {visibleTodos.filter(t => t.status === "Assigned" && getTaskAssignmentInfo(t).isAssignedToMe && !getTaskAssignmentInfo(t).isCreatedByMe).length}
             </p>
           </div>
-          <User className="h-5 w-5 text-teal-500" />
-        </div>
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
-          <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Accounts Pats Tasks</span>
-            <p className="text-xl font-bold text-indigo-600 font-mono mt-0.5">
-              {visibleTodos.filter(t => t.status === "Assigned" && (getTaskAssignmentInfo(t).isCreatedByAccountsPats || getTaskAssignmentInfo(t).isTargetedToAccountsPats)).length}
-            </p>
-          </div>
-          <PlusCircle className="h-5 w-5 text-indigo-500" />
+          <User className="h-5 w-5 text-purple-500" />
         </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
           <div>
@@ -423,13 +439,13 @@ export default function AccountsDashboard({
         <div className="flex flex-wrap items-center gap-1.5 pt-1">
           <button
             onClick={() => setAssignmentScope("all")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               assignmentScope === "all"
                 ? "bg-slate-800 text-white shadow-xs"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
-            <span>All Tasks (Saket & Accounts Pats)</span>
+            <span>All Tasks</span>
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold ${
               assignmentScope === "all" ? "bg-slate-700 text-slate-100" : "bg-slate-200 text-slate-700"
             }`}>
@@ -438,66 +454,18 @@ export default function AccountsDashboard({
           </button>
 
           <button
-            onClick={() => setAssignmentScope("saket")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              assignmentScope === "saket"
-                ? "bg-teal-700 text-white shadow-xs"
-                : "bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-100"
-            }`}
-          >
-            <span>Saket Shaligram Tasks</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold ${
-              assignmentScope === "saket" ? "bg-teal-800 text-teal-100" : "bg-teal-100 text-teal-800"
-            }`}>
-              {visibleTodos.filter(t => (activeTab === "todo" ? t.status === "Assigned" : t.status === "Finished") && (getTaskAssignmentInfo(t).isCreatedBySaket || getTaskAssignmentInfo(t).isTargetedToSaket)).length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setAssignmentScope("accountsPats")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              assignmentScope === "accountsPats"
-                ? "bg-indigo-700 text-white shadow-xs"
-                : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-100"
-            }`}
-          >
-            <span>Accounts Pats Tasks</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold ${
-              assignmentScope === "accountsPats" ? "bg-indigo-800 text-indigo-100" : "bg-indigo-100 text-indigo-800"
-            }`}>
-              {visibleTodos.filter(t => (activeTab === "todo" ? t.status === "Assigned" : t.status === "Finished") && (getTaskAssignmentInfo(t).isCreatedByAccountsPats || getTaskAssignmentInfo(t).isTargetedToAccountsPats)).length}
-            </span>
-          </button>
-
-          <button
             onClick={() => setAssignmentScope("toMe")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
               assignmentScope === "toMe"
                 ? "bg-purple-700 text-white shadow-xs"
                 : "bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100"
             }`}
           >
-            <span>Assigned To Me</span>
+            <span>Assigned to Me</span>
             <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold ${
               assignmentScope === "toMe" ? "bg-purple-800 text-purple-100" : "bg-purple-100 text-purple-800"
             }`}>
-              {visibleTodos.filter(t => (activeTab === "todo" ? t.status === "Assigned" : t.status === "Finished") && getTaskAssignmentInfo(t).isAssignedToMe).length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setAssignmentScope("byMe")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              assignmentScope === "byMe"
-                ? "bg-blue-700 text-white shadow-xs"
-                : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100"
-            }`}
-          >
-            <span>Assigned By Me</span>
-            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold ${
-              assignmentScope === "byMe" ? "bg-blue-800 text-blue-100" : "bg-blue-100 text-blue-800"
-            }`}>
-              {visibleTodos.filter(t => (activeTab === "todo" ? t.status === "Assigned" : t.status === "Finished") && getTaskAssignmentInfo(t).isCreatedByMe).length}
+              {visibleTodos.filter(t => (activeTab === "todo" ? t.status === "Assigned" : t.status === "Finished") && getTaskAssignmentInfo(t).isAssignedToMe && !getTaskAssignmentInfo(t).isCreatedByMe).length}
             </span>
           </button>
         </div>
@@ -585,11 +553,11 @@ export default function AccountsDashboard({
 
                   {/* Metadata: Creator and Date (highly compact) */}
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="font-medium flex-1 min-w-0 pr-2" title={todo.created_by_role && todo.created_by_role.includes('|for:') ? `For ${todo.created_by_role.split('|for:')[1]}` : undefined}>
+                    <span className="font-medium flex-1 min-w-0 pr-2" title={getTargetUserStr(todo) ? `For ${getTargetUserStr(todo)}` : undefined}>
                       By <strong className="text-slate-600 font-bold">{todo.created_by_name}</strong>
-                      {todo.created_by_role && todo.created_by_role.includes('|for:') && (
+                      {getTargetUserStr(todo) && (
                         <span className="ml-1 text-[8.5px] bg-indigo-50 text-indigo-600 font-extrabold px-1.5 py-0.5 rounded border border-indigo-100 uppercase inline-flex items-center gap-0.5">
-                          ➔ {todo.created_by_role.split('|for:')[1]}
+                          ➔ {getTargetUserStr(todo)}
                         </span>
                       )}
                     </span>
@@ -646,28 +614,13 @@ export default function AccountsDashboard({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Assign / Display To User</label>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Assign Task To Manager</label>
                 <select
                   value={targetAccountsUser}
                   onChange={(e) => setTargetAccountsUser(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 hover:border-blue-300 focus:border-blue-500 px-3 py-2 rounded-xl focus:outline-none transition-colors cursor-pointer text-xs"
                 >
-                  <option value="">General Accounts Task (All Accounts Users)</option>
-                  {currentUser && currentUser.name && (
-                    <option value={currentUser.name}>Myself ({currentUser.name})</option>
-                  )}
-                  <optgroup label="Accounts Users">
-                    {employees
-                      .filter(emp => {
-                        const r = (emp.role || "").toLowerCase();
-                        return r.includes("accounts") && emp.name !== currentUser?.name;
-                      })
-                      .map(emp => (
-                        <option key={emp.id} value={emp.name}>
-                          {emp.name} (Accounts)
-                        </option>
-                      ))}
-                  </optgroup>
+                  <option value="">General Accounts Task (Unassigned to specific Manager)</option>
                   <optgroup label="Managers & Admins">
                     {employees
                       .filter(emp => {
@@ -680,20 +633,8 @@ export default function AccountsDashboard({
                         </option>
                       ))}
                   </optgroup>
-                  <optgroup label="All Other Employees">
-                    {employees
-                      .filter(emp => {
-                        const r = (emp.role || "").toLowerCase();
-                        return !r.includes("accounts") && !r.includes("manager") && !r.includes("admin") && emp.name !== currentUser?.name;
-                      })
-                      .map(emp => (
-                        <option key={emp.id} value={emp.name}>
-                          {emp.name} ({emp.role || "Employee"})
-                        </option>
-                      ))}
-                  </optgroup>
                 </select>
-                <p className="text-[10px] text-slate-400 mt-1">Select a specific user to target this checklist item, or leave as General Accounts Task.</p>
+                <p className="text-[10px] text-slate-400 mt-1">Select a Manager to assign this task to, or leave as General Accounts Task.</p>
               </div>
 
               <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
@@ -947,9 +888,9 @@ export default function AccountsDashboard({
                         <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider leading-none">
                           {viewingTodo.created_by_role ? viewingTodo.created_by_role.split('|')[0] : ""}
                         </span>
-                        {viewingTodo.created_by_role && viewingTodo.created_by_role.includes('|for:') && (
+                        {getTargetUserStr(viewingTodo) && (
                           <span className="text-[8px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-md px-1.5 py-0.5 uppercase tracking-wider leading-none">
-                            For: {viewingTodo.created_by_role.split('|for:')[1]}
+                            For: {getTargetUserStr(viewingTodo)}
                           </span>
                         )}
                       </div>

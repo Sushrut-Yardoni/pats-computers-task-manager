@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { 
-  PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Trash2, AlertCircle, Eye, UserPlus, Users, Columns, LayoutGrid
+  PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Trash2, AlertCircle, Eye, UserPlus, Users, Columns, LayoutGrid, GripVertical, ChevronDown
 } from "lucide-react";
 import { TodoTask, Employee, DeletedTodoTask, isTargetMatch } from "../types";
 import TodoHistoryModal from "./TodoHistoryModal";
@@ -50,6 +50,414 @@ export default function ManagerDashboard({
   const [finishingTodo, setFinishingTodo] = useState<TodoTask | null>(null);
   const [deletingTodo, setDeletingTodo] = useState<TodoTask | null>(null);
   const [viewingTodo, setViewingTodo] = useState<TodoTask | null>(null);
+
+  // Drag and Drop State
+  const [draggedTodo, setDraggedTodo] = useState<TodoTask | null>(null);
+  const [dragOverTodoId, setDragOverTodoId] = useState<number | null>(null);
+  const [dragOverColumnUser, setDragOverColumnUser] = useState<string | null>(null);
+  const [dropPosition, setDropPosition] = useState<"above" | "below">("above");
+
+  // Column Reordering State
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("todo_column_order");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [draggedColumnUser, setDraggedColumnUser] = useState<string | null>(null);
+  const [dragOverColumnTargetUser, setDragOverColumnTargetUser] = useState<string | null>(null);
+  const [columnDropSide, setColumnDropSide] = useState<"left" | "right">("left");
+
+  // Column Visibility State
+  const [hiddenColumns, setHiddenColumns] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("todo_hidden_columns");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isColumnDropdownOpen, setIsColumnDropdownOpen] = useState(false);
+
+  const toggleColumnVisibility = (userName: string) => {
+    setHiddenColumns(prev => {
+      let next: string[];
+      if (prev.includes(userName)) {
+        next = prev.filter(u => u !== userName);
+      } else {
+        next = [...prev, userName];
+      }
+      try {
+        localStorage.setItem("todo_hidden_columns", JSON.stringify(next));
+      } catch (err) {
+        console.error("Failed to save hidden columns", err);
+      }
+      return next;
+    });
+  };
+
+  const removeColumn = (userName: string) => {
+    setHiddenColumns(prev => {
+      if (prev.includes(userName)) return prev;
+      const next = [...prev, userName];
+      try {
+        localStorage.setItem("todo_hidden_columns", JSON.stringify(next));
+      } catch (err) {
+        console.error("Failed to save hidden columns", err);
+      }
+      return next;
+    });
+  };
+
+  const showAllColumns = () => {
+    setHiddenColumns([]);
+    try {
+      localStorage.removeItem("todo_hidden_columns");
+    } catch (err) {
+      console.error("Failed to clear hidden columns", err);
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, todo: TodoTask) => {
+    setDraggedTodo(todo);
+    setDraggedColumnUser(null);
+    e.dataTransfer.setData("text/plain", String(todo.id));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleColumnHeaderDragStart = (e: React.DragEvent, userName: string) => {
+    setDraggedColumnUser(userName);
+    setDraggedTodo(null);
+    e.dataTransfer.setData("text/plain", JSON.stringify({ type: "column", userName }));
+    e.dataTransfer.effectAllowed = "move";
+    e.stopPropagation();
+  };
+
+  const handleColumnDragEnd = () => {
+    setDraggedTodo(null);
+    setDragOverTodoId(null);
+    setDragOverColumnUser(null);
+    setDraggedColumnUser(null);
+    setDragOverColumnTargetUser(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTodo(null);
+    setDragOverTodoId(null);
+    setDragOverColumnUser(null);
+    setDraggedColumnUser(null);
+    setDragOverColumnTargetUser(null);
+  };
+
+  const handleDragOverColumn = (e: React.DragEvent, userName: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+
+    const columnEl = e.currentTarget as HTMLElement;
+
+    if (draggedColumnUser) {
+      const rect = columnEl.getBoundingClientRect();
+      const isLeftHalf = e.clientX - rect.left < rect.width / 2;
+      const side = isLeftHalf ? "left" : "right";
+
+      if (dragOverColumnTargetUser !== userName || columnDropSide !== side) {
+        setDragOverColumnTargetUser(userName);
+        setColumnDropSide(side);
+      }
+
+      // Auto-scroll horizontal column row
+      const horizontalScroll = columnEl.closest(".overflow-x-auto") as HTMLElement;
+      if (horizontalScroll) {
+        const hRect = horizontalScroll.getBoundingClientRect();
+        const hThreshold = 100;
+        const hSpeed = 20;
+        if (e.clientX - hRect.left < hThreshold) {
+          horizontalScroll.scrollLeft -= hSpeed;
+        } else if (hRect.right - e.clientX < hThreshold) {
+          horizontalScroll.scrollLeft += hSpeed;
+        }
+      }
+      return;
+    }
+
+    // Auto-scroll vertical task list inside column
+    const verticalScroll = columnEl.querySelector(".overflow-y-auto") as HTMLElement;
+    if (verticalScroll) {
+      const rect = verticalScroll.getBoundingClientRect();
+      const threshold = 70;
+      const speed = 15;
+      if (e.clientY - rect.top < threshold) {
+        verticalScroll.scrollTop -= speed;
+      } else if (rect.bottom - e.clientY < threshold) {
+        verticalScroll.scrollTop += speed;
+      }
+    }
+
+    // Auto-scroll horizontal column row
+    const horizontalScroll = columnEl.closest(".overflow-x-auto") as HTMLElement;
+    if (horizontalScroll) {
+      const hRect = horizontalScroll.getBoundingClientRect();
+      const hThreshold = 80;
+      const hSpeed = 18;
+      if (e.clientX - hRect.left < hThreshold) {
+        horizontalScroll.scrollLeft -= hSpeed;
+      } else if (hRect.right - e.clientX < hThreshold) {
+        horizontalScroll.scrollLeft += hSpeed;
+      }
+    }
+
+    // Auto-scroll main window
+    const windowThreshold = 80;
+    const windowSpeed = 15;
+    if (e.clientY < windowThreshold) {
+      window.scrollBy({ top: -windowSpeed, behavior: "auto" });
+    } else if (window.innerHeight - e.clientY < windowThreshold) {
+      window.scrollBy({ top: windowSpeed, behavior: "auto" });
+    }
+
+    if (dragOverColumnUser !== userName) {
+      setDragOverColumnUser(userName);
+    }
+  };
+
+  const handleDragLeaveColumn = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragOverColumnUser(null);
+    setDragOverColumnTargetUser(null);
+  };
+
+  const handleDragOverTask = (e: React.DragEvent, todo: TodoTask) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+
+    const targetEl = e.currentTarget as HTMLElement;
+    
+    // Auto-scroll vertically if near edges of container
+    const scrollContainer = targetEl.closest(".overflow-y-auto") as HTMLElement;
+    if (scrollContainer) {
+      const rect = scrollContainer.getBoundingClientRect();
+      const threshold = 70;
+      const speed = 15;
+      if (e.clientY - rect.top < threshold) {
+        scrollContainer.scrollTop -= speed;
+      } else if (rect.bottom - e.clientY < threshold) {
+        scrollContainer.scrollTop += speed;
+      }
+    }
+
+    // Auto-scroll horizontal row
+    const horizontalScroll = targetEl.closest(".overflow-x-auto") as HTMLElement;
+    if (horizontalScroll) {
+      const hRect = horizontalScroll.getBoundingClientRect();
+      const hThreshold = 80;
+      const hSpeed = 18;
+      if (e.clientX - hRect.left < hThreshold) {
+        horizontalScroll.scrollLeft -= hSpeed;
+      } else if (hRect.right - e.clientX < hThreshold) {
+        horizontalScroll.scrollLeft += hSpeed;
+      }
+    }
+
+    // Auto-scroll main window
+    const windowThreshold = 80;
+    const windowSpeed = 15;
+    if (e.clientY < windowThreshold) {
+      window.scrollBy({ top: -windowSpeed, behavior: "auto" });
+    } else if (window.innerHeight - e.clientY < windowThreshold) {
+      window.scrollBy({ top: windowSpeed, behavior: "auto" });
+    }
+
+    // Determine drop position (top half vs bottom half of card)
+    const rect = targetEl.getBoundingClientRect();
+    const isTopHalf = e.clientY - rect.top < rect.height / 2;
+    const pos = isTopHalf ? "above" : "below";
+
+    if (dragOverTodoId !== todo.id || dropPosition !== pos) {
+      setDragOverTodoId(todo.id);
+      setDropPosition(pos);
+    }
+  };
+
+  const getAssignedUserForTask = (todo: TodoTask): string => {
+    const role = todo.created_by_role || "";
+    if (role.includes("|for:")) {
+      return role.split("|for:")[1].trim();
+    }
+    const creatorName = todo.created_by_name || "";
+    const isAccounts = role.toLowerCase().startsWith("accounts") || creatorName.toLowerCase().includes("accounts");
+    if (isAccounts) {
+      return "Saket Shaligram";
+    }
+    return creatorName ? creatorName.trim() : "General / Other";
+  };
+
+  const handleDragLeaveTask = (e: React.DragEvent) => {
+    e.stopPropagation();
+  };
+
+  const handleDropOnColumn = async (e: React.DragEvent, targetUserName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (draggedColumnUser) {
+      const sourceUser = draggedColumnUser;
+      setDraggedColumnUser(null);
+      setDragOverColumnTargetUser(null);
+
+      if (sourceUser !== targetUserName) {
+        const currentGroups = getAllUserGroups().map(g => g.userName);
+        const filtered = currentGroups.filter(u => u !== sourceUser);
+        let targetIndex = filtered.indexOf(targetUserName);
+        if (targetIndex !== -1) {
+          if (columnDropSide === "right") {
+            targetIndex += 1;
+          }
+          filtered.splice(targetIndex, 0, sourceUser);
+        } else {
+          filtered.push(sourceUser);
+        }
+        setColumnOrder(filtered);
+        try {
+          localStorage.setItem("todo_column_order", JSON.stringify(filtered));
+        } catch (err) {
+          console.error("Failed to save column order", err);
+        }
+      }
+      return;
+    }
+
+    if (!draggedTodo) return;
+    await processDrop(draggedTodo, targetUserName, undefined, "below");
+  };
+
+  const handleDropOnTask = async (e: React.DragEvent, targetTodo: TodoTask, columnUserName?: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (draggedColumnUser) {
+      const targetUser = columnUserName || getAssignedUserForTask(targetTodo) || "General / Other";
+      await handleDropOnColumn(e, targetUser);
+      return;
+    }
+
+    if (!draggedTodo) return;
+    const targetUser = columnUserName || getAssignedUserForTask(targetTodo) || "General / Other";
+    await processDrop(draggedTodo, targetUser, targetTodo.id, dropPosition);
+  };
+
+  const processDrop = async (
+    dragged: TodoTask,
+    targetUserName: string,
+    dropTargetTodoId?: number,
+    pos: "above" | "below" = "above"
+  ) => {
+    setDraggedTodo(null);
+    setDragOverTodoId(null);
+    setDragOverColumnUser(null);
+
+    const currentTargetUser = getAssignedUserForTask(dragged);
+    const isChangingUser = targetUserName !== "General / Other" 
+      ? (currentTargetUser.trim().toLowerCase() !== targetUserName.trim().toLowerCase())
+      : (currentTargetUser !== "General / Other");
+
+    let updatedRole = dragged.created_by_role || "Manager";
+    if (isChangingUser) {
+      const baseRole = updatedRole.includes("|for:")
+        ? updatedRole.split("|for:")[0]
+        : (updatedRole || "Manager");
+
+      updatedRole = targetUserName === "General / Other"
+        ? baseRole
+        : `${baseRole}|for:${targetUserName.trim()}`;
+    }
+
+    let newTodos = [...todos];
+    const draggedIndex = newTodos.findIndex(t => t.id === dragged.id);
+    if (draggedIndex === -1) return;
+
+    const [removedTask] = newTodos.splice(draggedIndex, 1);
+    const updatedTask: TodoTask = {
+      ...removedTask,
+      created_by_role: updatedRole
+    };
+
+    if (dropTargetTodoId && dropTargetTodoId !== dragged.id) {
+      const targetIndex = newTodos.findIndex(t => t.id === dropTargetTodoId);
+      if (targetIndex !== -1) {
+        const insertIndex = pos === "below" ? targetIndex + 1 : targetIndex;
+        newTodos.splice(insertIndex, 0, updatedTask);
+      } else {
+        newTodos.push(updatedTask);
+      }
+    } else {
+      // Dropped on column area (not directly on a task card)
+      const targetUserTasks = newTodos.filter(t => {
+        const u = getAssignedUserForTask(t);
+        return u.trim().toLowerCase() === targetUserName.trim().toLowerCase();
+      });
+
+      if (targetUserTasks.length > 0) {
+        const lastTask = targetUserTasks[targetUserTasks.length - 1];
+        const lastIndex = newTodos.findIndex(t => t.id === lastTask.id);
+        newTodos.splice(lastIndex + 1, 0, updatedTask);
+      } else {
+        newTodos.push(updatedTask);
+      }
+    }
+
+    setTodos(newTodos);
+
+    try {
+      if (isChangingUser) {
+        const historyEntry = {
+          timestamp: new Date().toISOString(),
+          edited_by: `${currentUser.name} (${currentUser.role || "Manager"})`,
+          before: {
+            title: dragged.title,
+            description: dragged.description,
+            status: dragged.status,
+            remarks: dragged.remarks || null
+          },
+          after: {
+            title: dragged.title,
+            description: dragged.description,
+            status: dragged.status,
+            remarks: `[Reassigned via Drag & Drop to ${targetUserName.trim()}]`
+          },
+          rawChanges: [`Reassigned task target to ${targetUserName.trim()}`]
+        };
+
+        const existingHistory = Array.isArray(dragged.history) ? dragged.history : [];
+        const updatedHistory = [...existingHistory, historyEntry];
+
+        await fetch(`/api/todos/${dragged.id}/update`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            created_by_role: updatedRole,
+            edited_by: `${currentUser.name} (${currentUser.role || "Manager"})`,
+            history: updatedHistory
+          })
+        });
+      }
+
+      await fetch("/api/todos/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderedIds: newTodos.map(t => t.id),
+          updatedTodo: isChangingUser ? { id: dragged.id, created_by_role: updatedRole } : undefined
+        })
+      });
+
+      refreshLogs();
+    } catch (err) {
+      console.error("Failed to reassign/reorder tasks:", err);
+    }
+  };
 
   // Form State - Add
   const [title, setTitle] = useState("");
@@ -182,6 +590,19 @@ export default function ManagerDashboard({
     }
   };
 
+  const getTargetUserStr = (todo: TodoTask) => {
+    const role = todo.created_by_role || "";
+    if (role.includes("|for:")) {
+      return role.split("|for:")[1];
+    }
+    const creatorName = todo.created_by_name || "";
+    const isAccounts = role.toLowerCase().startsWith("accounts") || creatorName.toLowerCase().includes("accounts");
+    if (isAccounts) {
+      return "Saket Shaligram";
+    }
+    return null;
+  };
+
   const handleQuickFinishSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!finishingTodo) return;
@@ -249,35 +670,53 @@ export default function ManagerDashboard({
     setIsSubmittingViewer(true);
     try {
       const currentRole = viewingTodo.created_by_role || "Manager";
-      let newRole = "";
-      if (currentRole.includes("|for:")) {
-        const parts = currentRole.split("|for:");
-        const existingUsers = parts[1].split(",").map(u => u.trim());
-        if (!existingUsers.map(u => u.toLowerCase()).includes(selectedNewViewer.trim().toLowerCase())) {
-          existingUsers.push(selectedNewViewer.trim());
-        }
-        newRole = `${parts[0]}|for:${existingUsers.join(", ")}`;
-      } else {
-        newRole = `${currentRole}|for:${selectedNewViewer.trim()}`;
-      }
+      const baseRole = currentRole.includes("|for:") 
+        ? currentRole.split("|for:")[0] 
+        : (currentRole || "Manager");
+
+      // Fully transfer task to the newly selected user (replaces existing target)
+      const newRole = `${baseRole}|for:${selectedNewViewer.trim()}`;
+
+      const historyEntry = {
+        timestamp: new Date().toISOString(),
+        edited_by: `${currentUser.name} (${currentUser.role || "Manager"})`,
+        before: {
+          title: viewingTodo.title,
+          description: viewingTodo.description,
+          status: viewingTodo.status,
+          remarks: viewingTodo.remarks || null
+        },
+        after: {
+          title: viewingTodo.title,
+          description: viewingTodo.description,
+          status: viewingTodo.status,
+          remarks: `[Transferred task target to ${selectedNewViewer.trim()}]`
+        },
+        rawChanges: [`Transferred task target to ${selectedNewViewer.trim()}`]
+      };
+
+      const existingHistory = Array.isArray(viewingTodo.history) ? viewingTodo.history : [];
+      const updatedHistory = [...existingHistory, historyEntry];
 
       const res = await fetch(`/api/todos/${viewingTodo.id}/update`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           created_by_role: newRole,
-          edited_by: `${currentUser.name} (${currentUser.role || "Manager"})`
+          edited_by: `${currentUser.name} (${currentUser.role || "Manager"})`,
+          history: updatedHistory
         })
       });
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Failed to grant view access.");
+        throw new Error(errData.error || "Failed to transfer task.");
       }
 
       const updatedTodo = {
         ...viewingTodo,
-        created_by_role: newRole
+        created_by_role: newRole,
+        history: updatedHistory
       };
 
       setViewingTodo(updatedTodo);
@@ -287,7 +726,7 @@ export default function ManagerDashboard({
       fetchTodos();
       refreshLogs();
     } catch (err: any) {
-      alert(err.message || "Failed to add user view access.");
+      alert(err.message || "Failed to transfer task.");
     } finally {
       setIsSubmittingViewer(false);
     }
@@ -383,80 +822,107 @@ export default function ManagerDashboard({
     }
   };
 
-  const renderTaskCard = (todo: TodoTask | DeletedTodoTask) => (
-    <div 
-      key={todo.id} 
-      onClick={() => setViewingTodo(todo as TodoTask)}
-      className={`bg-white border rounded-xl shadow-3xs hover:shadow-md hover:translate-y-[-1px] transition-all duration-200 flex flex-col shrink-0 overflow-hidden cursor-pointer relative group ${
-        activeTab === "deleted" ? "border-red-100 hover:border-red-400" : "border-slate-200 hover:border-teal-400"
-      }`}
-    >
-      {/* Accent status line at top of card */}
-      <div className={`h-1 w-full ${
-        activeTab === "deleted" ? "bg-red-500" : todo.status === "Finished" ? "bg-emerald-500" : "bg-amber-500"
-      }`} />
+  const renderTaskCard = (todo: TodoTask | DeletedTodoTask, columnUserName?: string) => {
+    const isDraggable = activeTab !== "deleted";
+    const isBeingDragged = draggedTodo?.id === todo.id;
+    const isTargetOfDrag = dragOverTodoId === todo.id && !isBeingDragged;
 
-      <div className="p-3.5 flex-grow flex flex-col justify-between space-y-3">
-        {/* Card Header: ID & Status Badge */}
-        <div className="flex items-center justify-between">
-          <span className="font-mono font-extrabold text-teal-600 text-xs">#{todo.id}</span>
-          <div>
-            {activeTab === "deleted" ? (
-              <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.2 text-[8px] font-extrabold text-red-700 ring-1 ring-red-100 uppercase tracking-wide">
-                Deleted
-              </span>
-            ) : todo.status === "Assigned" ? (
-              <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.2 text-[8px] font-extrabold text-amber-700 ring-1 ring-amber-100 uppercase tracking-wide">
-                Assigned
-              </span>
-            ) : (
-              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.2 text-[8px] font-extrabold text-emerald-700 ring-1 ring-emerald-100 uppercase tracking-wide">
-                Finished
-              </span>
-            )}
+    return (
+      <div 
+        key={todo.id} 
+        draggable={isDraggable}
+        onDragStart={(e) => isDraggable && handleDragStart(e, todo as TodoTask)}
+        onDragEnd={handleDragEnd}
+        onDragOver={(e) => isDraggable && handleDragOverTask(e, todo as TodoTask)}
+        onDragLeave={handleDragLeaveTask}
+        onDrop={(e) => isDraggable && handleDropOnTask(e, todo as TodoTask, columnUserName)}
+        onClick={() => setViewingTodo(todo as TodoTask)}
+        className={`bg-white border rounded-xl shadow-3xs hover:shadow-md hover:translate-y-[-1px] transition-all duration-200 flex flex-col shrink-0 overflow-hidden cursor-pointer relative group ${
+          isBeingDragged 
+            ? "opacity-40 border-dashed border-teal-500 scale-[0.98]" 
+            : isTargetOfDrag 
+            ? (dropPosition === "above" 
+                ? "border-t-4 border-t-teal-500 ring-2 ring-teal-200 shadow-lg scale-[1.01]" 
+                : "border-b-4 border-b-teal-500 ring-2 ring-teal-200 shadow-lg scale-[1.01]")
+            : activeTab === "deleted" 
+            ? "border-red-100 hover:border-red-400" 
+            : "border-slate-200 hover:border-teal-400"
+        }`}
+      >
+        {/* Accent status line at top of card */}
+        <div className={`h-1 w-full ${
+          activeTab === "deleted" ? "bg-red-500" : todo.status === "Finished" ? "bg-emerald-500" : "bg-amber-500"
+        }`} />
+
+        <div className="p-3.5 flex-grow flex flex-col justify-between space-y-3">
+          {/* Card Header: ID & Status Badge */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              {isDraggable && (
+                <span title="Drag up/down to reorder or drag to another user column to reassign" className="text-slate-300 group-hover:text-teal-600 transition-colors cursor-grab active:cursor-grabbing p-0.5">
+                  <GripVertical className="h-3.5 w-3.5" />
+                </span>
+              )}
+              <span className="font-mono font-extrabold text-teal-600 text-xs">#{todo.id}</span>
+            </div>
+            <div>
+              {activeTab === "deleted" ? (
+                <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.2 text-[8px] font-extrabold text-red-700 ring-1 ring-red-100 uppercase tracking-wide">
+                  Deleted
+                </span>
+              ) : todo.status === "Assigned" ? (
+                <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.2 text-[8px] font-extrabold text-amber-700 ring-1 ring-amber-100 uppercase tracking-wide">
+                  Assigned
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.2 text-[8px] font-extrabold text-emerald-700 ring-1 ring-emerald-100 uppercase tracking-wide">
+                  Finished
+                </span>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Title and Description */}
-        <div className="space-y-1">
-          <h4 className="font-extrabold text-slate-800 text-[12.5px] leading-snug group-hover:text-teal-700 transition-colors line-clamp-2">{todo.title}</h4>
-          <p className="text-[10.5px] text-slate-500 font-normal leading-relaxed line-clamp-3 break-words">
-            {todo.description}
-          </p>
-        </div>
-
-        {/* Deletion details if activeTab is deleted */}
-        {activeTab === "deleted" && (
-          <div className="bg-red-50/40 border border-red-100/30 rounded-lg p-2 text-[9px] text-slate-600 space-y-0.5">
-            <div className="truncate">Deleted by: <strong className="text-red-700">{(todo as any).deleted_by || "Manager"}</strong></div>
-            <div className="truncate">Deleted at: <strong className="text-slate-700">{(todo as any).deleted_at ? formatDate((todo as any).deleted_at) : "N/A"}</strong></div>
+          {/* Title and Description */}
+          <div className="space-y-1">
+            <h4 className="font-extrabold text-slate-800 text-[12.5px] leading-snug group-hover:text-teal-700 transition-colors line-clamp-2">{todo.title}</h4>
+            <p className="text-[10.5px] text-slate-500 font-normal leading-relaxed line-clamp-3 break-words">
+              {todo.description}
+            </p>
           </div>
-        )}
 
-        {/* Resolution remarks if finished (smaller) */}
-        {activeTab === "finished" && todo.remarks && (
-          <div className="bg-emerald-50/40 border border-emerald-100/40 rounded-lg p-2 text-[10px] text-slate-600 italic truncate">
-            {todo.remarks}
+          {/* Deletion details if activeTab is deleted */}
+          {activeTab === "deleted" && (
+            <div className="bg-red-50/40 border border-red-100/30 rounded-lg p-2 text-[9px] text-slate-600 space-y-0.5">
+              <div className="truncate">Deleted by: <strong className="text-red-700">{(todo as any).deleted_by || "Manager"}</strong></div>
+              <div className="truncate">Deleted at: <strong className="text-slate-700">{(todo as any).deleted_at ? formatDate((todo as any).deleted_at) : "N/A"}</strong></div>
+            </div>
+          )}
+
+          {/* Resolution remarks if finished (smaller) */}
+          {activeTab === "finished" && todo.remarks && (
+            <div className="bg-emerald-50/40 border border-emerald-100/40 rounded-lg p-2 text-[10px] text-slate-600 italic truncate">
+              {todo.remarks}
+            </div>
+          )}
+
+          {/* Metadata: Creator and Date */}
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+            <span className="font-medium flex-1 min-w-0 pr-2" title={getTargetUserStr(todo as TodoTask) ? `For ${getTargetUserStr(todo as TodoTask)}` : undefined}>
+              By <strong className="text-slate-600 font-bold">{todo.created_by_name}</strong>
+              {getTargetUserStr(todo as TodoTask) && (
+                <span className="ml-1 text-[8.5px] bg-teal-50 text-teal-700 font-extrabold px-1.5 py-0.5 rounded border border-teal-100 uppercase inline-flex items-center gap-0.5">
+                  ➔ {getTargetUserStr(todo as TodoTask)}
+                </span>
+              )}
+            </span>
+            <span className="font-mono">{formatDate(todo.created_at)}</span>
           </div>
-        )}
-
-        {/* Metadata: Creator and Date */}
-        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-          <span className="font-medium flex-1 min-w-0 pr-2" title={todo.created_by_role && todo.created_by_role.includes('|for:') ? `For ${todo.created_by_role.split('|for:')[1]}` : undefined}>
-            By <strong className="text-slate-600 font-bold">{todo.created_by_name}</strong>
-            {todo.created_by_role && todo.created_by_role.includes('|for:') && (
-              <span className="ml-1 text-[8.5px] bg-teal-50 text-teal-700 font-extrabold px-1.5 py-0.5 rounded border border-teal-100 uppercase inline-flex items-center gap-0.5">
-                ➔ {todo.created_by_role.split('|for:')[1]}
-              </span>
-            )}
-          </span>
-          <span className="font-mono">{formatDate(todo.created_at)}</span>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
-  const getUserGroups = () => {
+  const getAllUserGroups = () => {
     const currentTodoList = activeTab === "deleted" ? filteredDeletedTodos : filteredTodos;
 
     if (selectedAccountsUser) {
@@ -524,8 +990,18 @@ export default function ManagerDashboard({
       groups.push({ userName: "General / Other", todos: unassignedTodos });
     }
 
-    // Sort so self task column comes first, followed by other users, and General at the end
+    // Sort according to columnOrder if set, otherwise default to self first, then others, General at end
     groups.sort((a, b) => {
+      if (columnOrder.length > 0) {
+        const indexA = columnOrder.indexOf(a.userName);
+        const indexB = columnOrder.indexOf(b.userName);
+        if (indexA !== -1 && indexB !== -1) {
+          return indexA - indexB;
+        }
+        if (indexA !== -1) return -1;
+        if (indexB !== -1) return 1;
+      }
+
       const aIsMe = myNameLower && a.userName.trim().toLowerCase() === myNameLower;
       const bIsMe = myNameLower && b.userName.trim().toLowerCase() === myNameLower;
       if (aIsMe) return -1;
@@ -536,6 +1012,10 @@ export default function ManagerDashboard({
     });
 
     return groups;
+  };
+
+  const getUserGroups = () => {
+    return getAllUserGroups().filter(group => !hiddenColumns.includes(group.userName));
   };
 
   return (
@@ -684,25 +1164,108 @@ export default function ManagerDashboard({
             />
           </div>
 
-          {/* Accounts/Manager User Filter Dropdown */}
-          <div className="flex items-center gap-2 min-w-[240px]">
-            <span className="text-xs text-slate-500 font-medium shrink-0">Filter User:</span>
-            <select
-              value={selectedAccountsUser}
-              onChange={(e) => setSelectedAccountsUser(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-teal-500 py-2 px-3 rounded-xl text-xs text-slate-700 font-medium focus:outline-none transition-all cursor-pointer"
-            >
-              <option value="">All Users (Assigned To / By)</option>
-              {accountsUsers.length === 0 ? (
-                <option disabled>No users found</option>
-              ) : (
-                accountsUsers.map(name => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))
-              )}
-            </select>
+          {/* Accounts/Manager User Filter Dropdown & Column Display Selector */}
+          <div className="flex flex-wrap items-center gap-2 min-w-[240px]">
+            <div className="flex items-center gap-2 flex-grow">
+              <span className="text-xs text-slate-500 font-medium shrink-0">Filter User:</span>
+              <select
+                value={selectedAccountsUser}
+                onChange={(e) => setSelectedAccountsUser(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-teal-500 py-2 px-3 rounded-xl text-xs text-slate-700 font-medium focus:outline-none transition-all cursor-pointer"
+              >
+                <option value="">All Users (Assigned To / By)</option>
+                {accountsUsers.length === 0 ? (
+                  <option disabled>No users found</option>
+                ) : (
+                  accountsUsers.map(name => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            {/* User Column Checkbox Selection Dropdown (Only in userColumns viewMode) */}
+            {viewMode === "userColumns" && (
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsColumnDropdownOpen(!isColumnDropdownOpen)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-teal-500 rounded-xl text-xs font-semibold text-slate-700 transition-all cursor-pointer shadow-3xs"
+                  title="Choose user columns to display"
+                >
+                  <Columns className="h-3.5 w-3.5 text-teal-600" />
+                  <span>User Columns</span>
+                  <span className="bg-teal-100 text-teal-800 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                    {getUserGroups().length}/{getAllUserGroups().length}
+                  </span>
+                  <ChevronDown className={`h-3.5 w-3.5 text-slate-400 transition-transform ${isColumnDropdownOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {isColumnDropdownOpen && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-20"
+                      onClick={() => setIsColumnDropdownOpen(false)} 
+                    />
+                    <div className="absolute right-0 mt-1.5 w-64 bg-white border border-slate-200 rounded-2xl shadow-xl z-30 p-3 space-y-2 animate-fade-in text-xs">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                        <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                          <Columns className="h-3.5 w-3.5 text-teal-600" />
+                          Display User Columns
+                        </span>
+                        <button
+                          type="button"
+                          onClick={showAllColumns}
+                          className="text-teal-600 hover:text-teal-800 font-medium cursor-pointer text-[11px]"
+                        >
+                          Select All
+                        </button>
+                      </div>
+
+                      <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+                        {getAllUserGroups().map((group) => {
+                          const isDisplayed = !hiddenColumns.includes(group.userName);
+                          return (
+                            <label
+                              key={group.userName}
+                              className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 cursor-pointer transition-colors text-slate-700 select-none"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <input
+                                  type="checkbox"
+                                  checked={isDisplayed}
+                                  onChange={() => toggleColumnVisibility(group.userName)}
+                                  className="rounded border-slate-300 text-teal-600 focus:ring-teal-500 h-4 w-4 cursor-pointer"
+                                />
+                                <span className="font-medium truncate text-xs">{group.userName}</span>
+                              </div>
+                              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md shrink-0">
+                                {group.todos.length}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      {hiddenColumns.length > 0 && (
+                        <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[11px] text-slate-500">
+                          <span>{hiddenColumns.length} column(s) hidden</span>
+                          <button
+                            type="button"
+                            onClick={showAllColumns}
+                            className="text-teal-600 hover:underline font-semibold cursor-pointer"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -716,53 +1279,109 @@ export default function ManagerDashboard({
             No To-Do tasks found matching your query.
           </div>
         ) : viewMode === "userColumns" ? (
-          /* Horizontal scroll wrapper with fixed height scrollable user columns */
-          <div className="overflow-x-auto custom-scrollbar pb-4 pt-1 border-t border-slate-100">
-            <div className="flex gap-4 items-start animate-fade-in pb-1">
-              {getUserGroups().map(group => {
-                const isSelf = currentUser && group.userName.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
-                return (
-                  <div 
-                    key={group.userName} 
-                    className={`w-72 sm:w-80 shrink-0 rounded-2xl p-3.5 flex flex-col h-[500px] shadow-xs transition-all ${
-                      isSelf 
-                        ? "bg-teal-50/80 border-2 border-teal-400 ring-2 ring-teal-100/60" 
-                        : "bg-slate-50/80 border border-slate-200/90"
-                    }`}
-                  >
-                    {/* Column Header */}
-                    <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 shrink-0 mb-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div className={`p-1.5 rounded-lg shrink-0 ${isSelf ? "bg-teal-600 text-white" : "bg-teal-100 text-teal-800"}`}>
-                          <User className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <h3 className="font-extrabold text-xs text-slate-800 truncate" title={group.userName}>{group.userName}</h3>
-                            {isSelf && (
-                              <span className="bg-teal-600 text-white font-black text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">
-                                My Tasks
-                              </span>
-                            )}
+          getUserGroups().length === 0 ? (
+            <div className="bg-slate-50/80 border-2 border-dashed border-slate-200 rounded-3xl p-8 text-center space-y-3">
+              <div className="p-3 bg-teal-50 text-teal-600 rounded-2xl w-max mx-auto">
+                <Columns className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-bold text-sm text-slate-800">All User Columns Are Hidden</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  You have hidden all user columns from display. Click below or use the "User Columns" dropdown menu to restore columns.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={showAllColumns}
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                Show All User Columns
+              </button>
+            </div>
+          ) : (
+            /* Horizontal scroll wrapper with fixed height scrollable user columns */
+            <div className="overflow-x-auto custom-scrollbar pb-4 pt-1 border-t border-slate-100">
+              <div className="flex gap-4 items-start animate-fade-in pb-1">
+                {getUserGroups().map(group => {
+                  const isSelf = currentUser && group.userName.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+                  const isColumnDragOver = dragOverColumnUser === group.userName;
+                  const isBeingColumnDragged = draggedColumnUser === group.userName;
+                  const isTargetColumn = dragOverColumnTargetUser === group.userName;
+
+                  return (
+                    <div 
+                      key={group.userName} 
+                      onDragOver={(e) => handleDragOverColumn(e, group.userName)}
+                      onDragLeave={handleDragLeaveColumn}
+                      onDrop={(e) => handleDropOnColumn(e, group.userName)}
+                      className={`w-72 sm:w-80 shrink-0 rounded-2xl p-3.5 flex flex-col h-[500px] shadow-xs transition-all relative ${
+                        isBeingColumnDragged
+                          ? "opacity-30 border-2 border-dashed border-teal-400 scale-[0.98]"
+                          : isTargetColumn
+                            ? (columnDropSide === "left"
+                                ? "border-l-4 border-l-teal-500 border-y border-r border-slate-300 ring-4 ring-teal-100 scale-[1.01] shadow-md"
+                                : "border-r-4 border-r-teal-500 border-y border-l border-slate-300 ring-4 ring-teal-100 scale-[1.01] shadow-md")
+                            : isColumnDragOver && !draggedColumnUser
+                              ? "bg-teal-100/70 border-2 border-teal-500 ring-4 ring-teal-200/80 scale-[1.01]"
+                              : isSelf 
+                                ? "bg-teal-50/80 border-2 border-teal-400 ring-2 ring-teal-100/60" 
+                                : "bg-slate-50/80 border border-slate-200/90"
+                      }`}
+                    >
+                      {/* Column Header */}
+                      <div 
+                        draggable
+                        onDragStart={(e) => handleColumnHeaderDragStart(e, group.userName)}
+                        onDragEnd={handleColumnDragEnd}
+                        className="flex items-center justify-between pb-2.5 border-b border-slate-200 shrink-0 mb-3 cursor-grab active:cursor-grabbing select-none group/header"
+                        title="Drag header to reorder column"
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <GripVertical className="h-4 w-4 text-slate-300 group-hover/header:text-teal-600 shrink-0 transition-colors" />
+                          <div className={`p-1.5 rounded-lg shrink-0 ${isSelf ? "bg-teal-600 text-white" : "bg-teal-100 text-teal-800"}`}>
+                            <User className="h-4 w-4" />
                           </div>
-                          <span className="text-[9.5px] text-slate-400 font-medium block">
-                            {isSelf ? "Self & Assigned Tasks" : "User Tasks"}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <h3 className="font-extrabold text-xs text-slate-800 truncate" title={group.userName}>{group.userName}</h3>
+                              {isSelf && (
+                                <span className="bg-teal-600 text-white font-black text-[8px] px-1.5 py-0.5 rounded uppercase tracking-wider shrink-0">
+                                  My Tasks
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[9.5px] text-slate-400 font-medium block">
+                              {isSelf ? "Self & Assigned Tasks" : "User Tasks"}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="bg-teal-600 text-white font-mono text-[10px] font-extrabold px-2 py-0.5 rounded-full">
+                            {group.todos.length}
                           </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeColumn(group.userName);
+                            }}
+                            className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer opacity-70 group-hover/header:opacity-100"
+                            title={`Remove '${group.userName}' column from display`}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       </div>
-                      <span className="bg-teal-600 text-white font-mono text-[10px] font-extrabold px-2 py-0.5 rounded-full shrink-0">
-                        {group.todos.length}
-                      </span>
-                    </div>
 
                     {/* Dedicated Vertical Task Stack for this user */}
                     <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-1 flex flex-col gap-2.5">
                       {group.todos.length === 0 ? (
                         <div className="p-4 bg-white/60 border border-dashed border-slate-200 rounded-xl text-center text-[11px] text-slate-400 italic">
-                          No tasks assigned
+                          No tasks assigned (drop task here)
                         </div>
                       ) : (
-                        group.todos.map(todo => renderTaskCard(todo))
+                        group.todos.map(todo => renderTaskCard(todo, group.userName))
                       )}
                     </div>
                   </div>
@@ -770,7 +1389,8 @@ export default function ManagerDashboard({
               })}
             </div>
           </div>
-        ) : (
+        )
+      ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 animate-fade-in">
             {(activeTab === "deleted" ? filteredDeletedTodos : filteredTodos).map(todo => renderTaskCard(todo))}
           </div>
@@ -1144,9 +1764,9 @@ export default function ManagerDashboard({
                         <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider leading-none">
                           {viewingTodo.created_by_role ? viewingTodo.created_by_role.split('|')[0] : ""}
                         </span>
-                        {viewingTodo.created_by_role && viewingTodo.created_by_role.includes('|for:') && (
+                        {getTargetUserStr(viewingTodo) && (
                           <span className="text-[8px] font-bold bg-teal-50 text-teal-700 border border-teal-100/70 rounded-md px-1.5 py-0.5 uppercase tracking-wider leading-none">
-                            For: {viewingTodo.created_by_role.split('|for:')[1]}
+                            For: {getTargetUserStr(viewingTodo)}
                           </span>
                         )}
                       </div>
@@ -1159,12 +1779,12 @@ export default function ManagerDashboard({
                 </div>
               </div>
 
-              {/* View Access & Users Section */}
+              {/* Task Assignment & Transfer Section */}
               <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-xs font-extrabold text-slate-800">
                     <Users className="h-3.5 w-3.5 text-teal-600" />
-                    <span>View Access & Assigned Users</span>
+                    <span>Task Assignment & Transfer</span>
                   </div>
                   <button
                     type="button"
@@ -1172,12 +1792,12 @@ export default function ManagerDashboard({
                     className="text-[10px] font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200/60 rounded-lg px-2 py-1 transition-all cursor-pointer flex items-center gap-1"
                   >
                     <UserPlus className="h-3 w-3" />
-                    <span>{isAddingViewer ? "Close" : "+ Add User/Manager"}</span>
+                    <span>{isAddingViewer ? "Close" : "+ Transfer / Reassign Task"}</span>
                   </button>
                 </div>
 
                 <div className="text-[11px] text-slate-600 flex flex-wrap items-center gap-1.5">
-                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider">Access Granted To:</span>
+                  <span className="text-[9px] text-slate-400 font-extrabold uppercase tracking-wider">Assigned To:</span>
                   <span className="bg-white border border-slate-200 px-2 py-0.5 rounded-md font-semibold text-slate-700 text-[10.5px]">
                     {viewingTodo.created_by_name} (Creator)
                   </span>
@@ -1194,7 +1814,7 @@ export default function ManagerDashboard({
                 {isAddingViewer && (
                   <div className="pt-2 border-t border-slate-200 space-y-2 animate-fade-in">
                     <span className="text-[9.5px] font-extrabold text-slate-500 uppercase block tracking-wider">
-                      Select User or Manager to grant task access:
+                      Select user or manager to transfer task to (old assigned user will lose access):
                     </span>
                     <div className="flex items-center gap-2">
                       <select
@@ -1213,7 +1833,7 @@ export default function ManagerDashboard({
                         onClick={handleAddViewerSubmit}
                         className="bg-teal-600 hover:bg-teal-700 disabled:bg-slate-300 text-white font-bold text-xs px-3 py-1.5 rounded-xl transition-all shadow-xs cursor-pointer shrink-0 flex items-center gap-1"
                       >
-                        {isSubmittingViewer ? "Granting..." : "Add Access"}
+                        {isSubmittingViewer ? "Transferring..." : "Transfer Task"}
                       </button>
                     </div>
                   </div>
