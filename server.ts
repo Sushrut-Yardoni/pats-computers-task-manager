@@ -2310,7 +2310,7 @@ app.post("/api/todos", async (req, res) => {
         title,
         details: description,
         priority: created_by_role, // Save the role with assignment target in priority column
-        status: "Assigned",
+        status: "pending",
         created_by,
         created_at: new Date().toISOString()
       };
@@ -2324,7 +2324,7 @@ app.post("/api/todos", async (req, res) => {
       const insertedTodo = insertedRows && insertedRows[0];
       if (!insertedTodo) throw new Error("No data returned from insert.");
 
-      const query = `INSERT INTO todo (id, title, details, priority, status, created_at, created_by)\nVALUES (${nextId}, '${title.replace(/'/g, "''")}', '${description.replace(/'/g, "''")}', '${created_by_role}', 'Assigned', '${newTodoData.created_at}', ${created_by || 'NULL'});`;
+      const query = `INSERT INTO todo (id, title, details, priority, status, created_at, created_by)\nVALUES (${nextId}, '${title.replace(/'/g, "''")}', '${description.replace(/'/g, "''")}', '${created_by_role}', 'pending', '${newTodoData.created_at}', ${created_by || 'NULL'});`;
       logSQL(query, 1);
 
       return res.json({
@@ -2408,10 +2408,22 @@ app.post("/api/todos/:id/update", async (req, res) => {
         return res.status(403).json({ error: "Description cannot be edited while status is Finished. Change status to Assigned first." });
       }
 
+      let dbStatusVal = status !== undefined ? status : todo.status;
+      if (dbStatusVal && typeof dbStatusVal === "string") {
+        const lower = dbStatusVal.toLowerCase();
+        if (lower === "assigned" || lower === "pending") {
+          dbStatusVal = "pending";
+        } else if (lower === "finished" || lower === "completed") {
+          dbStatusVal = "finished";
+        } else if (lower === "deleted") {
+          dbStatusVal = "deleted";
+        }
+      }
+
       const updatedFields: any = {
         title: title !== undefined ? title : todo.title,
         details: description !== undefined ? description : todo.details,
-        status: status !== undefined ? status : todo.status,
+        status: dbStatusVal,
         remarks: remarks !== undefined ? remarks : todo.remarks,
         updated_at: new Date().toISOString()
       };
@@ -2420,10 +2432,18 @@ app.post("/api/todos/:id/update", async (req, res) => {
         updatedFields.priority = new_created_by_role;
       }
 
+      const getNormStatus = (s: string) => {
+        if (!s) return "pending";
+        const l = s.toLowerCase();
+        if (l === "finished" || l === "completed") return "finished";
+        if (l === "deleted") return "deleted";
+        return "pending";
+      };
+
       const hasChanges = 
         beforeState.title !== updatedFields.title ||
         beforeState.description !== (description !== undefined ? description : beforeState.description) ||
-        beforeState.status !== updatedFields.status ||
+        getNormStatus(beforeState.status) !== getNormStatus(updatedFields.status) ||
         beforeState.remarks !== updatedFields.remarks;
 
       const { data: emps } = await supabase.from("employees").select("*");
@@ -2582,10 +2602,22 @@ app.post("/api/todos/:id/update", async (req, res) => {
     return res.status(403).json({ error: "Description cannot be edited while status is Finished. Change status to Assigned first." });
   }
 
+  let dbStatusVal = status !== undefined ? status : todo.status;
+  if (dbStatusVal && typeof dbStatusVal === "string") {
+    const lower = dbStatusVal.toLowerCase();
+    if (lower === "assigned" || lower === "pending") {
+      dbStatusVal = "pending";
+    } else if (lower === "finished" || lower === "completed") {
+      dbStatusVal = "finished";
+    } else if (lower === "deleted") {
+      dbStatusVal = "deleted";
+    }
+  }
+
   const updatedFields: any = {
     title: title !== undefined ? title : todo.title,
     description: description !== undefined ? description : todo.description,
-    status: status !== undefined ? status : todo.status,
+    status: dbStatusVal,
     remarks: remarks !== undefined ? remarks : todo.remarks
   };
 
@@ -2593,10 +2625,18 @@ app.post("/api/todos/:id/update", async (req, res) => {
     updatedFields.created_by_role = new_created_by_role;
   }
 
+  const getNormStatus = (s: string) => {
+    if (!s) return "pending";
+    const l = s.toLowerCase();
+    if (l === "finished" || l === "completed") return "finished";
+    if (l === "deleted") return "deleted";
+    return "pending";
+  };
+
   const hasChanges = 
     beforeState.title !== updatedFields.title ||
     beforeState.description !== updatedFields.description ||
-    beforeState.status !== updatedFields.status ||
+    getNormStatus(beforeState.status) !== getNormStatus(updatedFields.status) ||
     beforeState.remarks !== updatedFields.remarks;
 
   if (edited_by && hasChanges) {
