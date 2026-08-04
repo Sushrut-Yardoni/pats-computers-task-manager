@@ -27,12 +27,12 @@ export default function ManagerDashboard({
   const accountsUsers = Array.from(new Set([
     ...employees.filter(emp => {
       const r = (emp.role || "").toLowerCase();
-      return r.includes("manager") || r.includes("accounts");
+      return r.includes("manager") || r.includes("employee");
     }).map(emp => emp.name.trim()),
     ...todos.flatMap(todo => {
       const role = todo.created_by_role || "";
       const roleLower = role.toLowerCase();
-      if (roleLower.includes("manager") || roleLower.includes("accounts")) {
+      if (roleLower.includes("manager") || roleLower.includes("employee")) {
         const names = [todo.created_by_name.trim()];
         if (role.includes("|for:")) {
           names.push(...role.split("|for:")[1].split(",").map(u => u.trim()));
@@ -287,7 +287,7 @@ export default function ManagerDashboard({
       return role.split("|for:")[1].trim();
     }
     const creatorName = todo.created_by_name || "";
-    const isAccounts = role.toLowerCase().startsWith("accounts") || creatorName.toLowerCase().includes("accounts");
+    const isAccounts = role.toLowerCase().startsWith("accounts") || role.toLowerCase().startsWith("employee") || creatorName.toLowerCase().includes("accounts") || creatorName.toLowerCase().includes("employee");
     if (isAccounts) {
       return "Saket Shaligram";
     }
@@ -596,7 +596,7 @@ export default function ManagerDashboard({
       return role.split("|for:")[1];
     }
     const creatorName = todo.created_by_name || "";
-    const isAccounts = role.toLowerCase().startsWith("accounts") || creatorName.toLowerCase().includes("accounts");
+    const isAccounts = role.toLowerCase().startsWith("accounts") || role.toLowerCase().startsWith("employee") || creatorName.toLowerCase().includes("accounts") || creatorName.toLowerCase().includes("employee");
     if (isAccounts) {
       return "Saket Shaligram";
     }
@@ -1435,12 +1435,12 @@ export default function ManagerDashboard({
                   className="w-full bg-slate-50 border border-slate-200 hover:border-teal-300 focus:border-teal-500 px-3 py-2 rounded-xl focus:outline-none transition-colors cursor-pointer text-xs"
                 >
                   <option value="">All Users (Public)</option>
-                  <optgroup label="Accounts Users">
+                  <optgroup label="Employee Users">
                     {employees
-                      .filter(emp => emp.role.toLowerCase() === "accounts" || emp.role.toLowerCase().includes("accounts"))
+                      .filter(emp => emp.role.toLowerCase() === "employee" || emp.role.toLowerCase().includes("employee"))
                       .map(emp => (
                         <option key={emp.id} value={emp.name}>
-                          {emp.name} (Accounts)
+                          {emp.name} ({emp.role})
                         </option>
                       ))}
                   </optgroup>
@@ -1454,7 +1454,7 @@ export default function ManagerDashboard({
                       ))}
                   </optgroup>
                 </select>
-                <p className="text-[10px] text-slate-400 mt-1">If specified, only this user (Accounts or Manager), plus admins, can see this task.</p>
+                <p className="text-[10px] text-slate-400 mt-1">If specified, only this user (Employee or Manager), plus admins, can see this task.</p>
               </div>
 
               <div>

@@ -117,7 +117,7 @@ export default function EmployeeManagementSection({
 
   const handleOpenAssignRole = (emp: Employee) => {
     setChangeRoleTarget(emp);
-    const predefined = ["Admin", "Accounts", "Manager", "Desktop Engineer", "Network Specialist", "Software Support Expert"];
+    const predefined = ["Admin", "Employee", "Manager", "Desktop Engineer", "Network Specialist", "Software Support Expert"];
     if (predefined.includes(emp.role)) {
       setSelectedRoleType(emp.role);
       setCustomRoleValue("");
@@ -399,7 +399,7 @@ export default function EmployeeManagementSection({
                   className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 text-slate-800 px-3 py-2.5 rounded-xl text-xs focus:outline-none transition-all font-sans"
                 >
                   <option value="Admin">Admin (Accesses Admin Dashboard)</option>
-                  <option value="Accounts">Accounts (Accesses Accounts Dashboard)</option>
+                  <option value="Employee">Employee (Accesses Employee Dashboard)</option>
                   <option value="Manager">Manager (Accesses Manager Dashboard)</option>
                   <option value="Desktop Engineer">Desktop Engineer (Accesses Service Portal)</option>
                   <option value="Network Specialist">Network Specialist (Accesses Service Portal)</option>

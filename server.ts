@@ -43,8 +43,63 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
 const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 const supabase = isSupabaseConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
-if (isSupabaseConfigured) {
+if (isSupabaseConfigured && supabase) {
   console.log("✅ Supabase is initialized. Active Live Connection Point:", supabaseUrl);
+  // Startup migration: replace role = Accounts with Employee in Supabase also.
+  (async () => {
+    try {
+      console.log("🔄 Running background database update for Supabase: 'Accounts' -> 'Employee'...");
+      
+      // 1. Update employees with role 'Accounts' or 'Accounts Dept' to 'Employee'
+      const { data: empsToUpdate, error: selectErr } = await supabase
+        .from("employees")
+        .select("id, role")
+        .or("role.eq.Accounts,role.eq.Accounts Dept");
+
+      if (selectErr) {
+        console.warn("⚠️ Unable to fetch employees for role migration (it's normal if table doesn't exist yet):", selectErr.message);
+      } else if (empsToUpdate && empsToUpdate.length > 0) {
+        const { error: updateErr } = await supabase
+          .from("employees")
+          .update({ role: "Employee" })
+          .or("role.eq.Accounts,role.eq.Accounts Dept");
+
+        if (updateErr) {
+          console.error("❌ Failed to update employee roles in Supabase:", updateErr.message);
+        } else {
+          console.log(`✅ Successfully updated ${empsToUpdate.length} employee role(s) to 'Employee' in Supabase.`);
+        }
+      }
+
+      // 2. Update created_by_role in todo table
+      const { data: todosToUpdate, error: selectTodoErr } = await supabase
+        .from("todo")
+        .select("id, created_by_role");
+
+      if (selectTodoErr) {
+        console.warn("⚠️ Unable to fetch todos for role migration (it's normal if table doesn't exist yet):", selectTodoErr.message);
+      } else if (todosToUpdate && todosToUpdate.length > 0) {
+        let updatedCount = 0;
+        for (const t of todosToUpdate) {
+          if (t.created_by_role && t.created_by_role.includes("Accounts")) {
+            const newRole = t.created_by_role.replace(/Accounts/g, "Employee");
+            const { error: updateTodoErr } = await supabase
+              .from("todo")
+              .update({ created_by_role: newRole })
+              .eq("id", t.id);
+            if (!updateTodoErr) {
+              updatedCount++;
+            }
+          }
+        }
+        if (updatedCount > 0) {
+          console.log(`✅ Successfully updated ${updatedCount} todo task(s) created_by_role to use 'Employee' in Supabase.`);
+        }
+      }
+    } catch (err: any) {
+      console.error("❌ Error in Supabase startup role migration:", err?.message || err);
+    }
+  })();
 } else {
   console.log("⚠️ Supabase parameters missing from .env, falling back onto local pats_database.json");
 }
@@ -305,6 +360,10 @@ function initDb(): DatabaseSchema {
             emp.ended_at = emp.ended_at.split("T")[0];
             updated = true;
           }
+          if (emp.role === "Accounts" || emp.role === "Accounts Dept") {
+            emp.role = "Employee";
+            updated = true;
+          }
           if (updated) migrated = true;
           return emp;
         });
@@ -312,15 +371,13 @@ function initDb(): DatabaseSchema {
       if (!data.todos) {
         data.todos = [];
         migrated = true;
-      } else {
-        data.todos.forEach(t => {
-          const creatorName = (t.created_by_name || "").toLowerCase();
-          if (creatorName.includes("accounts") || creatorName.includes("pats")) {
-            if (!t.created_by_role || !t.created_by_role.includes("|for:")) {
-              t.created_by_role = "Accounts|for:Saket Shaligram";
-              migrated = true;
-            }
+      } else if (Array.isArray(data.todos)) {
+        data.todos = data.todos.map(t => {
+          if (t.created_by_role && t.created_by_role.includes("Accounts")) {
+            t.created_by_role = t.created_by_role.replace(/Accounts/g, "Employee");
+            migrated = true;
           }
+          return t;
         });
       }
       if (!data.deletedTodos) {
@@ -429,7 +486,7 @@ function initDb(): DatabaseSchema {
         status: "Assigned",
         created_at: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
         created_by_name: "Meera Sen",
-        created_by_role: "Accounts",
+        created_by_role: "Employee",
         remarks: null,
         history: []
       },
@@ -1853,7 +1910,7 @@ app.post("/api/tasks/:id/reassign", async (req, res) => {
   }
 });
 
-// Admin/Manager/Accounts updates task details and records history
+// Admin/Manager/Employee updates task details and records history
 app.post("/api/tasks/:id/update", async (req, res) => {
   const taskId = Number(req.params.id);
   const { 
@@ -2157,13 +2214,9 @@ app.get("/api/todos", async (req, res) => {
         const creator = employees.find(e => e.id === todo.created_by);
         const created_by_name = creator ? creator.name : (todo.created_by_name || "System Admin");
         const savedPriority = todo.priority || "";
-        let created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority === "Accounts")
+        const created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority.startsWith("Accounts") || savedPriority.startsWith("Employee"))
           ? savedPriority
-          : (creator ? creator.role : "Admin");
-
-        if ((created_by_role.toLowerCase().startsWith("accounts") || (created_by_name && created_by_name.toLowerCase().includes("accounts"))) && !created_by_role.includes("|for:")) {
-          created_by_role = "Accounts|for:Saket Shaligram";
-        }
+          : (creator ? creator.role : "Employee");
 
         return {
           id: todo.id,
@@ -2472,7 +2525,7 @@ app.post("/api/todos/:id/update", async (req, res) => {
       const creator = employees.find(e => e.id === todo.created_by);
       const created_by_name = creator ? creator.name : "System Admin";
       const savedPriority = todo.priority || "";
-      const created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority === "Accounts")
+      const created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority === "Accounts" || savedPriority === "Accounts Dept" || savedPriority === "Employee")
         ? savedPriority
         : (creator ? creator.role : "Admin");
 
@@ -2584,7 +2637,7 @@ app.delete("/api/todos/:id", async (req, res) => {
           status: data.status || "Assigned",
           created_at: data.created_at || new Date().toISOString(),
           created_by_name: data.created_by_name || "System Admin",
-          created_by_role: data.created_by_role || "Accounts",
+          created_by_role: data.created_by_role || "Employee",
           remarks: data.remarks || ""
         };
       }

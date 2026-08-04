@@ -708,7 +708,7 @@ export default function CompanySection({
                   <label className="block text-[10px] font-bold text-slate-405 uppercase tracking-wider mb-1">Department</label>
                   <input
                     type="text"
-                    placeholder="e.g. Accounts, HR, Operations"
+                    placeholder="e.g. Finance, HR, Operations"
                     value={assetForm.department}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, department: e.target.value }))}
                     className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs focus:outline-none focus:border-indigo-500 font-medium"

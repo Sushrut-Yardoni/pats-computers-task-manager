@@ -47,6 +47,13 @@ export default function AccountsDashboard({
 
   const [assignmentScope, setAssignmentScope] = useState<"all" | "toMe">("all");
 
+  const [selectedManagerToAssign, setSelectedManagerToAssign] = useState("");
+  const [isAssigningManager, setIsAssigningManager] = useState(false);
+
+  useEffect(() => {
+    setSelectedManagerToAssign("");
+  }, [viewingTodo]);
+
   const fetchTodos = async () => {
     setIsLoading(true);
     try {
@@ -75,8 +82,8 @@ export default function AccountsDashboard({
 
     setIsSubmitting(true);
     try {
-      const assignedTarget = targetAccountsUser.trim() || "Saket Shaligram";
-      const finalRole = `Accounts|for:${assignedTarget}`;
+      const assignedTarget = targetAccountsUser.trim();
+      const finalRole = assignedTarget ? `${currentUser.role}|for:${assignedTarget}` : currentUser.role;
 
       const res = await fetch("/api/todos", {
         method: "POST",
@@ -134,7 +141,7 @@ export default function AccountsDashboard({
           description: editDescription.trim(),
           status: editStatus,
           remarks: editStatus === "Finished" ? (editRemarks.trim() || "Completed") : null,
-          edited_by: `${currentUser.name} (Accounts)`
+          edited_by: `${currentUser.name} (Employee)`
         })
       });
 
@@ -164,8 +171,8 @@ export default function AccountsDashboard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status: "Finished",
-          remarks: finishRemarks.trim() || "Completed by Accounts",
-          edited_by: `${currentUser.name} (Accounts)`
+          remarks: finishRemarks.trim() || "Completed by Employee",
+          edited_by: `${currentUser.name} (Employee)`
         })
       });
 
@@ -185,6 +192,40 @@ export default function AccountsDashboard({
     }
   };
 
+  const handleAssignManager = async () => {
+    if (!viewingTodo || !selectedManagerToAssign) return;
+
+    setIsAssigningManager(true);
+    try {
+      const baseRole = (viewingTodo.created_by_role || "").split("|")[0] || currentUser.role || "Employee";
+      const updatedRole = `${baseRole}|for:${selectedManagerToAssign}`;
+
+      const res = await fetch(`/api/todos/${viewingTodo.id}/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: viewingTodo.title,
+          description: viewingTodo.description,
+          created_by_role: updatedRole,
+          edited_by: `${currentUser.name} (Employee)`
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to assign manager.");
+      }
+
+      setViewingTodo(null);
+      fetchTodos();
+      refreshLogs();
+    } catch (err: any) {
+      alert(err.message || "Failed to assign manager.");
+    } finally {
+      setIsAssigningManager(false);
+    }
+  };
+
   const isSaketName = (name?: string) => {
     if (!name) return false;
     const n = name.trim().toLowerCase();
@@ -194,7 +235,7 @@ export default function AccountsDashboard({
   const isAccountsPatsName = (name?: string) => {
     if (!name) return false;
     const n = name.trim().toLowerCase();
-    return n.includes("accounts") || n.includes("pats");
+    return n === "accounts pats" || (n.includes("accounts") && n.includes("pats")) || n.includes("pats");
   };
 
   const getTargetUserStr = (todo: TodoTask) => {
@@ -202,24 +243,21 @@ export default function AccountsDashboard({
     if (role.includes("|for:")) {
       return role.split("|for:")[1];
     }
-    const creatorName = todo.created_by_name || "";
-    const isAccounts = role.toLowerCase().startsWith("accounts") || creatorName.toLowerCase().includes("accounts");
-    if (isAccounts) {
-      return "Saket Shaligram";
-    }
     return null;
   };
 
-  // Helper to determine if a task is created by or assigned to Saket Shaligram or Accounts Pats
+  // Helper to determine if a task is created by or assigned to current Accounts user
   const getTaskAssignmentInfo = (todo: TodoTask) => {
     const creatorName = todo.created_by_name?.trim() || "";
-    const isCreatedByMe = creatorName.toLowerCase() === currentUser.name?.trim().toLowerCase();
+    const isCreatedByMe = 
+      isTargetMatch(creatorName, currentUser.name, currentUser.email_id) || 
+      creatorName.toLowerCase() === currentUser.name?.trim().toLowerCase();
+
     const isCreatedBySaket = isSaketName(creatorName);
     const isCreatedByAccountsPats = isAccountsPatsName(creatorName);
 
     const creatorRole = todo.created_by_role || "";
-    const isAccountsCreator = isCreatedByAccountsPats || creatorRole.toLowerCase().startsWith("accounts");
-    const targetUserStr = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : (isAccountsCreator ? "Saket Shaligram" : null);
+    const targetUserStr = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
     const targetUsers = targetUserStr ? targetUserStr.split(",").map(u => u.trim()) : [];
 
     const isSpecificallyTargetedToMe = targetUsers.some(target => 
@@ -227,22 +265,20 @@ export default function AccountsDashboard({
       (currentUser.email_id && isTargetMatch(target, currentUser.email_id))
     );
 
-    const isTargetedToSaket = targetUsers.some(target => isSaketName(target));
-    const isTargetedToAccountsPats = targetUsers.some(target => isAccountsPatsName(target));
-
     const isGeneralAccountsTask = 
-      (!targetUserStr && creatorRole.toLowerCase().includes("accounts")) ||
-      targetUsers.some(t => t.toLowerCase() === "accounts" || t.toLowerCase() === "all accounts");
+      (!targetUserStr && (creatorRole.toLowerCase().includes("accounts") || creatorRole.toLowerCase().includes("employee") || creatorRole.toLowerCase().includes("manager"))) ||
+      targetUsers.some(t => {
+        const tl = t.toLowerCase();
+        return tl === "accounts" || tl === "all accounts" || tl === "accounts dept" || tl.includes("accounts") || tl === "employee" || tl === "all employees" || tl === "employee dept" || tl.includes("employee");
+      });
 
-    const isAssignedToMe = isSpecificallyTargetedToMe || (isGeneralAccountsTask && targetUsers.length <= 1);
+    const isAssignedToMe = isSpecificallyTargetedToMe || isGeneralAccountsTask;
 
     return {
       isCreatedByMe,
       isAssignedToMe,
       isCreatedBySaket,
       isCreatedByAccountsPats,
-      isTargetedToSaket,
-      isTargetedToAccountsPats,
       isSpecificallyTargetedToMe,
       isGeneralAccountsTask,
       targetUsers
@@ -250,46 +286,56 @@ export default function AccountsDashboard({
   };
 
   // Visibility Filter for Accounts Dashboard:
-  // 1. Tasks assigned by any accounts role user are visible ONLY to manager and admin (and the creator themselves).
-  //    Other accounts role users CANNOT see tasks assigned/created by an accounts role user!
-  // 2. Accounts role users see tasks assigned to them by Managers/Admins.
+  // Only display tasks assigned by managers to Accounts Pats & tasks assigned by Accounts Pats to managers
   const visibleTodos = todos.filter(todo => {
-    const { 
-      isCreatedByMe, 
-      isAssignedToMe, 
-      isSpecificallyTargetedToMe,
-      isCreatedByAccountsPats,
-      targetUsers
-    } = getTaskAssignmentInfo(todo);
+    const creatorName = todo.created_by_name?.trim() || "";
+    const creatorRole = todo.created_by_role?.trim() || "";
 
-    const creatorRoleLower = (todo.created_by_role || "").toLowerCase();
-    const isCreatedByAccountsUser = isCreatedByAccountsPats || creatorRoleLower.includes("accounts");
+    const targetUserStr = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
+    const targetUsers = targetUserStr ? targetUserStr.split(",").map(u => u.trim()) : [];
 
-    // Tasks created/assigned by any accounts role user are visible ONLY to Manager & Admin (and the creator himself).
-    // Hide them from all other accounts users!
-    if (isCreatedByAccountsUser && !isCreatedByMe) {
-      return false;
+    // Helper check if a name/role belongs to a Manager
+    const isManager = (nameOrRole?: string) => {
+      if (!nameOrRole) return false;
+      const nr = nameOrRole.trim().toLowerCase();
+      return nr.includes("manager") || nr.includes("admin") || nr.includes("saket") || nr.includes("sushrut");
+    };
+
+    // Helper check if a name/role belongs to Employee
+    const isAccounts = (nameOrRole?: string) => {
+      if (!nameOrRole) return false;
+      const nr = nameOrRole.trim().toLowerCase();
+      return nr.includes("accounts") || nr.includes("pats") || nr.includes("employee");
+    };
+
+    const isCreatedByManager = 
+      isManager(creatorName) || 
+      isManager(creatorRole) || 
+      (!creatorRole.toLowerCase().startsWith("accounts") && !creatorRole.toLowerCase().startsWith("employee") && !creatorRole.toLowerCase().startsWith("employee dept"));
+
+    const isCreatedByThisUser = isTargetMatch(creatorName, currentUser.name, currentUser.email_id);
+
+    // If the task is not assigned to any user, it should be visible if entered by this specific employee, or else hidden (only visible to Manager)
+    if (targetUsers.length === 0) {
+      return isCreatedByThisUser;
     }
 
-    // If task is targeted to specific other individual user(s) (not me and not general accounts) -> hide!
-    if (targetUsers.length > 0) {
-      const targetsSpecificIndividual = targetUsers.some(u => {
-        const un = u.toLowerCase();
-        return un !== "accounts" && un !== "all accounts" && un !== "manager";
-      });
-      if (targetsSpecificIndividual && !isSpecificallyTargetedToMe) {
-        return false;
-      }
+    // 1. Tasks assigned by managers to that user
+    if (isCreatedByManager) {
+      const isAssignedToMe = targetUsers.some(target => 
+        isTargetMatch(target, currentUser.name, currentUser.email_id) ||
+        target.toLowerCase() === "all" ||
+        target.toLowerCase() === "accounts dept" ||
+        target.toLowerCase() === "employee dept" ||
+        target.toLowerCase() === "employee"
+      );
+      if (isAssignedToMe) return true;
     }
 
-    // If task is specifically targeted to the logged in user -> visible
-    if (isSpecificallyTargetedToMe) return true;
-
-    // If task was created by the logged in user -> visible
-    if (isCreatedByMe) return true;
-
-    // If general accounts task with no specific other individual -> visible
-    if (isAssignedToMe) return true;
+    // 2. Tasks assigned by this user
+    if (isCreatedByThisUser) {
+      return true;
+    }
 
     return false;
   });
@@ -338,7 +384,7 @@ export default function AccountsDashboard({
       <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-6 rounded-3xl shadow-lg border border-indigo-900 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-xl translate-x-10 -translate-y-10" />
         <span className="text-[10px] font-bold uppercase tracking-widest bg-blue-600/60 px-2.5 py-1 rounded-md border border-blue-400/30">
-          Accounts Department
+          Employee Department
         </span>
         <h2 className="text-xl font-extrabold mt-3 font-display">Welcome back, {currentUser.name}!</h2>
       </div>
@@ -482,7 +528,7 @@ export default function AccountsDashboard({
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 animate-fade-in">
             {filteredTodos.map(todo => {
-              const { isCreatedByMe, isAssignedToMe, isCreatedBySaket, isTargetedToSaket, isCreatedByAccountsPats } = getTaskAssignmentInfo(todo);
+              const { isCreatedByMe, isAssignedToMe, isCreatedBySaket, isCreatedByAccountsPats } = getTaskAssignmentInfo(todo);
               return (
                 <div 
                   key={todo.id} 
@@ -620,7 +666,7 @@ export default function AccountsDashboard({
                   onChange={(e) => setTargetAccountsUser(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 hover:border-blue-300 focus:border-blue-500 px-3 py-2 rounded-xl focus:outline-none transition-colors cursor-pointer text-xs"
                 >
-                  <option value="">General Accounts Task (Unassigned to specific Manager)</option>
+                  <option value="">General Employee Task (Unassigned to specific Manager)</option>
                   <optgroup label="Managers & Admins">
                     {employees
                       .filter(emp => {
@@ -634,7 +680,7 @@ export default function AccountsDashboard({
                       ))}
                   </optgroup>
                 </select>
-                <p className="text-[10px] text-slate-400 mt-1">Select a Manager to assign this task to, or leave as General Accounts Task.</p>
+                <p className="text-[10px] text-slate-400 mt-1">Select a Manager to assign this task to, or leave as General Employee Task.</p>
               </div>
 
               <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
@@ -902,6 +948,41 @@ export default function AccountsDashboard({
                   <span className="font-semibold text-slate-700 text-xs block mt-1">{formatDate(viewingTodo.created_at)}</span>
                 </div>
               </div>
+
+              {!getTargetUserStr(viewingTodo) && viewingTodo.status !== "Finished" && (
+                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 space-y-2 mt-2">
+                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
+                    Unassigned Task - Assign to Manager
+                  </span>
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedManagerToAssign}
+                      onChange={(e) => setSelectedManagerToAssign(e.target.value)}
+                      className="flex-1 bg-white border border-slate-200 px-2 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:border-blue-500 cursor-pointer text-slate-700"
+                    >
+                      <option value="">-- Select Manager --</option>
+                      {employees
+                        .filter(emp => {
+                          const r = (emp.role || "").toLowerCase();
+                          return r.includes("manager") || r.includes("admin");
+                        })
+                        .map(emp => (
+                          <option key={emp.id} value={emp.name}>
+                            {emp.name} ({emp.role})
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={!selectedManagerToAssign || isAssigningManager}
+                      onClick={handleAssignManager}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer shadow-3xs"
+                    >
+                      {isAssigningManager ? "Assigning..." : "Assign"}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center gap-1.5 pt-4 border-t border-slate-100">
                 {/* Edit button */}

@@ -338,7 +338,7 @@ export default function App() {
               onTogglePriority={handleTogglePriority}
               onUpdatePassword={handleUpdatePassword}
             />
-          ) : currentUser.role.toLowerCase() === "accounts" ? (
+          ) : (currentUser.role.toLowerCase() === "employee" || currentUser.role.toLowerCase() === "employee dept" || currentUser.role.toLowerCase() === "accounts" || currentUser.role.toLowerCase() === "accounts dept") ? (
             <AccountsDashboard
               currentUser={currentUser}
               employees={employees}
