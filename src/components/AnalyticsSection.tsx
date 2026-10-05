@@ -118,7 +118,6 @@ export default function AnalyticsSection({ tasks, employees }: AnalyticsSectionP
         </div>
       </div>
 
-<<<<<<< HEAD
       {/* Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
@@ -150,7 +149,6 @@ export default function AnalyticsSection({ tasks, employees }: AnalyticsSectionP
                     ))}
                   </Bar>
                 </BarChart>
-=======
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white border border-slate-200/80 border-l-4 border-l-slate-400 rounded-xl p-4 shadow-xs transition-all duration-300 hover:shadow-sm">
@@ -202,13 +200,11 @@ export default function AnalyticsSection({ tasks, employees }: AnalyticsSectionP
                     wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} 
                   />
                 </PieChart>
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
               </ResponsiveContainer>
             )}
           </div>
         </div>
 
-<<<<<<< HEAD
         {/* 2. Company Revenue Breakdown */}
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
@@ -240,7 +236,6 @@ export default function AnalyticsSection({ tasks, employees }: AnalyticsSectionP
               </ResponsiveContainer>
             )}
           </div>
-=======
         {/* 2. Task Volume Bar Chart */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
           <h4 className="text-sm font-bold text-slate-700 uppercase tracking-tight mb-4">Task Volume by Status</h4>
@@ -320,7 +315,6 @@ export default function AnalyticsSection({ tasks, employees }: AnalyticsSectionP
                     <Bar dataKey="value" fill="#10b981" radius={[4, 4, 0, 0]} />
                 </BarChart>
             </ResponsiveContainer>
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
         </div>
 
       </div>

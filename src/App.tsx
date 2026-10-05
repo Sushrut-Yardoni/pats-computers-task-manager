@@ -26,11 +26,9 @@ export default function App() {
   const [isSqlConsoleFocused, setIsSqlConsoleFocused] = useState(false);
 
   // Employee active view partition (synchronized to allow Header Settings to open Profile)
-<<<<<<< HEAD
   const [employeeActiveTab, setEmployeeActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "attendance" | "companies">("active");
-=======
+
   const [employeeActiveTab, setEmployeeActiveTab] = useState<"active" | "completed" | "travel" | "profile">("active");
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 
   // Fetch critical relational tables via the single unified sync endpoint
   const fetchData = async (silent = false) => {
@@ -98,13 +96,10 @@ export default function App() {
     problem_reported: string;
     assigned_to: number;
     address?: string;
-<<<<<<< HEAD
     contract_type?: string;
     company_id?: number | null;
     company_name?: string | null;
     asset_id?: string | null;
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   }) => {
     const resp = await fetch("/api/tasks", {
       method: "POST",
@@ -155,7 +150,6 @@ export default function App() {
 
   const handleUpdateTaskDetails = async (
     taskId: number,
-<<<<<<< HEAD
     taskData: { 
       customer_name: string; 
       contact_details: string; 
@@ -166,9 +160,7 @@ export default function App() {
       company_name?: string | null;
       asset_id?: string | null;
     }
-=======
     taskData: { customer_name: string; contact_details: string; problem_reported: string; address?: string }
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   ) => {
     const resp = await fetch(`/api/tasks/${taskId}/update`, {
       method: "POST",
@@ -372,11 +364,8 @@ export default function App() {
             <ManagerDashboard
               currentUser={currentUser}
               employees={employees}
-<<<<<<< HEAD
               companies={companies}
               assets={assets}
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
               refreshLogs={() => fetchData(true)}
             />
           ) : (
