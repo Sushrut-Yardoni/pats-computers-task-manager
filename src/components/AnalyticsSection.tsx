@@ -3,10 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
 } from "recharts";
 import { Task, Employee } from "../types";
-<<<<<<< HEAD
 import { BarChart4, TrendingUp, CheckCircle2, Users, Building, DollarSign, Award } from "lucide-react";
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 
 interface AnalyticsSectionProps {
   tasks: Task[];
@@ -14,106 +11,6 @@ interface AnalyticsSectionProps {
 }
 
 export default function AnalyticsSection({ tasks, employees }: AnalyticsSectionProps) {
-<<<<<<< HEAD
-  // Load saved bills from localStorage for revenue metrics
-  const savedBills = useMemo(() => {
-    try {
-      const saved = localStorage.getItem("pats_saved_bills");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  }, []);
-
-  // 1. Total Finished Tasks by Engineer
-  const finishedTasksByEngineer = useMemo(() => {
-    const counts: Record<string, number> = {};
-    tasks.filter(t => t.status === "Finished").forEach(t => {
-      const eng = t.employee_name || "Unassigned";
-      counts[eng] = (counts[eng] || 0) + 1;
-    });
-    return Object.entries(counts)
-      .map(([name, finishedTasks]) => ({ name, finishedTasks }))
-      .sort((a, b) => b.finishedTasks - a.finishedTasks);
-  }, [tasks]);
-
-  // 2. Company Revenue from generated bills
-  const revenueByCompany = useMemo(() => {
-    const revMap: Record<string, number> = {};
-    savedBills.forEach((b: any) => {
-      const comp = b.businessName || b.customerName || "General";
-      revMap[comp] = (revMap[comp] || 0) + Number(b.grandTotal || 0);
-    });
-    return Object.entries(revMap)
-      .map(([name, revenue]) => ({ name, revenue }))
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [savedBills]);
-
-  // 3. Overview Statistics
-  const totalFinishedTasks = tasks.filter(t => t.status === "Finished").length;
-  const totalRevenue = savedBills.reduce((sum: number, b: any) => sum + Number(b.grandTotal || 0), 0);
-  const activeEngineersCount = employees.filter(emp => {
-    const ended = emp.ended_at ? new Date(emp.ended_at) : null;
-    return !ended || isNaN(ended.getTime()) || ended > new Date();
-  }).length;
-
-  const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#14b8a6', '#6366f1', '#f97316'];
-
-  return (
-    <div className="space-y-6 animate-fade-in text-slate-800">
-      {/* Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h3 className="text-base font-display font-extrabold text-slate-900 flex items-center gap-2">
-            <BarChart4 className="h-5 w-5 text-blue-600 animate-pulse" />
-            <span>Team Productivity & Performance Metrics</span>
-          </h3>
-          <p className="text-xs text-slate-500 font-medium mt-1">
-            Real-time analytics tracking engineer finished task volume and company-wise revenue generation.
-          </p>
-        </div>
-      </div>
-
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Total Finished Tasks</p>
-            <h3 className="text-2xl font-extrabold text-slate-900 font-mono mt-1">{totalFinishedTasks}</h3>
-          </div>
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100">
-            <CheckCircle2 className="h-6 w-6" />
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Total Billed Revenue</p>
-            <h3 className="text-2xl font-extrabold text-blue-600 font-mono mt-1">₹ {totalRevenue.toFixed(2)}</h3>
-          </div>
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl border border-blue-100">
-            <DollarSign className="h-6 w-6" />
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Active Engineers</p>
-            <h3 className="text-2xl font-extrabold text-indigo-600 font-mono mt-1">{activeEngineersCount}</h3>
-          </div>
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl border border-indigo-100">
-            <Users className="h-6 w-6" />
-          </div>
-        </div>
-
-        <div className="bg-white border border-slate-200 p-5 rounded-3xl shadow-2xs flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Generated Invoices</p>
-            <h3 className="text-2xl font-extrabold text-amber-600 font-mono mt-1">{savedBills.length}</h3>
-          </div>
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl border border-amber-100">
-            <Award className="h-6 w-6" />
-=======
   const [selectedMonth, setSelectedMonth] = useState<string>("All");
   const [selectedEngineer, setSelectedEngineer] = useState<string>("All");
 
@@ -217,7 +114,6 @@ export default function AnalyticsSection({ tasks, employees }: AnalyticsSectionP
             >
               {uniqueEngineers.map(e => <option key={e} value={e}>{e}</option>)}
             </select>
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
           </div>
         </div>
       </div>
