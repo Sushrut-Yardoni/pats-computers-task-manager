@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { 
-  PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Calendar, ChevronRight, Eye
+  PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Calendar, ChevronRight, Eye, Receipt, Printer, Check
 } from "lucide-react";
 import { TodoTask, Employee, isTargetMatch } from "../types";
 import TodoHistoryModal from "./TodoHistoryModal";
@@ -18,8 +18,34 @@ export default function AccountsDashboard({
 }: AccountsDashboardProps) {
   const [todos, setTodos] = useState<TodoTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"todo" | "finished">("todo");
+  const [activeTab, setActiveTab] = useState<"todo" | "finished" | "billing">("todo");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [savedBills, setSavedBills] = useState<any[]>(() => {
+    try {
+      const saved = localStorage.getItem("pats_saved_bills");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [activeAccountsBill, setActiveAccountsBill] = useState<any | null>(null);
+
+  const handleMarkBillDone = (billId: string) => {
+    const updated = savedBills.map(b => {
+      if (b.id === billId) {
+        return { ...b, printed: true, printed_at: new Date().toISOString() };
+      }
+      return b;
+    });
+    setSavedBills(updated);
+    try {
+      localStorage.setItem("pats_saved_bills", JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+    setActiveAccountsBill(null);
+  };
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -44,6 +70,15 @@ export default function AccountsDashboard({
   // Form State - Quick Finish
   const [finishRemarks, setFinishRemarks] = useState("");
   const [isFinishingSubmitting, setIsFinishingSubmitting] = useState(false);
+
+  const [assignmentScope, setAssignmentScope] = useState<"all" | "toMe">("all");
+
+  const [selectedManagerToAssign, setSelectedManagerToAssign] = useState("");
+  const [isAssigningManager, setIsAssigningManager] = useState(false);
+
+  useEffect(() => {
+    setSelectedManagerToAssign("");
+  }, [viewingTodo]);
 
   const fetchTodos = async () => {
     setIsLoading(true);
@@ -74,7 +109,7 @@ export default function AccountsDashboard({
     setIsSubmitting(true);
     try {
       const assignedTarget = targetAccountsUser.trim();
-      const finalRole = assignedTarget ? `Accounts|for:${assignedTarget}` : "Accounts";
+      const finalRole = assignedTarget ? `${currentUser.role}|for:${assignedTarget}` : currentUser.role;
 
       const res = await fetch("/api/todos", {
         method: "POST",
@@ -132,7 +167,7 @@ export default function AccountsDashboard({
           description: editDescription.trim(),
           status: editStatus,
           remarks: editStatus === "Finished" ? (editRemarks.trim() || "Completed") : null,
-          edited_by: `${currentUser.name} (Accounts)`
+          edited_by: `${currentUser.name} (Employee)`
         })
       });
 
@@ -162,8 +197,8 @@ export default function AccountsDashboard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           status: "Finished",
-          remarks: finishRemarks.trim() || "Completed by Accounts",
-          edited_by: `${currentUser.name} (Accounts)`
+          remarks: finishRemarks.trim() || "Completed by Employee",
+          edited_by: `${currentUser.name} (Employee)`
         })
       });
 
@@ -183,24 +218,152 @@ export default function AccountsDashboard({
     }
   };
 
-  // Filters
-  const visibleTodos = todos.filter(todo => {
-    const isCreatedByMe = todo.created_by_name.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+  const handleAssignManager = async () => {
+    if (!viewingTodo || !selectedManagerToAssign) return;
+
+    setIsAssigningManager(true);
+    try {
+      const baseRole = (viewingTodo.created_by_role || "").split("|")[0] || currentUser.role || "Employee";
+      const updatedRole = `${baseRole}|for:${selectedManagerToAssign}`;
+
+      const res = await fetch(`/api/todos/${viewingTodo.id}/update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: viewingTodo.title,
+          description: viewingTodo.description,
+          created_by_role: updatedRole,
+          edited_by: `${currentUser.name} (Employee)`
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to assign manager.");
+      }
+
+      setViewingTodo(null);
+      fetchTodos();
+      refreshLogs();
+    } catch (err: any) {
+      alert(err.message || "Failed to assign manager.");
+    } finally {
+      setIsAssigningManager(false);
+    }
+  };
+
+  const isSaketName = (name?: string) => {
+    if (!name) return false;
+    const n = name.trim().toLowerCase();
+    return n.includes("saket") || n.includes("sakett") || n.includes("shaligram");
+  };
+
+  const isAccountsPatsName = (name?: string) => {
+    if (!name) return false;
+    const n = name.trim().toLowerCase();
+    return n === "accounts pats" || (n.includes("accounts") && n.includes("pats")) || n.includes("pats");
+  };
+
+  const getTargetUserStr = (todo: TodoTask) => {
+    const role = todo.created_by_role || "";
+    if (role.includes("|for:")) {
+      return role.split("|for:")[1];
+    }
+    return null;
+  };
+
+  // Helper to determine if a task is created by or assigned to current Accounts user
+  const getTaskAssignmentInfo = (todo: TodoTask) => {
+    const creatorName = todo.created_by_name?.trim() || "";
+    const isCreatedByMe = 
+      isTargetMatch(creatorName, currentUser.name, currentUser.email_id) || 
+      creatorName.toLowerCase() === currentUser.name?.trim().toLowerCase();
+
+    const isCreatedBySaket = isSaketName(creatorName);
+    const isCreatedByAccountsPats = isAccountsPatsName(creatorName);
+
     const creatorRole = todo.created_by_role || "";
-    const targetUser = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
-    const targetUsers = targetUser ? targetUser.split(",").map(u => u.trim()) : [];
-    
-    const isTargetedToMe = targetUser && targetUsers.some(target => 
+    const targetUserStr = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
+    const targetUsers = targetUserStr ? targetUserStr.split(",").map(u => u.trim()) : [];
+
+    const isSpecificallyTargetedToMe = targetUsers.some(target => 
       isTargetMatch(target, currentUser.name, currentUser.email_id) ||
-      target.toLowerCase() === "malhar" ||
-      target.toLowerCase() === "malhar@pats.co.in"
+      (currentUser.email_id && isTargetMatch(target, currentUser.email_id))
     );
 
-    if (currentUser.email_id?.trim().toLowerCase() === "malhar@pats.co.in") {
-      return !!isTargetedToMe;
+    const isGeneralAccountsTask = 
+      (!targetUserStr && (creatorRole.toLowerCase().includes("accounts") || creatorRole.toLowerCase().includes("employee") || creatorRole.toLowerCase().includes("manager"))) ||
+      targetUsers.some(t => {
+        const tl = t.toLowerCase();
+        return tl === "accounts" || tl === "all accounts" || tl === "accounts dept" || tl.includes("accounts") || tl === "employee" || tl === "all employees" || tl === "employee dept" || tl.includes("employee");
+      });
+
+    const isAssignedToMe = isSpecificallyTargetedToMe || isGeneralAccountsTask;
+
+    return {
+      isCreatedByMe,
+      isAssignedToMe,
+      isCreatedBySaket,
+      isCreatedByAccountsPats,
+      isSpecificallyTargetedToMe,
+      isGeneralAccountsTask,
+      targetUsers
+    };
+  };
+
+  // Visibility Filter for Accounts Dashboard:
+  // Only display tasks assigned by managers to Accounts Pats & tasks assigned by Accounts Pats to managers
+  const visibleTodos = todos.filter(todo => {
+    const creatorName = todo.created_by_name?.trim() || "";
+    const creatorRole = todo.created_by_role?.trim() || "";
+
+    const targetUserStr = creatorRole.includes("|for:") ? creatorRole.split("|for:")[1] : null;
+    const targetUsers = targetUserStr ? targetUserStr.split(",").map(u => u.trim()) : [];
+
+    // Helper check if a name/role belongs to a Manager
+    const isManager = (nameOrRole?: string) => {
+      if (!nameOrRole) return false;
+      const nr = nameOrRole.trim().toLowerCase();
+      return nr.includes("manager") || nr.includes("admin") || nr.includes("saket") || nr.includes("sushrut");
+    };
+
+    // Helper check if a name/role belongs to Employee
+    const isAccounts = (nameOrRole?: string) => {
+      if (!nameOrRole) return false;
+      const nr = nameOrRole.trim().toLowerCase();
+      return nr.includes("accounts") || nr.includes("pats") || nr.includes("employee");
+    };
+
+    const isCreatedByManager = 
+      isManager(creatorName) || 
+      isManager(creatorRole) || 
+      (!creatorRole.toLowerCase().startsWith("accounts") && !creatorRole.toLowerCase().startsWith("employee") && !creatorRole.toLowerCase().startsWith("employee dept"));
+
+    const isCreatedByThisUser = isTargetMatch(creatorName, currentUser.name, currentUser.email_id);
+
+    // If the task is not assigned to any user, it should be visible if entered by this specific employee, or else hidden (only visible to Manager)
+    if (targetUsers.length === 0) {
+      return isCreatedByThisUser;
     }
 
-    return isCreatedByMe || !!isTargetedToMe;
+    // 1. Tasks assigned by managers to that user
+    if (isCreatedByManager) {
+      const isAssignedToMe = targetUsers.some(target => 
+        isTargetMatch(target, currentUser.name, currentUser.email_id) ||
+        target.toLowerCase() === "all" ||
+        target.toLowerCase() === "accounts dept" ||
+        target.toLowerCase() === "employee dept" ||
+        target.toLowerCase() === "employee"
+      );
+      if (isAssignedToMe) return true;
+    }
+
+    // 2. Tasks assigned by this user
+    if (isCreatedByThisUser) {
+      return true;
+    }
+
+    return false;
   });
 
   const filteredTodos = visibleTodos.filter(todo => {
@@ -209,13 +372,22 @@ export default function AccountsDashboard({
     }
     const matchesTab = activeTab === "todo" ? todo.status === "Assigned" : todo.status === "Finished";
     
+    const { 
+      isCreatedByMe, 
+      isAssignedToMe
+    } = getTaskAssignmentInfo(todo);
+
+    const matchesScope = 
+      assignmentScope === "all" ? true :
+      assignmentScope === "toMe" ? (isAssignedToMe && !isCreatedByMe) : true;
+
     const matchesSearch = 
       todo.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       todo.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       todo.created_by_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       String(todo.id).includes(searchQuery);
 
-    return matchesTab && matchesSearch;
+    return matchesTab && matchesScope && matchesSearch;
   });
 
   const formatDate = (isoString: string) => {
@@ -238,23 +410,34 @@ export default function AccountsDashboard({
       <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-6 rounded-3xl shadow-lg border border-indigo-900 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-xl translate-x-10 -translate-y-10" />
         <span className="text-[10px] font-bold uppercase tracking-widest bg-blue-600/60 px-2.5 py-1 rounded-md border border-blue-400/30">
-          Accounts Department
+          Employee Department
         </span>
         <h2 className="text-xl font-extrabold mt-3 font-display">Welcome back, {currentUser.name}!</h2>
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
           <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Assigned To-Do Tasks</span>
-            <p className="text-xl font-bold text-blue-600 font-mono mt-0.5">{visibleTodos.filter(t => t.status === "Assigned").length}</p>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Total Active Tasks</span>
+            <p className="text-xl font-bold text-blue-600 font-mono mt-0.5">
+              {visibleTodos.filter(t => t.status === "Assigned").length}
+            </p>
           </div>
           <ListFilter className="h-5 w-5 text-blue-500" />
         </div>
         <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
           <div>
-            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Finished To-Do Tasks</span>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Assigned To Me</span>
+            <p className="text-xl font-bold text-purple-600 font-mono mt-0.5">
+              {visibleTodos.filter(t => t.status === "Assigned" && getTaskAssignmentInfo(t).isAssignedToMe && !getTaskAssignmentInfo(t).isCreatedByMe).length}
+            </p>
+          </div>
+          <User className="h-5 w-5 text-purple-500" />
+        </div>
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+          <div>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">Finished Tasks</span>
             <p className="text-xl font-bold text-emerald-600 font-mono mt-0.5">
               {visibleTodos.filter(t => t.status === "Finished").length}
             </p>
@@ -293,6 +476,17 @@ export default function AccountsDashboard({
               <CheckSquare className="h-3.5 w-3.5" />
               <span>Task History / Finished</span>
             </button>
+            <button
+              onClick={() => setActiveTab("billing")}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
+                activeTab === "billing" 
+                  ? "bg-white text-blue-700 shadow-xs border border-slate-200" 
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              <Receipt className="h-3.5 w-3.5" />
+              <span>Generated Bills ({savedBills.filter(b => !b.printed).length})</span>
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -324,8 +518,92 @@ export default function AccountsDashboard({
           </div>
         </div>
 
+        {/* Assignment Scope Pills */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1">
+          <button
+            onClick={() => setAssignmentScope("all")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              assignmentScope === "all"
+                ? "bg-slate-800 text-white shadow-xs"
+                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            }`}
+          >
+            <span>All Tasks</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold ${
+              assignmentScope === "all" ? "bg-slate-700 text-slate-100" : "bg-slate-200 text-slate-700"
+            }`}>
+              {visibleTodos.filter(t => activeTab === "todo" ? t.status === "Assigned" : t.status === "Finished").length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setAssignmentScope("toMe")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              assignmentScope === "toMe"
+                ? "bg-purple-700 text-white shadow-xs"
+                : "bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-100"
+            }`}
+          >
+            <span>Assigned to Me</span>
+            <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-extrabold ${
+              assignmentScope === "toMe" ? "bg-purple-800 text-purple-100" : "bg-purple-100 text-purple-800"
+            }`}>
+              {visibleTodos.filter(t => (activeTab === "todo" ? t.status === "Assigned" : t.status === "Finished") && getTaskAssignmentInfo(t).isAssignedToMe && !getTaskAssignmentInfo(t).isCreatedByMe).length}
+            </span>
+          </button>
+        </div>
+
         {/* Tasks List - Card View */}
-        {isLoading ? (
+        {activeTab === "billing" ? (
+          <div className="space-y-4 animate-fade-in">
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
+              <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 flex items-center gap-2 mb-1">
+                <Receipt className="h-4 w-4 text-blue-600" />
+                <span>Generated Invoices & Bills Queue</span>
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                View bills generated by Admin, print them, and click <strong>"Done"</strong> once printed.
+              </p>
+            </div>
+
+            {savedBills.length === 0 ? (
+              <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-400 italic text-xs shadow-xs">
+                No bills have been generated yet by Admin.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {savedBills.map((bill: any) => (
+                  <div
+                    key={bill.id}
+                    onClick={() => setActiveAccountsBill(bill)}
+                    className="bg-white border border-slate-200 hover:border-blue-400 rounded-2xl p-4 shadow-3xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between space-y-3 relative overflow-hidden"
+                  >
+                    <div className={`absolute top-0 left-0 w-full h-1 ${bill.printed ? "bg-emerald-500" : "bg-blue-600"}`} />
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-xs font-bold text-slate-900">{bill.invoiceNo}</span>
+                      <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${
+                        bill.printed ? "bg-emerald-50 text-emerald-800 border-emerald-200" : "bg-blue-50 text-blue-800 border-blue-200 animate-pulse"
+                      }`}>
+                        {bill.printed ? "✓ Printed / Done" : "Pending Print"}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h4 className="font-extrabold text-slate-900 text-sm truncate">{bill.customerName}</h4>
+                      <p className="text-[11px] text-slate-500">Ref Ticket: #{bill.taskId} | {bill.billType === "GST" ? "GST Invoice" : "Normal Bill"}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 font-mono text-xs">
+                      <span className="text-slate-400 font-bold">Total:</span>
+                      <span className="font-extrabold text-emerald-600">₹ {Number(bill.grandTotal || 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : isLoading ? (
           <div className="bg-white border border-slate-200 rounded-2xl text-center py-12 text-slate-400 italic text-xs shadow-xs">
             Loading To-Do checklist tasks...
           </div>
@@ -335,34 +613,60 @@ export default function AccountsDashboard({
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 animate-fade-in">
-            {filteredTodos.map(todo => (
-              <div 
-                key={todo.id} 
-                onClick={() => setViewingTodo(todo)}
-                className="bg-white border border-slate-200 hover:border-blue-400 rounded-xl shadow-3xs hover:shadow-sm transition-all duration-200 flex flex-col overflow-hidden cursor-pointer relative group"
-              >
-                {/* Accent status line at top of card */}
-                <div className={`h-1 w-full ${
-                  todo.status === "Finished" ? "bg-emerald-500" : "bg-amber-500"
-                }`} />
+            {filteredTodos.map(todo => {
+              const { isCreatedByMe, isAssignedToMe, isCreatedBySaket, isCreatedByAccountsPats } = getTaskAssignmentInfo(todo);
+              return (
+                <div 
+                  key={todo.id} 
+                  onClick={() => setViewingTodo(todo)}
+                  className="bg-white border border-slate-200 hover:border-blue-400 rounded-xl shadow-3xs hover:shadow-sm transition-all duration-200 flex flex-col overflow-hidden cursor-pointer relative group"
+                >
+                  {/* Accent status line at top of card */}
+                  <div className={`h-1 w-full ${
+                    todo.status === "Finished" ? "bg-emerald-500" : "bg-amber-500"
+                  }`} />
 
-                <div className="p-3.5 flex-grow flex flex-col justify-between space-y-3">
-                  {/* Card Header: ID & Status Badge */}
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-extrabold text-blue-600 text-xs">#{todo.id}</span>
-                    <div>
-                      {todo.status === "Assigned" && (
-                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.2 text-[8px] font-extrabold text-amber-700 ring-1 ring-amber-100 uppercase tracking-wide">
-                          Assigned
-                        </span>
-                      )}
-                      {todo.status === "Finished" && (
-                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.2 text-[8px] font-extrabold text-emerald-700 ring-1 ring-emerald-100 uppercase tracking-wide">
-                          Finished
-                        </span>
-                      )}
+                  <div className="p-3.5 flex-grow flex flex-col justify-between space-y-3">
+                    {/* Card Header: ID, Assignment Badge & Status Badge */}
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-mono font-extrabold text-blue-600 text-xs">#{todo.id}</span>
+                        {isCreatedBySaket ? (
+                          <span className="inline-flex items-center rounded-full bg-teal-50 px-1.5 py-0.2 text-[8px] font-extrabold text-teal-700 ring-1 ring-teal-200 uppercase tracking-wide">
+                            Saket
+                          </span>
+                        ) : isCreatedByAccountsPats ? (
+                          <span className="inline-flex items-center rounded-full bg-indigo-50 px-1.5 py-0.2 text-[8px] font-extrabold text-indigo-700 ring-1 ring-indigo-200 uppercase tracking-wide">
+                            Accounts Pats
+                          </span>
+                        ) : isCreatedByMe && isAssignedToMe ? (
+                          <span className="inline-flex items-center rounded-full bg-blue-50 px-1.5 py-0.2 text-[8px] font-extrabold text-blue-700 ring-1 ring-blue-200 uppercase tracking-wide">
+                            Self
+                          </span>
+                        ) : isCreatedByMe ? (
+                          <span className="inline-flex items-center rounded-full bg-indigo-50 px-1.5 py-0.2 text-[8px] font-extrabold text-indigo-700 ring-1 ring-indigo-200 uppercase tracking-wide">
+                            By You
+                          </span>
+                        ) : isAssignedToMe ? (
+                          <span className="inline-flex items-center rounded-full bg-purple-50 px-1.5 py-0.2 text-[8px] font-extrabold text-purple-700 ring-1 ring-purple-200 uppercase tracking-wide">
+                            To You
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div>
+                        {todo.status === "Assigned" && (
+                          <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.2 text-[8px] font-extrabold text-amber-700 ring-1 ring-amber-100 uppercase tracking-wide">
+                            Assigned
+                          </span>
+                        )}
+                        {todo.status === "Finished" && (
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.2 text-[8px] font-extrabold text-emerald-700 ring-1 ring-emerald-100 uppercase tracking-wide">
+                            Finished
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
                   {/* Title and Description */}
                   <div className="space-y-1">
@@ -381,11 +685,11 @@ export default function AccountsDashboard({
 
                   {/* Metadata: Creator and Date (highly compact) */}
                   <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="font-medium flex-1 min-w-0 pr-2" title={todo.created_by_role && todo.created_by_role.includes('|for:') ? `For ${todo.created_by_role.split('|for:')[1]}` : undefined}>
+                    <span className="font-medium flex-1 min-w-0 pr-2" title={getTargetUserStr(todo) ? `For ${getTargetUserStr(todo)}` : undefined}>
                       By <strong className="text-slate-600 font-bold">{todo.created_by_name}</strong>
-                      {todo.created_by_role && todo.created_by_role.includes('|for:') && (
+                      {getTargetUserStr(todo) && (
                         <span className="ml-1 text-[8.5px] bg-indigo-50 text-indigo-600 font-extrabold px-1.5 py-0.5 rounded border border-indigo-100 uppercase inline-flex items-center gap-0.5">
-                          ➔ {todo.created_by_role.split('|for:')[1]}
+                          ➔ {getTargetUserStr(todo)}
                         </span>
                       )}
                     </span>
@@ -393,7 +697,8 @@ export default function AccountsDashboard({
                   </div>
                 </div>
               </div>
-            ))}
+            );
+          })}
           </div>
         )}
       </div>
@@ -441,28 +746,13 @@ export default function AccountsDashboard({
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Assign / Display To User</label>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Assign Task To Manager</label>
                 <select
                   value={targetAccountsUser}
                   onChange={(e) => setTargetAccountsUser(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 hover:border-blue-300 focus:border-blue-500 px-3 py-2 rounded-xl focus:outline-none transition-colors cursor-pointer text-xs"
                 >
-                  <option value="">General Accounts Task (All Accounts Users)</option>
-                  {currentUser && currentUser.name && (
-                    <option value={currentUser.name}>Myself ({currentUser.name})</option>
-                  )}
-                  <optgroup label="Accounts Users">
-                    {employees
-                      .filter(emp => {
-                        const r = (emp.role || "").toLowerCase();
-                        return r.includes("accounts") && emp.name !== currentUser?.name;
-                      })
-                      .map(emp => (
-                        <option key={emp.id} value={emp.name}>
-                          {emp.name} (Accounts)
-                        </option>
-                      ))}
-                  </optgroup>
+                  <option value="">General Employee Task (Unassigned to specific Manager)</option>
                   <optgroup label="Managers & Admins">
                     {employees
                       .filter(emp => {
@@ -476,7 +766,7 @@ export default function AccountsDashboard({
                       ))}
                   </optgroup>
                 </select>
-                <p className="text-[10px] text-slate-400 mt-1">Select a specific user to target this checklist item, or leave as General Accounts Task.</p>
+                <p className="text-[10px] text-slate-400 mt-1">Select a Manager to assign this task to, or leave as General Employee Task.</p>
               </div>
 
               <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
@@ -730,9 +1020,9 @@ export default function AccountsDashboard({
                         <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider leading-none">
                           {viewingTodo.created_by_role ? viewingTodo.created_by_role.split('|')[0] : ""}
                         </span>
-                        {viewingTodo.created_by_role && viewingTodo.created_by_role.includes('|for:') && (
+                        {getTargetUserStr(viewingTodo) && (
                           <span className="text-[8px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-md px-1.5 py-0.5 uppercase tracking-wider leading-none">
-                            For: {viewingTodo.created_by_role.split('|for:')[1]}
+                            For: {getTargetUserStr(viewingTodo)}
                           </span>
                         )}
                       </div>
@@ -744,6 +1034,41 @@ export default function AccountsDashboard({
                   <span className="font-semibold text-slate-700 text-xs block mt-1">{formatDate(viewingTodo.created_at)}</span>
                 </div>
               </div>
+
+              {!getTargetUserStr(viewingTodo) && viewingTodo.status !== "Finished" && (
+                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 space-y-2 mt-2">
+                  <span className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block">
+                    Unassigned Task - Assign to Manager
+                  </span>
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedManagerToAssign}
+                      onChange={(e) => setSelectedManagerToAssign(e.target.value)}
+                      className="flex-1 bg-white border border-slate-200 px-2 py-1.5 rounded-lg text-xs font-semibold focus:outline-none focus:border-blue-500 cursor-pointer text-slate-700"
+                    >
+                      <option value="">-- Select Manager --</option>
+                      {employees
+                        .filter(emp => {
+                          const r = (emp.role || "").toLowerCase();
+                          return r.includes("manager") || r.includes("admin");
+                        })
+                        .map(emp => (
+                          <option key={emp.id} value={emp.name}>
+                            {emp.name} ({emp.role})
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={!selectedManagerToAssign || isAssigningManager}
+                      onClick={handleAssignManager}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-colors cursor-pointer shadow-3xs"
+                    >
+                      {isAssigningManager ? "Assigning..." : "Assign"}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center gap-1.5 pt-4 border-t border-slate-100">
                 {/* Edit button */}
@@ -785,6 +1110,148 @@ export default function AccountsDashboard({
                 >
                   <span>History Log</span>
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Accounts Bill Preview & Print Modal */}
+      {activeAccountsBill && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in select-text text-slate-800">
+          <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-2xl w-full shadow-2xl relative overflow-hidden max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4 shrink-0">
+              <div className="flex items-center gap-2">
+                <Receipt className="h-6 w-6 text-blue-600" />
+                <div>
+                  <h3 className="font-display font-extrabold text-slate-900 text-sm">Tax Invoice / Bill Statement</h3>
+                  <p className="text-[10px] text-slate-400 font-mono">{activeAccountsBill.invoiceNo}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold uppercase transition-colors cursor-pointer"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span>Print</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleMarkBillDone(activeAccountsBill.id)}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-extrabold uppercase transition-colors cursor-pointer shadow-sm"
+                >
+                  <Check className="h-4 w-4" />
+                  <span>Done (Mark as Printed)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveAccountsBill(null)}
+                  className="p-2 hover:bg-slate-100 rounded-xl text-slate-500 transition-colors cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Invoice Paper Layout */}
+            <div className="bg-white p-6 border border-slate-200 rounded-2xl space-y-5 overflow-y-auto flex-1 font-sans text-xs">
+              <div className="flex justify-between items-start border-b border-slate-200 pb-4">
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-900 tracking-tight">PATS MAINTENANCE & REPAIR SERVICES</h2>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Professional IT Support & Hardware AMC Management</p>
+                  <p className="text-[10px] text-slate-500">Email: support@pats.co.in | Phone: +91 98765 43210</p>
+                  {activeAccountsBill.billType === "GST" && activeAccountsBill.gstin && (
+                    <p className="text-[10px] font-mono font-bold text-emerald-700 mt-1">GSTIN: {activeAccountsBill.gstin}</p>
+                  )}
+                </div>
+                <div className="text-right font-mono">
+                  <span className="inline-block px-2.5 py-1 bg-blue-50 text-blue-800 rounded-lg text-[10px] font-black uppercase border border-blue-200 mb-1">
+                    {activeAccountsBill.billType === "GST" ? "GST Tax Invoice" : "Normal Bill (NB)"}
+                  </span>
+                  <p className="text-xs font-bold text-slate-900">{activeAccountsBill.invoiceNo}</p>
+                  <p className="text-[10px] text-slate-500">Date: {new Date(activeAccountsBill.createdAt).toLocaleDateString()}</p>
+                  <p className="text-[10px] text-slate-500">Ref Ticket: #{activeAccountsBill.taskId}</p>
+                </div>
+              </div>
+
+              {/* Bill To */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
+                <span className="text-[9px] font-extrabold uppercase text-slate-400 tracking-wider">Billed To:</span>
+                <h4 className="font-extrabold text-slate-900 text-sm">{activeAccountsBill.customerName}</h4>
+                {activeAccountsBill.businessName && activeAccountsBill.businessName !== activeAccountsBill.customerName && (
+                  <p className="text-slate-600 font-medium">Business: {activeAccountsBill.businessName}</p>
+                )}
+                {activeAccountsBill.contactDetails && <p className="text-slate-600">Contact: {activeAccountsBill.contactDetails}</p>}
+                {activeAccountsBill.address && <p className="text-slate-600">Address: {activeAccountsBill.address}</p>}
+              </div>
+
+              {/* Items Table */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
+                  <thead className="bg-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+                    <tr>
+                      <th className="px-3 py-2">#</th>
+                      <th className="px-3 py-2">Item Description</th>
+                      <th className="px-3 py-2 text-center">Qty</th>
+                      <th className="px-3 py-2 text-right">Unit Price</th>
+                      <th className="px-3 py-2 text-right">Disc %</th>
+                      <th className="px-3 py-2 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                    {activeAccountsBill.items.map((it: any, idx: number) => {
+                      const lineTotal = it.qty * it.unitPrice;
+                      const lineDisc = lineTotal * (it.discountPct / 100);
+                      const finalLineAmt = lineTotal - lineDisc;
+                      return (
+                        <tr key={it.id || idx}>
+                          <td className="px-3 py-2.5 font-mono text-slate-400">{idx + 1}</td>
+                          <td className="px-3 py-2.5 font-bold text-slate-900">{it.description}</td>
+                          <td className="px-3 py-2.5 text-center font-mono">{it.qty}</td>
+                          <td className="px-3 py-2.5 text-right font-mono">₹ {Number(it.unitPrice).toFixed(2)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono">{it.discountPct}%</td>
+                          <td className="px-3 py-2.5 text-right font-mono font-bold text-slate-900">₹ {finalLineAmt.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totals */}
+              <div className="flex justify-end pt-2">
+                <div className="w-64 space-y-1.5 font-mono text-xs">
+                  <div className="flex justify-between text-slate-600">
+                    <span>Subtotal:</span>
+                    <span>₹ {Number(activeAccountsBill.subtotal).toFixed(2)}</span>
+                  </div>
+                  {activeAccountsBill.totalDiscount > 0 && (
+                    <div className="flex justify-between text-emerald-600">
+                      <span>Discount:</span>
+                      <span>- ₹ {Number(activeAccountsBill.totalDiscount).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {activeAccountsBill.billType === "GST" && (
+                    <div className="flex justify-between text-blue-600">
+                      <span>GST ({activeAccountsBill.gstRate}%):</span>
+                      <span>+ ₹ {Number(activeAccountsBill.gstAmount).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-slate-300 pt-2 flex justify-between font-extrabold text-sm text-slate-900">
+                    <span>Grand Total:</span>
+                    <span>₹ {Number(activeAccountsBill.grandTotal).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 pt-4 flex justify-between items-end text-[10px] text-slate-400">
+                <p>Computer generated invoice. {activeAccountsBill.printed ? "✓ Printed / Done." : "Pending print."}</p>
+                <div className="text-right">
+                  <p className="font-bold text-slate-700">Authorized Signatory</p>
+                  <p className="mt-6 border-t border-slate-300 pt-1">Pats Accounts Dept</p>
+                </div>
               </div>
             </div>
           </div>

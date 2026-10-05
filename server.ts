@@ -43,8 +43,63 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
 const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 const supabase = isSupabaseConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
-if (isSupabaseConfigured) {
+if (isSupabaseConfigured && supabase) {
   console.log("✅ Supabase is initialized. Active Live Connection Point:", supabaseUrl);
+  // Startup migration: replace role = Accounts with Employee in Supabase also.
+  (async () => {
+    try {
+      console.log("🔄 Running background database update for Supabase: 'Accounts' -> 'Employee'...");
+      
+      // 1. Update employees with role 'Accounts' or 'Accounts Dept' to 'Employee'
+      const { data: empsToUpdate, error: selectErr } = await supabase
+        .from("employees")
+        .select("id, role")
+        .or("role.eq.Accounts,role.eq.Accounts Dept");
+
+      if (selectErr) {
+        console.warn("⚠️ Unable to fetch employees for role migration (it's normal if table doesn't exist yet):", selectErr.message);
+      } else if (empsToUpdate && empsToUpdate.length > 0) {
+        const { error: updateErr } = await supabase
+          .from("employees")
+          .update({ role: "Employee" })
+          .or("role.eq.Accounts,role.eq.Accounts Dept");
+
+        if (updateErr) {
+          console.error("❌ Failed to update employee roles in Supabase:", updateErr.message);
+        } else {
+          console.log(`✅ Successfully updated ${empsToUpdate.length} employee role(s) to 'Employee' in Supabase.`);
+        }
+      }
+
+      // 2. Update created_by_role in todo table
+      const { data: todosToUpdate, error: selectTodoErr } = await supabase
+        .from("todo")
+        .select("id, created_by_role");
+
+      if (selectTodoErr) {
+        console.warn("⚠️ Unable to fetch todos for role migration (it's normal if table doesn't exist yet):", selectTodoErr.message);
+      } else if (todosToUpdate && todosToUpdate.length > 0) {
+        let updatedCount = 0;
+        for (const t of todosToUpdate) {
+          if (t.created_by_role && t.created_by_role.includes("Accounts")) {
+            const newRole = t.created_by_role.replace(/Accounts/g, "Employee");
+            const { error: updateTodoErr } = await supabase
+              .from("todo")
+              .update({ created_by_role: newRole })
+              .eq("id", t.id);
+            if (!updateTodoErr) {
+              updatedCount++;
+            }
+          }
+        }
+        if (updatedCount > 0) {
+          console.log(`✅ Successfully updated ${updatedCount} todo task(s) created_by_role to use 'Employee' in Supabase.`);
+        }
+      }
+    } catch (err: any) {
+      console.error("❌ Error in Supabase startup role migration:", err?.message || err);
+    }
+  })();
 } else {
   console.log("⚠️ Supabase parameters missing from .env, falling back onto local pats_database.json");
 }
@@ -61,6 +116,9 @@ const sqlLogs: SqlLog[] = [];
 // Helper to gracefully translate Supabase RLS and policy errors to highly helpful human prompts
 function translateSupabaseError(err: any, tableName: string): string {
   const msg = err?.message || String(err);
+  if (err?.code === "42P01" || msg.includes("does not exist")) {
+    return `The '${tableName}' table does not exist in your Supabase database. Please copy and run the creation SQL DDL queries from the Attendance tab / Admin dashboard to provision it.`;
+  }
   if (msg.includes("row-level security") || msg.includes("policy") || msg.includes("RLS")) {
     return `Supabase Row-Level Security (RLS) is active on the '${tableName}' table. Please run "ALTER TABLE ${tableName} DISABLE ROW LEVEL SECURITY;" in your Supabase SQL Editor to allow public anonymous database transactions.`;
   }
@@ -129,6 +187,10 @@ interface Task {
   km_travelled?: number;
   materials_carried?: string | null;
   history?: TaskHistoryEntry[];
+  contract_type?: string;
+  company_id?: number | null;
+  company_name?: string | null;
+  asset_id?: string | null;
 }
 
 interface OfflineTravel {
@@ -180,33 +242,50 @@ interface Company {
   type: "AMC" | "Non AMC";
   created_at: string;
   created_by: string;
+  allocated_engineer_id?: number | null;
+  allocated_engineer_name?: string | null;
 }
 
 interface CompanyAsset {
   id: number;
   company_id: number;
-  asset: string;
-  asset_id: string;
   location: string;
-  department: string;
-  monitor: string;
+  asset_id: string;
+  asset: string;
   employee_name: string;
   comp_name: string;
-  model_no: string;
-  configured_os: string;
-  os_key: string;
-  ms_office: string;
-  office_key: string;
-  other_app: string;
-  serial: string;
-  lan_ip: string;
-  mac_ip: string;
-  wifi_mac_ip: string;
-  antivirus_key: string;
-  key_val: string;
-  validity: string;
-  remarks: string;
-  created_at: string;
+  model_no: string; // Make/Model
+  serial_no?: string;
+  config_processor: string;
+  config_ram: string;
+  config_storage: string;
+  os: string;
+  os_key?: string;
+  os_type?: string;
+  office: string;
+  office_key?: string;
+  office_type?: string;
+  lan_mac?: string;
+  wan_mac?: string;
+  ip_address: string;
+  antivirus?: string;
+  antivirus_key?: string;
+  validity?: string;
+  status?: string;
+  amc_status?: "In AMC" | "Not in AMC";
+  created_at?: string;
+}
+
+interface AttendanceRecord {
+  id: number;
+  employee_id: number;
+  employee_name: string;
+  employee_role: string;
+  date: string;
+  in_time: string | null;
+  out_time: string | null;
+  in_location_coords: string | null;
+  out_location_coords: string | null;
 }
 
 interface DatabaseSchema {
@@ -217,11 +296,13 @@ interface DatabaseSchema {
   deletedTodos?: DeletedTodoTask[];
   companies?: Company[];
   assets?: CompanyAsset[];
+  attendance?: AttendanceRecord[];
   nextTaskId: number;
   nextTodoId?: number;
   nextOfflineTravelId?: number;
   nextCompanyId?: number;
   nextAssetId?: number;
+  nextAttendanceId?: number;
   settings?: {
     petrol_price: number;
   };
@@ -305,6 +386,10 @@ function initDb(): DatabaseSchema {
             emp.ended_at = emp.ended_at.split("T")[0];
             updated = true;
           }
+          if (emp.role === "Accounts" || emp.role === "Accounts Dept") {
+            emp.role = "Employee";
+            updated = true;
+          }
           if (updated) migrated = true;
           return emp;
         });
@@ -312,6 +397,14 @@ function initDb(): DatabaseSchema {
       if (!data.todos) {
         data.todos = [];
         migrated = true;
+      } else if (Array.isArray(data.todos)) {
+        data.todos = data.todos.map(t => {
+          if (t.created_by_role && t.created_by_role.includes("Accounts")) {
+            t.created_by_role = t.created_by_role.replace(/Accounts/g, "Employee");
+            migrated = true;
+          }
+          return t;
+        });
       }
       if (!data.deletedTodos) {
         data.deletedTodos = [];
@@ -335,6 +428,14 @@ function initDb(): DatabaseSchema {
       }
       if (typeof data.nextAssetId !== "number") {
         data.nextAssetId = data.assets.length > 0 ? Math.max(...data.assets.map(a => a.id)) + 1 : 1;
+        migrated = true;
+      }
+      if (!data.attendance) {
+        data.attendance = [];
+        migrated = true;
+      }
+      if (typeof data.nextAttendanceId !== "number") {
+        data.nextAttendanceId = data.attendance.length > 0 ? Math.max(...data.attendance.map(a => a.id)) + 1 : 1;
         migrated = true;
       }
       if (migrated) {
@@ -419,7 +520,7 @@ function initDb(): DatabaseSchema {
         status: "Assigned",
         created_at: new Date(Date.now() - 4 * 3600 * 1000).toISOString(),
         created_by_name: "Meera Sen",
-        created_by_role: "Accounts",
+        created_by_role: "Employee",
         remarks: null,
         history: []
       },
@@ -447,9 +548,11 @@ function initDb(): DatabaseSchema {
     ],
     deletedTodos: [],
     companies: [],
-    assets: [],
     nextCompanyId: 1,
+    assets: [],
     nextAssetId: 1,
+    attendance: [],
+    nextAttendanceId: 1,
     settings: {
       petrol_price: 100
     }
@@ -463,7 +566,105 @@ function initDb(): DatabaseSchema {
 
   // Log schema creation
   logSQL(
-    `CREATE TABLE employees (\n  id INT PRIMARY KEY,\n  name VARCHAR(100),\n  role VARCHAR(100),\n  joined_at VARCHAR(100),\n  ended_at VARCHAR(100) NULL,\n  email_id VARCHAR(50),\n  password VARCHAR(50)\n);\n\nCREATE TABLE tasks (\n  id INT PRIMARY KEY,\n  customer_name VARCHAR(255),\n  contact_details VARCHAR(255),\n  problem_reported TEXT,\n  assigned_to INT,\n  status VARCHAR(50),\n  assigned_at TIMESTAMP,\n  accepted_at TIMESTAMP NULL,\n  finished_at TIMESTAMP NULL,\n  remarks TEXT NULL,\n  FOREIGN KEY (assigned_to) REFERENCES employees(id)\n);`,
+    `CREATE TABLE employees (
+  id INT PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  role VARCHAR(100) NOT NULL,
+  joined_at VARCHAR(100),
+  ended_at VARCHAR(100) NULL,
+  email_id VARCHAR(100) UNIQUE,
+  password VARCHAR(100)
+);
+
+CREATE TABLE companies (
+  id INT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  type VARCHAR(50) NOT NULL, -- 'AMC' or 'Non AMC'
+  created_at TIMESTAMP DEFAULT NOW(),
+  created_by VARCHAR(100),
+  allocated_engineer_id INT NULL REFERENCES employees(id)
+);
+
+CREATE TABLE company_assets (
+  id INT PRIMARY KEY,
+  company_id INT NOT NULL REFERENCES companies(id),
+  asset_id VARCHAR(100) NOT NULL,
+  asset VARCHAR(100) NOT NULL,
+  model_no VARCHAR(100),
+  location VARCHAR(255),
+  employee_name VARCHAR(100),
+  ip_address VARCHAR(50),
+  os VARCHAR(100),
+  config_processor VARCHAR(100),
+  config_ram VARCHAR(50),
+  config_storage VARCHAR(100),
+  amc_status VARCHAR(50) DEFAULT 'In AMC',
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE tasks (
+  id INT PRIMARY KEY,
+  customer_name VARCHAR(255) NOT NULL,
+  contact_details VARCHAR(255),
+  problem_reported TEXT NOT NULL,
+  assigned_to INT NOT NULL REFERENCES employees(id),
+  status VARCHAR(50) DEFAULT 'Pending',
+  assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  accepted_at TIMESTAMP WITH TIME ZONE NULL,
+  finished_at TIMESTAMP WITH TIME ZONE NULL,
+  remarks TEXT NULL,
+  address TEXT NULL,
+  contract_type VARCHAR(50) DEFAULT 'AMC',
+  company_id INT NULL REFERENCES companies(id),
+  company_name VARCHAR(255) NULL,
+  asset_id VARCHAR(100) NULL,
+  is_priority BOOLEAN DEFAULT FALSE,
+  is_repeat BOOLEAN DEFAULT FALSE,
+  km_travelled NUMERIC(10,2) DEFAULT 0,
+  materials_carried TEXT NULL,
+  history JSONB NULL
+);
+
+CREATE TABLE bills (
+  id VARCHAR(100) PRIMARY KEY,
+  invoice_no VARCHAR(50) UNIQUE NOT NULL,
+  task_id INT NULL REFERENCES tasks(id) ON DELETE SET NULL,
+  customer_name VARCHAR(255) NOT NULL,
+  contact_details VARCHAR(255),
+  address TEXT,
+  bill_type VARCHAR(50) NOT NULL, -- 'NB' or 'GST'
+  gstin VARCHAR(50) NULL,
+  business_name VARCHAR(255) NULL,
+  gst_rate NUMERIC(5,2) DEFAULT 0,
+  subtotal NUMERIC(12,2) DEFAULT 0,
+  total_discount NUMERIC(12,2) DEFAULT 0,
+  taxable_amount NUMERIC(12,2) DEFAULT 0,
+  gst_amount NUMERIC(12,2) DEFAULT 0,
+  grand_total NUMERIC(12,2) DEFAULT 0,
+  printed BOOLEAN DEFAULT FALSE,
+  printed_at TIMESTAMP WITH TIME ZONE NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE bill_items (
+  id SERIAL PRIMARY KEY,
+  bill_id VARCHAR(100) NOT NULL REFERENCES bills(id) ON DELETE CASCADE,
+  description TEXT NOT NULL,
+  qty INT NOT NULL DEFAULT 1,
+  discount_pct NUMERIC(5,2) DEFAULT 0,
+  unit_price NUMERIC(12,2) NOT NULL,
+  line_total NUMERIC(12,2) NOT NULL
+);
+
+-- Analytics & Fast Lookup Indexes
+CREATE INDEX idx_tasks_assigned_to ON tasks(assigned_to);
+CREATE INDEX idx_tasks_company_id ON tasks(company_id);
+CREATE INDEX idx_tasks_asset_id ON tasks(asset_id);
+CREATE INDEX idx_tasks_contract_type ON tasks(contract_type);
+CREATE INDEX idx_tasks_engineer_company_asset ON tasks(assigned_to, company_id, asset_id);
+CREATE INDEX idx_bills_task_id ON bills(task_id);
+CREATE INDEX idx_bills_printed ON bills(printed);
+CREATE INDEX idx_bill_items_bill_id ON bill_items(bill_id);`,
     4
   );
 
@@ -1048,20 +1249,14 @@ app.get("/api/sync", async (req, res) => {
         if (isSupabaseConfigured && supabase) {
           const { data: cos } = await supabase.from("companies").select("*").order("id", { ascending: true });
           companiesList = cos || [];
-        } else {
-          companiesList = db.companies || [];
-        }
-      } catch (err) {
-        companiesList = db.companies || [];
-      }
-      try {
-        if (isSupabaseConfigured && supabase) {
-          const { data: ast } = await supabase.from("assets").select("*").order("id", { ascending: true });
+          const { data: ast } = await supabase.from("company_assets").select("*").order("id", { ascending: true });
           assetsList = ast || [];
         } else {
+          companiesList = db.companies || [];
           assetsList = db.assets || [];
         }
       } catch (err) {
+        companiesList = db.companies || [];
         assetsList = db.assets || [];
       }
 
@@ -1107,27 +1302,39 @@ app.get("/api/sync", async (req, res) => {
 
 // Create a new company
 app.post("/api/companies", async (req, res) => {
-  const { name, type, created_by } = req.body;
+  const { name, type, created_by, allocated_engineer_id } = req.body;
   if (!name || !type) {
     return res.status(400).json({ error: "Company name and type (AMC / Non AMC) are required." });
   }
 
-  const nextId = db.nextCompanyId || 1;
+  if (!db.companies) db.companies = [];
+  const nextId = db.companies.length > 0 
+    ? Math.max(0, ...db.companies.map(c => Number(c.id) || 0)) + 1 
+    : 1;
+  const engId = allocated_engineer_id ? Number(allocated_engineer_id) : null;
+  
+  let engName = null;
+  if (engId) {
+    const emp = db.employees.find(e => e.id === engId);
+    if (emp) engName = emp.name;
+  }
+
   const newCompany = {
     id: nextId,
     name,
     type: type === "AMC" ? ("AMC" as const) : ("Non AMC" as const),
     created_by: created_by || "System",
-    created_at: new Date().toISOString()
+    created_at: new Date().toISOString(),
+    allocated_engineer_id: engId,
+    allocated_engineer_name: engName
   };
 
-  if (!db.companies) db.companies = [];
   db.companies.push(newCompany);
   db.nextCompanyId = nextId + 1;
   saveDb();
 
   // Log SQL
-  logSQL(`INSERT INTO companies (id, name, type, created_by, created_at) VALUES (${nextId}, '${name}', '${type}', '${created_by || "System"}', NOW());`, 1);
+  logSQL(`INSERT INTO companies (id, name, type, created_by, allocated_engineer_id, created_at) VALUES (${nextId}, '${name.replace(/'/g, "''")}', '${type}', '${(created_by || "System").replace(/'/g, "''")}', ${engId || "NULL"}, NOW());`, 1);
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -1140,62 +1347,130 @@ app.post("/api/companies", async (req, res) => {
   res.status(201).json(newCompany);
 });
 
-// Create a new asset under a company
-app.post("/api/assets", async (req, res) => {
-  const {
-    company_id,
-    asset,
-    asset_id,
-    location,
-    department,
-    monitor,
-    employee_name,
-    comp_name,
-    model_no,
-    configured_os,
-    os_key,
-    ms_office,
-    office_key,
-    other_app,
-    serial,
-    lan_ip,
-    mac_ip,
-    wifi_mac_ip,
-    antivirus_key,
-    key_val,
-    validity,
-    remarks
-  } = req.body;
-
-  if (!company_id) {
-    return res.status(400).json({ error: "company_id is required." });
+// Allocate engineer to a company
+app.post("/api/companies/:id/allocate", async (req, res) => {
+  const companyId = Number(req.params.id);
+  const { allocated_engineer_id } = req.body;
+  
+  const engId = allocated_engineer_id ? Number(allocated_engineer_id) : null;
+  let engName = null;
+  if (engId) {
+    const emp = db.employees.find(e => e.id === engId);
+    if (emp) engName = emp.name;
   }
 
+  const companyIndex = (db.companies || []).findIndex(c => c.id === companyId);
+  if (companyIndex === -1) {
+    return res.status(404).json({ error: "Company not found" });
+  }
+
+  db.companies![companyIndex].allocated_engineer_id = engId;
+  db.companies![companyIndex].allocated_engineer_name = engName;
+  saveDb();
+
+  // Log SQL
+  logSQL(`UPDATE companies SET allocated_engineer_id = ${engId || "NULL"} WHERE id = ${companyId};`, 1);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from("companies").update({
+        allocated_engineer_id: engId,
+        allocated_engineer_name: engName
+      }).eq("id", companyId);
+    } catch (e) {
+      console.warn("Could not update company allocation in Supabase:", e);
+    }
+  }
+
+  res.json(db.companies![companyIndex]);
+});
+
+// Delete full company and all its assets from records (Admin & Manager)
+const handleCompanyDelete = async (req: express.Request, res: express.Response) => {
+  const companyId = Number(req.params.id);
+  console.log(`[DELETE COMPANY] Requested deletion of company ID: ${companyId}`);
+
+  if (isNaN(companyId)) {
+    return res.status(400).json({ error: "Invalid company ID" });
+  }
+
+  let deletedCompany: Company | null = null;
+  if (db.companies) {
+    const idx = db.companies.findIndex(c => c.id === companyId);
+    if (idx !== -1) {
+      deletedCompany = db.companies[idx];
+      db.companies.splice(idx, 1);
+    }
+    db.nextCompanyId = db.companies.length > 0 
+      ? Math.max(0, ...db.companies.map(c => Number(c.id) || 0)) + 1 
+      : 1;
+  }
+
+  // Cascade delete all assets for this company
+  let deletedAssetsCount = 0;
+  if (db.assets) {
+    const prevCount = db.assets.length;
+    db.assets = db.assets.filter(a => Number(a.company_id) !== companyId);
+    deletedAssetsCount = prevCount - db.assets.length;
+  }
+  saveDb();
+
+  logSQL(`DELETE FROM company_assets WHERE company_id = ${companyId}; DELETE FROM companies WHERE id = ${companyId};`, 1 + deletedAssetsCount);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from("company_assets").delete().eq("company_id", companyId);
+      await supabase.from("companies").delete().eq("id", companyId);
+    } catch (e: any) {
+      console.warn("Could not delete company in Supabase:", e?.message || e);
+    }
+  }
+
+  console.log(`[DELETE COMPANY] Deleted company #${companyId} ("${deletedCompany?.name || 'Unknown'}") and ${deletedAssetsCount} assets.`);
+  res.json({
+    success: true,
+    message: `Company "${deletedCompany?.name || companyId}" and all its records were deleted successfully`,
+    deletedCompany,
+    deletedAssetsCount
+  });
+};
+
+app.delete("/api/companies/:id", handleCompanyDelete);
+app.post("/api/companies/:id/delete", handleCompanyDelete);
+
+// Add a company asset
+app.post("/api/companies/:id/assets", async (req, res) => {
+  const companyId = Number(req.params.id);
+  const assetData = req.body;
+
   const nextId = db.nextAssetId || 1;
-  const newAsset = {
+  const newAsset: CompanyAsset = {
     id: nextId,
-    company_id: Number(company_id),
-    asset: asset || "",
-    asset_id: asset_id || "",
-    location: location || "",
-    department: department || "",
-    monitor: monitor || "",
-    employee_name: employee_name || "",
-    comp_name: comp_name || "",
-    model_no: model_no || "",
-    configured_os: configured_os || "",
-    os_key: os_key || "",
-    ms_office: ms_office || "",
-    office_key: office_key || "",
-    other_app: other_app || "",
-    serial: serial || "",
-    lan_ip: lan_ip || "",
-    mac_ip: mac_ip || "",
-    wifi_mac_ip: wifi_mac_ip || "",
-    antivirus_key: antivirus_key || "",
-    key_val: key_val || "",
-    validity: validity || "",
-    remarks: remarks || "",
+    company_id: companyId,
+    location: assetData.location || "",
+    asset_id: assetData.asset_id || "",
+    asset: assetData.asset || "Desktop",
+    employee_name: assetData.employee_name || "",
+    comp_name: assetData.comp_name || "",
+    model_no: assetData.model_no || "",
+    serial_no: assetData.serial_no || "",
+    config_processor: assetData.config_processor || "",
+    config_ram: assetData.config_ram || "",
+    config_storage: assetData.config_storage || "",
+    os: assetData.os || "",
+    os_key: assetData.os_key || "",
+    os_type: assetData.os_type || "",
+    office: assetData.office || "",
+    office_key: assetData.office_key || "",
+    office_type: assetData.office_type || "",
+    lan_mac: assetData.lan_mac || "",
+    wan_mac: assetData.wan_mac || "",
+    ip_address: assetData.ip_address || "",
+    antivirus: assetData.antivirus || "",
+    antivirus_key: assetData.antivirus_key || "",
+    validity: assetData.validity || "",
+    status: assetData.status || "In Use",
+    amc_status: assetData.amc_status === "Not in AMC" ? "Not in AMC" : "In AMC",
     created_at: new Date().toISOString()
   };
 
@@ -1205,11 +1480,11 @@ app.post("/api/assets", async (req, res) => {
   saveDb();
 
   // Log SQL
-  logSQL(`INSERT INTO assets (id, company_id, asset, asset_id, serial, location, department) VALUES (${nextId}, ${company_id}, '${asset || ""}', '${asset_id || ""}', '${serial || ""}', '${location || ""}', '${department || ""}');`, 1);
+  logSQL(`INSERT INTO company_assets (id, company_id, location, asset_id, asset, employee_name, comp_name, model_no, serial_no, config_processor, config_ram, config_storage, os, os_key, os_type, office, office_key, office_type, lan_mac, wan_mac, ip_address, antivirus, antivirus_key, validity, status, amc_status, created_at) VALUES (${nextId}, ${companyId}, '${newAsset.location.replace(/'/g, "''")}', '${newAsset.asset_id.replace(/'/g, "''")}', '${newAsset.asset.replace(/'/g, "''")}', '${newAsset.employee_name.replace(/'/g, "''")}', '${newAsset.comp_name.replace(/'/g, "''")}', '${newAsset.model_no.replace(/'/g, "''")}', '${(newAsset.serial_no||"").replace(/'/g, "''")}', '${newAsset.config_processor.replace(/'/g, "''")}', '${newAsset.config_ram.replace(/'/g, "''")}', '${newAsset.config_storage.replace(/'/g, "''")}', '${newAsset.os.replace(/'/g, "''")}', '${(newAsset.os_key||"").replace(/'/g, "''")}', '${(newAsset.os_type||"").replace(/'/g, "''")}', '${newAsset.office.replace(/'/g, "''")}', '${(newAsset.office_key||"").replace(/'/g, "''")}', '${(newAsset.office_type||"").replace(/'/g, "''")}', '${(newAsset.lan_mac||"").replace(/'/g, "''")}', '${(newAsset.wan_mac||"").replace(/'/g, "''")}', '${newAsset.ip_address.replace(/'/g, "''")}', '${(newAsset.antivirus||"").replace(/'/g, "''")}', '${(newAsset.antivirus_key||"").replace(/'/g, "''")}', '${(newAsset.validity||"").replace(/'/g, "''")}', '${(newAsset.status||"").replace(/'/g, "''")}', '${newAsset.amc_status}', NOW());`, 1);
 
   if (isSupabaseConfigured && supabase) {
     try {
-      await supabase.from("assets").insert([newAsset]);
+      await supabase.from("company_assets").insert([newAsset]);
     } catch (e) {
       console.warn("Could not insert asset to Supabase:", e);
     }
@@ -1217,6 +1492,148 @@ app.post("/api/assets", async (req, res) => {
 
   res.status(201).json(newAsset);
 });
+
+// Update a company asset (supports both POST and PUT)
+const handleAssetUpdate = async (req: express.Request, res: express.Response) => {
+  const assetId = Number(req.params.id);
+  const assetData = req.body;
+
+  if (isNaN(assetId)) {
+    return res.status(400).json({ error: "Invalid asset ID" });
+  }
+
+  if (!db.assets) db.assets = [];
+  const assetIndex = db.assets.findIndex(a => a.id === assetId);
+
+  let baseAsset: CompanyAsset;
+  if (assetIndex !== -1) {
+    baseAsset = db.assets[assetIndex];
+  } else {
+    baseAsset = {
+      id: assetId,
+      company_id: Number(assetData.company_id) || 1,
+      location: "",
+      asset_id: "",
+      asset: "",
+      employee_name: "",
+      comp_name: "",
+      model_no: "",
+      config_processor: "",
+      config_ram: "",
+      config_storage: "",
+      os: "",
+      office: "",
+      ip_address: ""
+    };
+  }
+
+  const updatedAsset: CompanyAsset = {
+    ...baseAsset,
+    ...assetData,
+    id: assetId
+  };
+
+  if (assetIndex !== -1) {
+    db.assets[assetIndex] = updatedAsset;
+  } else {
+    db.assets.push(updatedAsset);
+  }
+  saveDb();
+
+  // Log SQL
+  logSQL(`UPDATE company_assets SET location='${(updatedAsset.location||"").replace(/'/g, "''")}', asset_id='${(updatedAsset.asset_id||"").replace(/'/g, "''")}', asset='${(updatedAsset.asset||"").replace(/'/g, "''")}', employee_name='${(updatedAsset.employee_name||"").replace(/'/g, "''")}', comp_name='${(updatedAsset.comp_name||"").replace(/'/g, "''")}', model_no='${(updatedAsset.model_no||"").replace(/'/g, "''")}', serial_no='${(updatedAsset.serial_no||"").replace(/'/g, "''")}', config_processor='${(updatedAsset.config_processor||"").replace(/'/g, "''")}', config_ram='${(updatedAsset.config_ram||"").replace(/'/g, "''")}', config_storage='${(updatedAsset.config_storage||"").replace(/'/g, "''")}', os='${(updatedAsset.os||"").replace(/'/g, "''")}', os_key='${(updatedAsset.os_key||"").replace(/'/g, "''")}', os_type='${(updatedAsset.os_type||"").replace(/'/g, "''")}', office='${(updatedAsset.office||"").replace(/'/g, "''")}', office_key='${(updatedAsset.office_key||"").replace(/'/g, "''")}', office_type='${(updatedAsset.office_type||"").replace(/'/g, "''")}', lan_mac='${(updatedAsset.lan_mac||"").replace(/'/g, "''")}', wan_mac='${(updatedAsset.wan_mac||"").replace(/'/g, "''")}', ip_address='${(updatedAsset.ip_address||"").replace(/'/g, "''")}', antivirus='${(updatedAsset.antivirus||"").replace(/'/g, "''")}', antivirus_key='${(updatedAsset.antivirus_key||"").replace(/'/g, "''")}', validity='${(updatedAsset.validity||"").replace(/'/g, "''")}', status='${(updatedAsset.status||"").replace(/'/g, "''")}', amc_status='${(updatedAsset.amc_status||"In AMC").replace(/'/g, "''")}' WHERE id = ${assetId};`, 1);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from("company_assets").update(updatedAsset).eq("id", assetId);
+    } catch (e: any) {
+      console.warn("Could not update asset in Supabase:", e?.message || e);
+    }
+  }
+
+  res.json(updatedAsset);
+};
+
+app.post("/api/assets/:id/update", handleAssetUpdate);
+app.post("/api/assets/:id", handleAssetUpdate);
+app.put("/api/assets/:id", handleAssetUpdate);
+
+// Delete a specific asset (available to everyone who has access)
+const handleAssetDelete = async (req: express.Request, res: express.Response) => {
+  const assetIdRaw = req.params.id;
+  const assetIdNum = Number(assetIdRaw);
+  console.log(`[DELETE ASSET] Requested delete for ID/asset_id: "${assetIdRaw}"`);
+
+  if (!assetIdRaw) {
+    return res.status(400).json({ error: "Invalid asset ID" });
+  }
+
+  let deletedCount = 0;
+  if (db.assets) {
+    const prevCount = db.assets.length;
+    db.assets = db.assets.filter(a => {
+      if (String(a.id) === String(assetIdRaw)) return false;
+      if (!isNaN(assetIdNum) && a.id === assetIdNum) return false;
+      if (a.asset_id && a.asset_id === assetIdRaw) return false;
+      return true;
+    });
+    deletedCount = prevCount - db.assets.length;
+    saveDb();
+  }
+
+  logSQL(`DELETE FROM company_assets WHERE id = ${isNaN(assetIdNum) ? 0 : assetIdNum} OR asset_id = '${assetIdRaw.replace(/'/g, "''")}';`, 1);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      if (!isNaN(assetIdNum)) {
+        await supabase.from("company_assets").delete().eq("id", assetIdNum);
+      }
+      await supabase.from("company_assets").delete().eq("asset_id", assetIdRaw);
+    } catch (e: any) {
+      console.warn("Could not delete asset in Supabase:", e?.message || e);
+    }
+  }
+
+  console.log(`[DELETE ASSET] Successfully deleted ${deletedCount} record(s) matching "${assetIdRaw}".`);
+  res.json({ success: true, message: "Asset deleted successfully", deletedId: assetIdRaw, deletedCount });
+};
+
+app.delete("/api/assets/:id", handleAssetDelete);
+app.post("/api/assets/:id/delete", handleAssetDelete);
+
+// Delete all assets for a company (Admin & Manager)
+const handleCompanyAssetsDeleteAll = async (req: express.Request, res: express.Response) => {
+  const companyId = Number(req.params.id);
+  console.log(`[DELETE ALL ASSETS] Requested deletion of all assets for companyId: ${companyId}`);
+
+  if (isNaN(companyId)) {
+    return res.status(400).json({ error: "Invalid company ID" });
+  }
+
+  let deletedCount = 0;
+  if (db.assets) {
+    const initialCount = db.assets.length;
+    db.assets = db.assets.filter(a => Number(a.company_id) !== companyId);
+    deletedCount = initialCount - db.assets.length;
+    saveDb();
+  }
+
+  logSQL(`DELETE FROM company_assets WHERE company_id = ${companyId};`, deletedCount);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from("company_assets").delete().eq("company_id", companyId);
+    } catch (e: any) {
+      console.warn("Could not delete company assets in Supabase:", e?.message || e);
+    }
+  }
+
+  console.log(`[DELETE ALL ASSETS] Successfully deleted ${deletedCount} assets for company #${companyId}`);
+  res.json({ success: true, message: `All assets for company #${companyId} deleted successfully`, count: deletedCount });
+};
+
+app.delete("/api/companies/:id/assets", handleCompanyAssetsDeleteAll);
+app.post("/api/companies/:id/assets/delete-all", handleCompanyAssetsDeleteAll);
 
 // Get list of employees
 app.get("/api/employees", async (req, res) => {
@@ -1308,10 +1725,54 @@ app.get("/api/tasks", async (req, res) => {
 
 // Admin assigns task
 app.post("/api/tasks", async (req, res) => {
-  const { customer_name, contact_details, problem_reported, assigned_to, address } = req.body;
+  const { 
+    customer_name, 
+    contact_details, 
+    problem_reported, 
+    assigned_to, 
+    address,
+    contract_type,
+    company_id,
+    company_name,
+    asset_id
+  } = req.body;
 
-  if (!customer_name || !contact_details || !problem_reported || !assigned_to) {
-    return res.status(400).json({ error: "Missing required task fields" });
+  if (!customer_name || !problem_reported || !assigned_to) {
+    return res.status(400).json({ error: "Missing required task fields (Customer/Company name, Problem, and Assigned Engineer)" });
+  }
+
+  const safeContact = contact_details || "-";
+  const numCompanyId = company_id ? Number(company_id) : null;
+  const safeContractType = contract_type || "AMC";
+
+  // Validate that Asset ID exists in the sheet
+  let validatedAssetId: string | null = null;
+  if (asset_id && asset_id !== "none" && typeof asset_id === "string" && asset_id.trim() !== "") {
+    const cleanAssetId = asset_id.trim();
+    if (isSupabaseConfigured && supabase) {
+      let assetCheck = supabase.from("company_assets").select("id, asset_id").ilike("asset_id", cleanAssetId);
+      if (numCompanyId) {
+        assetCheck = assetCheck.eq("company_id", numCompanyId);
+      }
+      const { data: matchedAsset } = await assetCheck;
+      if (!matchedAsset || matchedAsset.length === 0) {
+        return res.status(400).json({ 
+          error: `Asset ID "${cleanAssetId}" does not exist in the sheet. You can only select an Asset ID that exists in the registered asset sheet.` 
+        });
+      }
+      validatedAssetId = matchedAsset[0].asset_id || cleanAssetId;
+    } else {
+      const matched = db.assets.find(a => 
+        a.asset_id.toLowerCase() === cleanAssetId.toLowerCase() &&
+        (!numCompanyId || a.company_id === numCompanyId)
+      );
+      if (!matched) {
+        return res.status(400).json({ 
+          error: `Asset ID "${cleanAssetId}" does not exist in the sheet. You can only select an Asset ID that exists in the registered asset sheet.` 
+        });
+      }
+      validatedAssetId = matched.asset_id || cleanAssetId;
+    }
   }
 
   if (isSupabaseConfigured && supabase) {
@@ -1322,7 +1783,7 @@ app.post("/api/tasks", async (req, res) => {
       const newTask: Task = {
         id: newId,
         customer_name,
-        contact_details,
+        contact_details: safeContact,
         problem_reported,
         assigned_to: Number(assigned_to),
         status: "Pending",
@@ -1330,13 +1791,33 @@ app.post("/api/tasks", async (req, res) => {
         accepted_at: null,
         finished_at: null,
         remarks: null,
-        address: address || ""
+        address: address || "",
+        contract_type: safeContractType,
+        company_id: numCompanyId,
+        company_name: company_name || null,
+        asset_id: validatedAssetId
       };
 
-      const { error: insertErr } = await supabase.from("tasks").insert(newTask);
-      if (insertErr) throw insertErr;
+      let { error: insertErr } = await supabase.from("tasks").insert(newTask);
+      if (insertErr && (insertErr.message?.includes("column") || (insertErr as any).code === "42703")) {
+        // Fallback for Supabase if table doesn't have contract_type/company/asset columns
+        const baseTask: any = {
+          id: newId,
+          customer_name,
+          contact_details: safeContact,
+          problem_reported,
+          assigned_to: Number(assigned_to),
+          status: "Pending",
+          assigned_at: newTask.assigned_at,
+          address: address || ""
+        };
+        const fallbackRes = await supabase.from("tasks").insert(baseTask);
+        if (fallbackRes.error) throw fallbackRes.error;
+      } else if (insertErr) {
+        throw insertErr;
+      }
 
-      const query = `INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, address)\nVALUES (${newId}, '${customer_name.replace(/'/g, "''")}', '${contact_details.replace(/'/g, "''")}', '${problem_reported.replace(/'/g, "''")}', ${assigned_to}, 'Pending', '${newTask.assigned_at}', '${(address || "").replace(/'/g, "''")}');`;
+      const query = `INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, address, contract_type, company_id, company_name, asset_id)\nVALUES (${newId}, '${customer_name.replace(/'/g, "''")}', '${safeContact.replace(/'/g, "''")}', '${problem_reported.replace(/'/g, "''")}', ${assigned_to}, 'Pending', '${newTask.assigned_at}', '${(address || "").replace(/'/g, "''")}', '${safeContractType}', ${numCompanyId || "NULL"}, '${(company_name || "").replace(/'/g, "''")}', '${(validatedAssetId || "").replace(/'/g, "''")}');`;
       logSQL(query, 1);
 
       const { data: employee } = await supabase.from("employees").select("name").eq("id", assigned_to).single();
@@ -1353,7 +1834,7 @@ app.post("/api/tasks", async (req, res) => {
     const newTask: Task = {
       id: newId,
       customer_name,
-      contact_details,
+      contact_details: safeContact,
       problem_reported,
       assigned_to: Number(assigned_to),
       status: "Pending",
@@ -1361,13 +1842,17 @@ app.post("/api/tasks", async (req, res) => {
       accepted_at: null,
       finished_at: null,
       remarks: null,
-      address: address || ""
+      address: address || "",
+      contract_type: safeContractType,
+      company_id: numCompanyId,
+      company_name: company_name || null,
+      asset_id: validatedAssetId
     };
 
     db.tasks.unshift(newTask);
     saveDb();
 
-    const query = `INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, address)\nVALUES (${newId}, '${customer_name.replace(/'/g, "''")}', '${contact_details.replace(/'/g, "''")}', '${problem_reported.replace(/'/g, "''")}', ${assigned_to}, 'Pending', '${newTask.assigned_at}', '${(address || "").replace(/'/g, "''")}');`;
+    const query = `INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, address, contract_type, company_id, company_name, asset_id)\nVALUES (${newId}, '${customer_name.replace(/'/g, "''")}', '${safeContact.replace(/'/g, "''")}', '${problem_reported.replace(/'/g, "''")}', ${assigned_to}, 'Pending', '${newTask.assigned_at}', '${(address || "").replace(/'/g, "''")}', '${safeContractType}', ${numCompanyId || "NULL"}, '${(company_name || "").replace(/'/g, "''")}', '${(validatedAssetId || "").replace(/'/g, "''")}');`;
     logSQL(query, 1);
 
     const emp = db.employees.find(e => e.id === newTask.assigned_to);
@@ -1843,7 +2328,7 @@ app.post("/api/tasks/:id/reassign", async (req, res) => {
   }
 });
 
-// Admin/Manager/Accounts updates task details and records history
+// Admin/Manager/Employee updates task details and records history
 app.post("/api/tasks/:id/update", async (req, res) => {
   const taskId = Number(req.params.id);
   const { 
@@ -1855,8 +2340,47 @@ app.post("/api/tasks/:id/update", async (req, res) => {
     status, 
     remarks, 
     materials_carried, 
-    edited_by 
+    edited_by,
+    contract_type,
+    company_id,
+    company_name,
+    asset_id
   } = req.body;
+
+  // Validate that Asset ID exists in the sheet if specified
+  let validatedUpdateAssetId: string | null | undefined = undefined;
+  if (asset_id !== undefined) {
+    if (asset_id && asset_id !== "none" && typeof asset_id === "string" && asset_id.trim() !== "") {
+      const cleanAssetId = asset_id.trim();
+      const targetCompanyId = company_id !== undefined ? (company_id ? Number(company_id) : null) : null;
+      if (isSupabaseConfigured && supabase) {
+        let assetCheck = supabase.from("company_assets").select("id, asset_id").ilike("asset_id", cleanAssetId);
+        if (targetCompanyId) {
+          assetCheck = assetCheck.eq("company_id", targetCompanyId);
+        }
+        const { data: matchedAsset } = await assetCheck;
+        if (!matchedAsset || matchedAsset.length === 0) {
+          return res.status(400).json({ 
+            error: `Asset ID "${cleanAssetId}" does not exist in the sheet. You can only select an Asset ID that exists in the registered asset sheet.` 
+          });
+        }
+        validatedUpdateAssetId = matchedAsset[0].asset_id || cleanAssetId;
+      } else {
+        const matched = db.assets.find(a => 
+          a.asset_id.toLowerCase() === cleanAssetId.toLowerCase() &&
+          (!targetCompanyId || a.company_id === targetCompanyId)
+        );
+        if (!matched) {
+          return res.status(400).json({ 
+            error: `Asset ID "${cleanAssetId}" does not exist in the sheet. You can only select an Asset ID that exists in the registered asset sheet.` 
+          });
+        }
+        validatedUpdateAssetId = matched.asset_id || cleanAssetId;
+      }
+    } else {
+      validatedUpdateAssetId = null;
+    }
+  }
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -1873,7 +2397,11 @@ app.post("/api/tasks/:id/update", async (req, res) => {
         assigned_to: task.assigned_to,
         status: task.status,
         remarks: task.remarks,
-        materials_carried: task.materials_carried
+        materials_carried: task.materials_carried,
+        contract_type: task.contract_type,
+        company_id: task.company_id,
+        company_name: task.company_name,
+        asset_id: task.asset_id
       };
 
       const updatedFields: any = {
@@ -1884,7 +2412,11 @@ app.post("/api/tasks/:id/update", async (req, res) => {
         assigned_to: assigned_to !== undefined ? Number(assigned_to) : task.assigned_to,
         status: status !== undefined ? status : task.status,
         remarks: remarks !== undefined ? remarks : task.remarks,
-        materials_carried: materials_carried !== undefined ? materials_carried : task.materials_carried
+        materials_carried: materials_carried !== undefined ? materials_carried : task.materials_carried,
+        contract_type: contract_type !== undefined ? contract_type : task.contract_type,
+        company_id: company_id !== undefined ? (company_id ? Number(company_id) : null) : task.company_id,
+        company_name: company_name !== undefined ? company_name : task.company_name,
+        asset_id: validatedUpdateAssetId !== undefined ? validatedUpdateAssetId : task.asset_id
       };
 
       // Construct history if edited_by is provided
@@ -1947,7 +2479,11 @@ app.post("/api/tasks/:id/update", async (req, res) => {
       assigned_to: task.assigned_to,
       status: task.status,
       remarks: task.remarks,
-      materials_carried: task.materials_carried
+      materials_carried: task.materials_carried,
+      contract_type: task.contract_type,
+      company_id: task.company_id,
+      company_name: task.company_name,
+      asset_id: task.asset_id
     };
 
     const updatedFields = {
@@ -1958,7 +2494,11 @@ app.post("/api/tasks/:id/update", async (req, res) => {
       assigned_to: assigned_to !== undefined ? Number(assigned_to) : task.assigned_to,
       status: status !== undefined ? status : task.status,
       remarks: remarks !== undefined ? remarks : task.remarks,
-      materials_carried: materials_carried !== undefined ? materials_carried : task.materials_carried
+      materials_carried: materials_carried !== undefined ? materials_carried : task.materials_carried,
+      contract_type: contract_type !== undefined ? contract_type : task.contract_type,
+      company_id: company_id !== undefined ? (company_id ? Number(company_id) : null) : task.company_id,
+      company_name: company_name !== undefined ? company_name : task.company_name,
+      asset_id: validatedUpdateAssetId !== undefined ? validatedUpdateAssetId : task.asset_id
     };
 
     // Construct history if edited_by is provided
@@ -2147,9 +2687,9 @@ app.get("/api/todos", async (req, res) => {
         const creator = employees.find(e => e.id === todo.created_by);
         const created_by_name = creator ? creator.name : (todo.created_by_name || "System Admin");
         const savedPriority = todo.priority || "";
-        const created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority === "Accounts")
+        const created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority.startsWith("Accounts") || savedPriority.startsWith("Employee"))
           ? savedPriority
-          : (creator ? creator.role : "Admin");
+          : (creator ? creator.role : "Employee");
 
         return {
           id: todo.id,
@@ -2177,6 +2717,48 @@ app.get("/api/todos", async (req, res) => {
   res.json(todos);
 });
 
+// REORDER TODOS
+app.post("/api/todos/reorder", async (req, res) => {
+  const { orderedIds, updatedTodo } = req.body;
+  if (!Array.isArray(orderedIds)) {
+    return res.status(400).json({ error: "Invalid orderedIds array" });
+  }
+
+  try {
+    if (db.todos && Array.isArray(db.todos)) {
+      if (updatedTodo && updatedTodo.id && updatedTodo.created_by_role) {
+        const item = db.todos.find(t => t.id === updatedTodo.id);
+        if (item) {
+          item.created_by_role = updatedTodo.created_by_role;
+        }
+      }
+
+      const idMap = new Map<number, number>();
+      orderedIds.forEach((id, index) => idMap.set(Number(id), index));
+
+      db.todos.sort((a, b) => {
+        const idxA = idMap.has(a.id) ? idMap.get(a.id)! : 999999;
+        const idxB = idMap.has(b.id) ? idMap.get(b.id)! : 999999;
+        return idxA - idxB;
+      });
+
+      saveDb();
+    }
+
+    if (isSupabaseConfigured && supabase && updatedTodo && updatedTodo.id && updatedTodo.created_by_role) {
+      await supabase
+        .from("todo")
+        .update({ priority: updatedTodo.created_by_role })
+        .eq("id", updatedTodo.id);
+    }
+
+    return res.json({ message: "To-Dos reordered successfully." });
+  } catch (err: any) {
+    console.error("Failed to reorder todos:", err);
+    return res.status(500).json({ error: "Failed to reorder todos" });
+  }
+});
+
 // CREATE A NEW TODO
 app.post("/api/todos", async (req, res) => {
   const { title, description, created_by_name, created_by_role } = req.body;
@@ -2201,7 +2783,7 @@ app.post("/api/todos", async (req, res) => {
         title,
         details: description,
         priority: created_by_role, // Save the role with assignment target in priority column
-        status: "Assigned",
+        status: "pending",
         created_by,
         created_at: new Date().toISOString()
       };
@@ -2215,7 +2797,7 @@ app.post("/api/todos", async (req, res) => {
       const insertedTodo = insertedRows && insertedRows[0];
       if (!insertedTodo) throw new Error("No data returned from insert.");
 
-      const query = `INSERT INTO todo (id, title, details, priority, status, created_at, created_by)\nVALUES (${nextId}, '${title.replace(/'/g, "''")}', '${description.replace(/'/g, "''")}', '${created_by_role}', 'Assigned', '${newTodoData.created_at}', ${created_by || 'NULL'});`;
+      const query = `INSERT INTO todo (id, title, details, priority, status, created_at, created_by)\nVALUES (${nextId}, '${title.replace(/'/g, "''")}', '${description.replace(/'/g, "''")}', '${created_by_role}', 'pending', '${newTodoData.created_at}', ${created_by || 'NULL'});`;
       logSQL(query, 1);
 
       return res.json({
@@ -2299,10 +2881,22 @@ app.post("/api/todos/:id/update", async (req, res) => {
         return res.status(403).json({ error: "Description cannot be edited while status is Finished. Change status to Assigned first." });
       }
 
+      let dbStatusVal = status !== undefined ? status : todo.status;
+      if (dbStatusVal && typeof dbStatusVal === "string") {
+        const lower = dbStatusVal.toLowerCase();
+        if (lower === "assigned" || lower === "pending") {
+          dbStatusVal = "pending";
+        } else if (lower === "finished" || lower === "completed") {
+          dbStatusVal = "finished";
+        } else if (lower === "deleted") {
+          dbStatusVal = "deleted";
+        }
+      }
+
       const updatedFields: any = {
         title: title !== undefined ? title : todo.title,
         details: description !== undefined ? description : todo.details,
-        status: status !== undefined ? status : todo.status,
+        status: dbStatusVal,
         remarks: remarks !== undefined ? remarks : todo.remarks,
         updated_at: new Date().toISOString()
       };
@@ -2311,10 +2905,18 @@ app.post("/api/todos/:id/update", async (req, res) => {
         updatedFields.priority = new_created_by_role;
       }
 
+      const getNormStatus = (s: string) => {
+        if (!s) return "pending";
+        const l = s.toLowerCase();
+        if (l === "finished" || l === "completed") return "finished";
+        if (l === "deleted") return "deleted";
+        return "pending";
+      };
+
       const hasChanges = 
         beforeState.title !== updatedFields.title ||
         beforeState.description !== (description !== undefined ? description : beforeState.description) ||
-        beforeState.status !== updatedFields.status ||
+        getNormStatus(beforeState.status) !== getNormStatus(updatedFields.status) ||
         beforeState.remarks !== updatedFields.remarks;
 
       const { data: emps } = await supabase.from("employees").select("*");
@@ -2416,7 +3018,7 @@ app.post("/api/todos/:id/update", async (req, res) => {
       const creator = employees.find(e => e.id === todo.created_by);
       const created_by_name = creator ? creator.name : "System Admin";
       const savedPriority = todo.priority || "";
-      const created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority === "Accounts")
+      const created_by_role = (savedPriority.includes("|for:") || savedPriority === "Admin" || savedPriority === "Manager" || savedPriority === "Accounts" || savedPriority === "Accounts Dept" || savedPriority === "Employee")
         ? savedPriority
         : (creator ? creator.role : "Admin");
 
@@ -2473,10 +3075,22 @@ app.post("/api/todos/:id/update", async (req, res) => {
     return res.status(403).json({ error: "Description cannot be edited while status is Finished. Change status to Assigned first." });
   }
 
+  let dbStatusVal = status !== undefined ? status : todo.status;
+  if (dbStatusVal && typeof dbStatusVal === "string") {
+    const lower = dbStatusVal.toLowerCase();
+    if (lower === "assigned" || lower === "pending") {
+      dbStatusVal = "pending";
+    } else if (lower === "finished" || lower === "completed") {
+      dbStatusVal = "finished";
+    } else if (lower === "deleted") {
+      dbStatusVal = "deleted";
+    }
+  }
+
   const updatedFields: any = {
     title: title !== undefined ? title : todo.title,
     description: description !== undefined ? description : todo.description,
-    status: status !== undefined ? status : todo.status,
+    status: dbStatusVal,
     remarks: remarks !== undefined ? remarks : todo.remarks
   };
 
@@ -2484,10 +3098,18 @@ app.post("/api/todos/:id/update", async (req, res) => {
     updatedFields.created_by_role = new_created_by_role;
   }
 
+  const getNormStatus = (s: string) => {
+    if (!s) return "pending";
+    const l = s.toLowerCase();
+    if (l === "finished" || l === "completed") return "finished";
+    if (l === "deleted") return "deleted";
+    return "pending";
+  };
+
   const hasChanges = 
     beforeState.title !== updatedFields.title ||
     beforeState.description !== updatedFields.description ||
-    beforeState.status !== updatedFields.status ||
+    getNormStatus(beforeState.status) !== getNormStatus(updatedFields.status) ||
     beforeState.remarks !== updatedFields.remarks;
 
   if (edited_by && hasChanges) {
@@ -2528,7 +3150,7 @@ app.delete("/api/todos/:id", async (req, res) => {
           status: data.status || "Assigned",
           created_at: data.created_at || new Date().toISOString(),
           created_by_name: data.created_by_name || "System Admin",
-          created_by_role: data.created_by_role || "Accounts",
+          created_by_role: data.created_by_role || "Employee",
           remarks: data.remarks || ""
         };
       }
@@ -2589,6 +3211,188 @@ app.delete("/api/todos/:id", async (req, res) => {
 app.get("/api/todos/deleted", (req, res) => {
   const deletedTodos = db.deletedTodos || [];
   res.json(deletedTodos);
+});
+
+// FETCH ALL ATTENDANCE RECORDS OR FILTER BY EMPLOYEE
+app.get("/api/attendance", async (req, res) => {
+  const empIdParam = req.query.employee_id;
+  const filterEmpId = empIdParam ? Number(empIdParam) : null;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      let query = supabase.from("attendance").select("*");
+      if (filterEmpId) {
+        query = query.eq("employee_id", filterEmpId);
+      }
+      const { data: records, error } = await query.order("date", { ascending: false });
+      if (error) {
+        if (error.code === "42P01" || (error.message && error.message.includes("does not exist"))) {
+          console.warn("ℹ️ Supabase 'attendance' table is not created yet. Using local database fallback.");
+        } else {
+          console.error("Failed to fetch attendance from Supabase:", error);
+        }
+      } else {
+        return res.json(records || []);
+      }
+    } catch (e: any) {
+      console.error("Exception fetching attendance from Supabase:", e);
+    }
+  }
+
+  // Local DB fallback
+  let records = db.attendance || [];
+  if (filterEmpId) {
+    records = records.filter(r => r.employee_id === filterEmpId);
+  }
+  const sortedRecords = [...records].sort((a, b) => b.date.localeCompare(a.date));
+  res.json(sortedRecords);
+});
+
+// PUNCH IN OR PUNCH OUT (Day-based single record per employee per day)
+app.post("/api/attendance", async (req, res) => {
+  const { employee_id, employee_name, employee_role, type, location_coords } = req.body;
+
+  if (!employee_id || !employee_name || !employee_role || !type) {
+    return res.status(400).json({ error: "Missing required attendance parameters." });
+  }
+
+  const timestamp = new Date().toISOString();
+  const coords = location_coords || "Unknown";
+  const dateStr = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Kolkata" });
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      // 1. Check if a record already exists for this employee and date
+      const { data: existing, error: fetchErr } = await supabase
+        .from("attendance")
+        .select("*")
+        .eq("employee_id", Number(employee_id))
+        .eq("date", dateStr)
+        .maybeSingle();
+
+      if (fetchErr) throw fetchErr;
+
+      if (existing) {
+        // Update existing record
+        const updates: any = {};
+        if (type === "In") {
+          updates.in_time = timestamp;
+          updates.in_location_coords = coords;
+        } else {
+          updates.out_time = timestamp;
+          updates.out_location_coords = coords;
+        }
+
+        const { data: updated, error: updateErr } = await supabase
+          .from("attendance")
+          .update(updates)
+          .eq("id", existing.id)
+          .select()
+          .single();
+
+        if (updateErr) throw updateErr;
+
+        const updateQuery = `UPDATE attendance \nSET ${type === "In" ? `in_time = '${timestamp}', in_location_coords = '${coords.replace(/'/g, "''")}'` : `out_time = '${timestamp}', out_location_coords = '${coords.replace(/'/g, "''")}'`} \nWHERE id = ${existing.id};`;
+        logSQL(updateQuery, 1);
+
+        return res.json(updated);
+      } else {
+        // Create new record
+        const insertObj: any = {
+          employee_id: Number(employee_id),
+          employee_name,
+          employee_role,
+          date: dateStr,
+          in_time: type === "In" ? timestamp : null,
+          in_location_coords: type === "In" ? coords : null,
+          out_time: type === "Out" ? timestamp : null,
+          out_location_coords: type === "Out" ? coords : null
+        };
+
+        const { data: inserted, error: insertErr } = await supabase
+          .from("attendance")
+          .insert(insertObj)
+          .select()
+          .single();
+
+        if (insertErr) throw insertErr;
+
+        const insertQuery = `INSERT INTO attendance (employee_id, employee_name, employee_role, date, in_time, in_location_coords, out_time, out_location_coords)\nVALUES (${employee_id}, '${employee_name.replace(/'/g, "''")}', '${employee_role.replace(/'/g, "''")}', '${dateStr}', ${type === "In" ? `'${timestamp}'` : "NULL"}, ${type === "In" ? `'${coords.replace(/'/g, "''")}'` : "NULL"}, ${type === "Out" ? `'${timestamp}'` : "NULL"}, ${type === "Out" ? `'${coords.replace(/'/g, "''")}'` : "NULL"});`;
+        logSQL(insertQuery, 1);
+
+        return res.json(inserted);
+      }
+    } catch (e: any) {
+      return res.status(500).json({ error: translateSupabaseError(e, "attendance") });
+    }
+  }
+
+  // Local JSON fallback
+  db.attendance = db.attendance || [];
+  const existingIndex = db.attendance.findIndex(
+    r => r.employee_id === Number(employee_id) && r.date === dateStr
+  );
+
+  if (existingIndex !== -1) {
+    const existing = db.attendance[existingIndex];
+    if (type === "In") {
+      existing.in_time = timestamp;
+      existing.in_location_coords = coords;
+    } else {
+      existing.out_time = timestamp;
+      existing.out_location_coords = coords;
+    }
+    saveDb();
+
+    const updateQuery = `UPDATE attendance \nSET ${type === "In" ? `in_time = '${timestamp}', in_location_coords = '${coords.replace(/'/g, "''")}'` : `out_time = '${timestamp}', out_location_coords = '${coords.replace(/'/g, "''")}'`} \nWHERE id = ${existing.id};`;
+    logSQL(updateQuery, 1);
+
+    res.json(existing);
+  } else {
+    const nextId = db.nextAttendanceId || (db.attendance.length > 0 ? Math.max(...db.attendance.map(a => a.id)) + 1 : 1);
+    db.nextAttendanceId = nextId + 1;
+
+    const newRecord = {
+      id: nextId,
+      employee_id: Number(employee_id),
+      employee_name,
+      employee_role,
+      date: dateStr,
+      in_time: type === "In" ? timestamp : null,
+      in_location_coords: type === "In" ? coords : null,
+      out_time: type === "Out" ? timestamp : null,
+      out_location_coords: type === "Out" ? coords : null
+    };
+
+    db.attendance.push(newRecord);
+    saveDb();
+
+    const insertQuery = `INSERT INTO attendance (id, employee_id, employee_name, employee_role, date, in_time, in_location_coords, out_time, out_location_coords)\nVALUES (${nextId}, ${employee_id}, '${employee_name.replace(/'/g, "''")}', '${employee_role.replace(/'/g, "''")}', '${dateStr}', ${type === "In" ? `'${timestamp}'` : "NULL"}, ${type === "In" ? `'${coords.replace(/'/g, "''")}'` : "NULL"}, ${type === "Out" ? `'${timestamp}'` : "NULL"}, ${type === "Out" ? `'${coords.replace(/'/g, "''")}'` : "NULL"});`;
+    logSQL(insertQuery, 1);
+
+    res.json(newRecord);
+  }
+});
+
+// RESET / DELETE ALL ATTENDANCE RECORDS
+app.delete("/api/attendance", async (req, res) => {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { error } = await supabase.from("attendance").delete().not("id", "is", null);
+      if (error) {
+        console.warn("Supabase attendance delete warning:", error.message);
+      } else {
+        logSQL("DELETE FROM attendance;", 1);
+      }
+    } catch (e: any) {
+      console.warn("Exception deleting attendance from Supabase:", e.message);
+    }
+  }
+
+  db.attendance = [];
+  saveDb();
+  logSQL("TRUNCATE TABLE attendance;", 1);
+  return res.json({ success: true, message: "All attendance records reset successfully." });
 });
 
 // Fetch Offline travels
@@ -3062,6 +3866,7 @@ app.post("/api/sql/reset", async (req, res) => {
       await supabase.from("offline_travels").delete().neq("id", 0);
       await supabase.from("tasks").delete().neq("id", 0);
       await supabase.from("employees").delete().neq("id", 0);
+      await supabase.from("attendance").delete().not("id", "is", null);
       await supabase.from("settings").delete().neq("key", "");
 
       // re-seed values
@@ -3113,12 +3918,13 @@ app.post("/api/sql/clear", async (req, res) => {
       await supabase.from("employees").delete().not("id", "is", null);
       await supabase.from("todos_history").delete().not("id", "is", null);
       await supabase.from("todo").delete().not("id", "is", null);
+      await supabase.from("attendance").delete().not("id", "is", null);
 
-      logSQL("DELETE FROM tasks;\nDELETE FROM employees;\nDELETE FROM sql_logs;\nDELETE FROM todos_history;\nDELETE FROM todo;", 0);
+      logSQL("DELETE FROM tasks;\nDELETE FROM employees;\nDELETE FROM sql_logs;\nDELETE FROM todos_history;\nDELETE FROM todo;\nDELETE FROM attendance;", 0);
 
       return res.json({
-        message: "All tasks, engineers, logs, and to-dos have been successfully removed from your Supabase database.",
-        data: { employees: [], tasks: [] }
+        message: "All tasks, engineers, logs, to-dos, and attendance records have been successfully removed from your Supabase database.",
+        data: { employees: [], tasks: [], attendance: [] }
       });
     } catch (e: any) {
       return res.status(500).json({ error: translateSupabaseError(e, "database") });
@@ -3127,11 +3933,13 @@ app.post("/api/sql/clear", async (req, res) => {
     db.employees = [];
     db.tasks = [];
     db.todos = [];
+    db.attendance = [];
     db.nextTaskId = 1001;
     db.nextTodoId = 101;
+    db.nextAttendanceId = 1;
     saveDb();
-    logSQL("DELETE FROM tasks;\nDELETE FROM employees;\nDELETE FROM todos;", 0);
-    res.json({ message: "All tasks, engineers, and to-do tasks have been successfully removed from the database.", data: db });
+    logSQL("DELETE FROM tasks;\nDELETE FROM employees;\nDELETE FROM todos;\nDELETE FROM attendance;", 0);
+    res.json({ message: "All tasks, engineers, to-do tasks, and attendance records have been successfully removed from the database.", data: db });
   }
 });
 

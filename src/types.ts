@@ -28,6 +28,10 @@ export interface TaskHistoryEntry {
     remarks?: string | null;
     materials_carried?: string | null;
     status?: string;
+    contract_type?: string;
+    company_id?: number | null;
+    company_name?: string | null;
+    asset_id?: string | null;
   };
   after: {
     customer_name: string;
@@ -39,6 +43,10 @@ export interface TaskHistoryEntry {
     remarks?: string | null;
     materials_carried?: string | null;
     status?: string;
+    contract_type?: string;
+    company_id?: number | null;
+    company_name?: string | null;
+    asset_id?: string | null;
   };
 }
 
@@ -60,6 +68,10 @@ export interface Task {
   km_travelled?: number;
   materials_carried?: string | null;
   history?: TaskHistoryEntry[];
+  contract_type?: "AMC" | "Non AMC" | string;
+  company_id?: number | null;
+  company_name?: string | null;
+  asset_id?: string | null;
 }
 
 export interface TodoTaskHistoryEntry {
@@ -119,34 +131,40 @@ export interface Company {
   name: string;
   type: "AMC" | "Non AMC";
   created_at: string;
+  by_user?: string; // Backwards compatible optional property
   created_by: string;
+  allocated_engineer_id?: number | null;
+  allocated_engineer_name?: string | null;
 }
 
 export interface CompanyAsset {
   id: number;
   company_id: number;
-  asset: string;
-  asset_id: string;
   location: string;
-  department: string;
-  monitor: string;
+  asset_id: string;
+  asset: string;
   employee_name: string;
   comp_name: string;
-  model_no: string;
-  configured_os: string;
-  os_key: string;
-  ms_office: string;
-  office_key: string;
-  other_app: string;
-  serial: string;
-  lan_ip: string;
-  mac_ip: string;
-  wifi_mac_ip: string;
-  antivirus_key: string;
-  key_val: string;
-  validity: string;
-  remarks: string;
-  created_at: string;
+  model_no: string; // Make/Model
+  serial_no?: string;
+  config_processor: string;
+  config_ram: string;
+  config_storage: string;
+  os: string;
+  os_key?: string;
+  os_type?: string;
+  office: string;
+  office_key?: string;
+  office_type?: string;
+  lan_mac?: string;
+  wan_mac?: string;
+  ip_address: string;
+  antivirus?: string;
+  antivirus_key?: string;
+  validity?: string;
+  status?: string;
+  amc_status?: "In AMC" | "Not in AMC";
+  created_at?: string;
 }
 
 export function isTargetMatch(targetRaw: string, userNameRaw: string, userEmailRaw?: string): boolean {

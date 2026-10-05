@@ -2,11 +2,13 @@ import React, { useState, useEffect } from "react";
 import { 
   CheckCircle, Clock, AlertTriangle, Phone, Mail, 
   X, Cpu, Calendar, CheckSquare, MessageSquare, ArrowRight, Play, Check, Navigation, Package,
-  User, ShieldAlert, ChevronLeft, ChevronRight, Menu, AlertCircle, Settings, Building
+  User, ShieldAlert, ChevronLeft, ChevronRight, Menu, AlertCircle, Settings, Building,
+  Shield, Laptop, Search
 } from "lucide-react";
 import EmployeeTravelSection from "./EmployeeTravelSection";
 import { Task, Employee, Company, CompanyAsset } from "../types";
 import CompanySection from "./CompanySection";
+import AttendanceSection from "./AttendanceSection";
 
 interface EmployeeDashboardProps {
   currentEmployee: { id: number; name: string; role: string };
@@ -21,8 +23,8 @@ interface EmployeeDashboardProps {
   onUpdatePassword?: (employeeId: number, newPassword: string) => Promise<void>;
   onUpdateMaterials?: (taskId: number, materials: string | null) => Promise<void>;
   onUpdateProfile?: (employeeId: number, profileData: Partial<Employee>) => Promise<void>;
-  activeTab?: "active" | "completed" | "travel" | "profile" | "companies";
-  onTabChange?: (tab: "active" | "completed" | "travel" | "profile" | "companies") => void;
+  activeTab?: "active" | "completed" | "travel" | "profile" | "attendance" | "companies";
+  onTabChange?: (tab: "active" | "completed" | "travel" | "profile" | "attendance" | "companies") => void;
 }
 
 export default function EmployeeDashboard({
@@ -49,7 +51,7 @@ export default function EmployeeDashboard({
   const [showRemarksInput, setShowRemarksInput] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "companies">("active");
+  const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "attendance" | "companies">("active");
   const activeTab = propsActiveTab !== undefined ? propsActiveTab : internalActiveTab;
   const setActiveTab = onTabChange !== undefined ? onTabChange : setInternalActiveTab;
 
@@ -86,33 +88,21 @@ export default function EmployeeDashboard({
   const fullEmployeeInfo = employees.find(e => e.id === currentEmployee.id) || currentEmployee;
 
   const [profPhone, setProfPhone] = useState("");
-  const [profSkills, setProfSkills] = useState("");
-  const [profExperience, setProfExperience] = useState("");
   const [profBloodGroup, setProfBloodGroup] = useState("");
   const [profEmergencyContact, setProfEmergencyContact] = useState("");
-  const [profAddress, setProfAddress] = useState("");
-  const [profNotes, setProfNotes] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
 
   useEffect(() => {
     if (fullEmployeeInfo) {
       setProfPhone((fullEmployeeInfo as any).phone || "");
-      setProfSkills((fullEmployeeInfo as any).skills || "");
-      setProfExperience((fullEmployeeInfo as any).experience || "");
       setProfBloodGroup((fullEmployeeInfo as any).blood_group || "");
       setProfEmergencyContact((fullEmployeeInfo as any).emergency_contact || "");
-      setProfAddress((fullEmployeeInfo as any).address || "");
-      setProfNotes((fullEmployeeInfo as any).notes || "");
     }
   }, [
     fullEmployeeInfo.id,
     (fullEmployeeInfo as any).phone,
-    (fullEmployeeInfo as any).skills,
-    (fullEmployeeInfo as any).experience,
     (fullEmployeeInfo as any).blood_group,
-    (fullEmployeeInfo as any).emergency_contact,
-    (fullEmployeeInfo as any).address,
-    (fullEmployeeInfo as any).notes
+    (fullEmployeeInfo as any).emergency_contact
   ]);
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
@@ -123,12 +113,8 @@ export default function EmployeeDashboard({
     try {
       await onUpdateProfile(currentEmployee.id, {
         phone: profPhone.trim() || null,
-        skills: profSkills.trim() || null,
-        experience: profExperience.trim() || null,
         blood_group: profBloodGroup.trim() || null,
-        emergency_contact: profEmergencyContact.trim() || null,
-        address: profAddress.trim() || null,
-        notes: profNotes.trim() || null
+        emergency_contact: profEmergencyContact.trim() || null
       });
       alert("Your profile details have been updated successfully!");
     } catch (err: any) {
@@ -191,22 +177,58 @@ export default function EmployeeDashboard({
     }
   };
 
+  // Search and AMC / Non-AMC classification filters
+  const [empSearchQuery, setEmpSearchQuery] = useState("");
+  const [empContractFilter, setEmpContractFilter] = useState<"All" | "AMC" | "Non AMC">("All");
+
   // Filtered lists
   const filteredActiveMyTasks = React.useMemo(() => {
     return activeMyTasks.filter(task => {
-      if (empTaskSelectedMonth === "All") return true;
-      const dateStr = task.assigned_at || task.accepted_at;
-      return dateStr && dateStr.startsWith(empTaskSelectedMonth);
+      if (empTaskSelectedMonth !== "All") {
+        const dateStr = task.assigned_at || task.accepted_at;
+        if (!dateStr || !dateStr.startsWith(empTaskSelectedMonth)) return false;
+      }
+      if (empContractFilter !== "All") {
+        const cType = task.contract_type || "AMC";
+        if (cType !== empContractFilter) return false;
+      }
+      if (empSearchQuery.trim()) {
+        const q = empSearchQuery.toLowerCase();
+        const m1 = task.customer_name?.toLowerCase().includes(q);
+        const m2 = task.company_name?.toLowerCase().includes(q);
+        const m3 = task.asset_id?.toLowerCase().includes(q);
+        const m4 = task.problem_reported?.toLowerCase().includes(q);
+        const m5 = task.address?.toLowerCase().includes(q);
+        const m6 = String(task.id).includes(q);
+        if (!m1 && !m2 && !m3 && !m4 && !m5 && !m6) return false;
+      }
+      return true;
     });
-  }, [activeMyTasks, empTaskSelectedMonth]);
+  }, [activeMyTasks, empTaskSelectedMonth, empContractFilter, empSearchQuery]);
 
   const filteredCompletedMyTasks = React.useMemo(() => {
     return completedMyTasks.filter(task => {
-      if (empTaskSelectedMonth === "All") return true;
-      const dateStr = task.finished_at || task.assigned_at;
-      return dateStr && dateStr.startsWith(empTaskSelectedMonth);
+      if (empTaskSelectedMonth !== "All") {
+        const dateStr = task.finished_at || task.assigned_at;
+        if (!dateStr || !dateStr.startsWith(empTaskSelectedMonth)) return false;
+      }
+      if (empContractFilter !== "All") {
+        const cType = task.contract_type || "AMC";
+        if (cType !== empContractFilter) return false;
+      }
+      if (empSearchQuery.trim()) {
+        const q = empSearchQuery.toLowerCase();
+        const m1 = task.customer_name?.toLowerCase().includes(q);
+        const m2 = task.company_name?.toLowerCase().includes(q);
+        const m3 = task.asset_id?.toLowerCase().includes(q);
+        const m4 = task.problem_reported?.toLowerCase().includes(q);
+        const m5 = task.address?.toLowerCase().includes(q);
+        const m6 = String(task.id).includes(q);
+        if (!m1 && !m2 && !m3 && !m4 && !m5 && !m6) return false;
+      }
+      return true;
     });
-  }, [completedMyTasks, empTaskSelectedMonth]);
+  }, [completedMyTasks, empTaskSelectedMonth, empContractFilter, empSearchQuery]);
 
   const displayedMyTasks = React.useMemo(() => {
     const currentList = activeTab === "active" ? filteredActiveMyTasks : filteredCompletedMyTasks;
@@ -380,6 +402,19 @@ export default function EmployeeDashboard({
 
           <button
             type="button"
+            onClick={() => setActiveTab("attendance")}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
+              activeTab === "attendance"
+                ? "bg-amber-50 text-amber-805 border border-amber-100 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <Clock className="h-4 w-4 text-amber-605 shrink-0" />
+            {!isSidebarCollapsed && <span className="font-sans">Punch Attendance</span>}
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("travel")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
               activeTab === "travel"
@@ -396,11 +431,11 @@ export default function EmployeeDashboard({
             onClick={() => setActiveTab("companies")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
               activeTab === "companies"
-                ? "bg-blue-50 text-blue-850 border border-blue-100 font-extrabold shadow-2xs"
+                ? "bg-indigo-50 text-indigo-800 border border-indigo-100 font-extrabold shadow-2xs"
                 : "text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
             }`}
           >
-            <Building className="h-4 w-4 text-blue-600 shrink-0" />
+            <Building className="h-4 w-4 text-indigo-600 shrink-0" />
             {!isSidebarCollapsed && <span className="font-sans">Company Assets</span>}
           </button>
 
@@ -413,7 +448,7 @@ export default function EmployeeDashboard({
                 : "text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
             }`}
           >
-            <Settings className="h-4 w-4 text-indigo-600 shrink-0" />
+            <Settings className="h-4 w-4 text-indigo-650 shrink-0" />
             {!isSidebarCollapsed && <span className="font-sans">Settings</span>}
           </button>
         </nav>
@@ -441,11 +476,6 @@ export default function EmployeeDashboard({
           <div className="border-b border-slate-100 pb-4 flex justify-between items-center flex-wrap gap-2">
             <div>
               <h3 className="text-lg font-display font-bold text-slate-800">My Professional Identity</h3>
-              <p className="text-xs text-slate-500 font-medium">View and update your personal and technical details for the dispatch roster.</p>
-            </div>
-            <div className="bg-indigo-50 border border-indigo-100/50 text-indigo-700 font-bold px-3 py-1 rounded-xl text-xs flex items-center gap-1">
-              <span className="h-2 w-2 bg-indigo-600 rounded-full animate-ping" />
-              <span>Staff ID: #{fullEmployeeInfo.id}</span>
             </div>
           </div>
 
@@ -528,59 +558,10 @@ export default function EmployeeDashboard({
                 />
               </div>
 
-              {/* Technical Skills Tag / Line (Editable) */}
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Technical Specializations & Certifications</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Cisco CCNA, Hardware Repair, Linux Server Admin, Liquid Cooling"
-                  value={profSkills}
-                  onChange={(e) => setProfSkills(e.target.value)}
-                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all"
-                />
-              </div>
 
-              {/* Prior Professional Experience (Editable) */}
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Professional Experience Context</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 5+ years in Field Support, previously at Dell Hardware Support"
-                  value={profExperience}
-                  onChange={(e) => setProfExperience(e.target.value)}
-                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all"
-                />
-              </div>
-
-              {/* Contact Address (Editable) */}
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Residential Address</label>
-                <textarea
-                  placeholder="Enter your current billing or residential address..."
-                  value={profAddress}
-                  onChange={(e) => setProfAddress(e.target.value)}
-                  rows={2}
-                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 p-3 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all resize-none"
-                />
-              </div>
-
-              {/* Bio/Notes (Editable) */}
-              <div className="md:col-span-2">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Internal Professional Bio / Notes</label>
-                <textarea
-                  placeholder="Write a brief statement or note about your availability, diagnostic domains, or tools inventory..."
-                  value={profNotes}
-                  onChange={(e) => setProfNotes(e.target.value)}
-                  rows={3}
-                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 p-3 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all resize-none"
-                />
-              </div>
             </div>
 
-            <div className="flex justify-between items-center pt-2 border-t border-slate-100 flex-wrap gap-2 text-slate-800">
-              <span className="text-[10px] text-slate-400 font-mono italic font-medium">
-                All saved metadata becomes immediately visible under Admin Directory dashboards.
-              </span>
+            <div className="flex justify-end items-center pt-2 border-t border-slate-100 flex-wrap gap-2 text-slate-800">
               <button
                 type="submit"
                 disabled={profileSaving}
@@ -605,11 +586,7 @@ export default function EmployeeDashboard({
                     <ShieldAlert className="h-4 w-4 text-emerald-600 animate-pulse" />
                     Workstation Security & Login Details
                   </h4>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Maintain separate, secure, and confidential credentials for PATS portal dispatch access.</p>
                 </div>
-                <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
-                  Encrypted SSL DB
-                </span>
               </div>
 
               <form onSubmit={handleEmpPasswordUpdate} className="flex flex-col sm:flex-row gap-3 items-end">
@@ -637,11 +614,17 @@ export default function EmployeeDashboard({
         </div>
       ) : activeTab === "travel" ? (
         <EmployeeTravelSection myTasks={myTasks} employeeId={currentEmployee.id} petrolPrice={petrolPrice} />
+      ) : activeTab === "attendance" ? (
+        <AttendanceSection 
+          currentUser={{ id: currentEmployee.id, name: currentEmployee.name, role: currentEmployee.role, type: "employee" }}
+          employees={employees}
+        />
       ) : activeTab === "companies" ? (
         <CompanySection
           companies={companies}
           assets={assets}
-          currentUser={{ name: currentEmployee.name, type: "employee", id: currentEmployee.id }}
+          employees={employees}
+          currentUser={{ id: currentEmployee.id, name: currentEmployee.name, role: currentEmployee.role, type: "employee" }}
           onRefresh={async () => {
             if (onSyncCompany) {
               await onSyncCompany();
@@ -650,25 +633,78 @@ export default function EmployeeDashboard({
         />
       ) : (
         <div className="space-y-4">
-          {/* Month Filter and Record Limit row */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 p-3 rounded-2xl text-xs animate-fade-in shadow-2xs">
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 p-1.5 rounded-xl text-xs shrink-0">
-              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Month:</span>
-              <select
-                value={empTaskSelectedMonth}
-                onChange={(e) => setEmpTaskSelectedMonth(e.target.value)}
-                className="bg-white border border-slate-200 text-slate-805 p-1 rounded-md text-[10.5px] font-extrabold focus:outline-none transition-all cursor-pointer font-sans"
-              >
-                <option value="All" className="font-bold">All Months</option>
-                {uniqueEmpTaskMonths.map(m => (
-                  <option key={m} value={m} className="font-bold">{formatEmpMonthKey(m)}</option>
-                ))}
-              </select>
+          {/* Search, Contract Type Filter, Month Filter and Record Limit row */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white border border-slate-200 p-3 rounded-2xl text-xs animate-fade-in shadow-2xs">
+            <div className="flex flex-wrap items-center gap-2 flex-1">
+              {/* Search bar */}
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search company, customer, asset ID, problem..."
+                  value={empSearchQuery}
+                  onChange={(e) => setEmpSearchQuery(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 pl-8 pr-3 py-1.5 rounded-xl text-xs placeholder-slate-400 focus:outline-none focus:border-blue-500 font-sans"
+                />
+              </div>
+
+              {/* AMC / Non-AMC Filter buttons */}
+              <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 p-1 rounded-xl shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setEmpContractFilter("All")}
+                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer ${
+                    empContractFilter === "All"
+                      ? "bg-white text-slate-900 shadow-2xs font-extrabold"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmpContractFilter("AMC")}
+                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    empContractFilter === "AMC"
+                      ? "bg-emerald-600 text-white shadow-2xs font-extrabold"
+                      : "text-emerald-700 hover:bg-emerald-50"
+                  }`}
+                >
+                  <Shield className="h-3 w-3" />
+                  <span>AMC</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEmpContractFilter("Non AMC")}
+                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    empContractFilter === "Non AMC"
+                      ? "bg-amber-600 text-white shadow-2xs font-extrabold"
+                      : "text-amber-700 hover:bg-amber-50"
+                  }`}
+                >
+                  <Building className="h-3 w-3" />
+                  <span>Non-AMC</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0 justify-between lg:justify-end">
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 p-1.5 rounded-xl text-xs">
+                <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Month:</span>
+                <select
+                  value={empTaskSelectedMonth}
+                  onChange={(e) => setEmpTaskSelectedMonth(e.target.value)}
+                  className="bg-white border border-slate-200 text-slate-805 p-1 rounded-md text-[10.5px] font-extrabold focus:outline-none transition-all cursor-pointer font-sans"
+                >
+                  <option value="All" className="font-bold">All Months</option>
+                  {uniqueEmpTaskMonths.map(m => (
+                    <option key={m} value={m} className="font-bold">{formatEmpMonthKey(m)}</option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex items-center gap-2">
-                <span className="text-[9px] font-extrabold uppercase text-slate-500 tracking-wider">Show Limit:</span>
+                <span className="text-[9px] font-extrabold uppercase text-slate-500 tracking-wider">Limit:</span>
                 <div className="flex gap-1">
                   {([5, 10, 20, "All"] as const).map(num => (
                     <button
@@ -686,8 +722,9 @@ export default function EmployeeDashboard({
                   ))}
                 </div>
               </div>
+
               <span className="text-[10px] text-slate-500 font-bold font-mono">
-                Showing {displayedMyTasks.length} tasks
+                {displayedMyTasks.length} task{displayedMyTasks.length === 1 ? "" : "s"}
               </span>
             </div>
           </div>
@@ -712,11 +749,27 @@ export default function EmployeeDashboard({
                 <div className="absolute top-0 right-0 w-16 h-1 bg-slate-100 group-hover:bg-gradient-to-r group-hover:from-blue-600 group-hover:to-indigo-500 transition-all" />
                 
                 <div>
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-3 flex-wrap gap-1.5">
                     <span className="font-mono text-xs text-indigo-600 font-extrabold select-all">
                       #{task.id}
                     </span>
                     <div className="flex flex-wrap items-center gap-1">
+                      {task.contract_type && (
+                        <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide border ${
+                          task.contract_type === "AMC"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}>
+                          {task.contract_type === "AMC" ? <Shield className="h-3 w-3" /> : <Building className="h-3 w-3" />}
+                          {task.contract_type}
+                        </span>
+                      )}
+                      {task.asset_id && (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 px-2 py-0.5 text-[9px] font-mono font-bold text-indigo-700 border border-indigo-200">
+                          <Laptop className="h-3 w-3" />
+                          Asset: #{task.asset_id}
+                        </span>
+                      )}
                       {task.is_priority && (
                         <span className="inline-flex items-center rounded-md bg-rose-50 px-1.5 py-0.5 text-[8.5px] font-extrabold text-rose-700 ring-1 ring-rose-200 uppercase tracking-wide">
                           🚨 Priority
@@ -745,9 +798,33 @@ export default function EmployeeDashboard({
                     </div>
                   </div>
 
+                  {task.company_name && task.company_name !== task.customer_name && (
+                    <div className="text-[10.5px] font-bold text-slate-500 flex items-center gap-1 mb-0.5">
+                      <Building className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="truncate">{task.company_name}</span>
+                    </div>
+                  )}
+
                   <h3 className="font-display font-extrabold text-slate-900 text-sm select-all">
                     {task.customer_name}
                   </h3>
+
+                  {/* Problem Description callout */}
+                  <div className="mt-3 p-3 bg-slate-50 border border-slate-200/80 rounded-xl text-xs space-y-1">
+                    <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 font-mono block">
+                      Problem Reported:
+                    </span>
+                    <p className="text-xs text-slate-700 font-medium line-clamp-2 leading-relaxed select-all" title={task.problem_reported}>
+                      {task.problem_reported}
+                    </p>
+                  </div>
+
+                  {task.address && (
+                    <div className="mt-2.5 flex items-center gap-1.5 text-[10.5px] text-slate-500 font-sans truncate">
+                      <Navigation className="h-3 w-3 text-slate-400 shrink-0" />
+                      <span className="truncate">{task.address}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono">
@@ -793,9 +870,31 @@ export default function EmployeeDashboard({
             {/* Modal Body Scroll */}
             <div className="p-6 overflow-y-auto space-y-5">
               
-              {/* Client General Metadata Context banner */}
-              <div className="space-y-1 bg-slate-50 p-4 border border-slate-200 rounded-xl">
-                <p className="text-[10px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">Client Context Details</p>
+              {/* Client & Contract Context Banner */}
+              <div className="space-y-2 bg-slate-50 p-4 border border-slate-200 rounded-xl font-sans">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <span className="text-[10px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">
+                    Client Context Details
+                  </span>
+                  {selectedTask.contract_type && (
+                    <span className={`px-2.5 py-0.5 text-[10px] font-black uppercase rounded-md tracking-wider border flex items-center gap-1 ${
+                      selectedTask.contract_type === "AMC"
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                        : "bg-amber-50 text-amber-800 border-amber-300"
+                    }`}>
+                      {selectedTask.contract_type === "AMC" ? <Shield className="h-3 w-3 text-emerald-600" /> : <Building className="h-3 w-3 text-amber-600" />}
+                      <span>{selectedTask.contract_type === "AMC" ? "AMC Contract Client" : "Non-AMC Direct Support"}</span>
+                    </span>
+                  )}
+                </div>
+
+                {selectedTask.company_name && selectedTask.company_name !== selectedTask.customer_name && (
+                  <div className="text-xs font-bold text-slate-600 flex items-center gap-1.5 pt-0.5">
+                    <Building className="h-4 w-4 text-slate-400 shrink-0" />
+                    <span>Company: <strong className="text-slate-900 font-extrabold">{selectedTask.company_name}</strong></span>
+                  </div>
+                )}
+
                 <h4 className="text-base font-extrabold text-slate-900 select-all">
                   {selectedTask.customer_name}
                 </h4>
@@ -817,12 +916,98 @@ export default function EmployeeDashboard({
                 </div>
               </div>
 
-              {/* Problem Description */}
-              <div className="space-y-1">
-                <h5 className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-mono">
-                  Fault / Problem Diagnosis
-                </h5>
-                <p className="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200 leading-relaxed select-all">
+              {/* Hardware Asset Technical Specifications Card */}
+              {(() => {
+                const matchedAsset = selectedTask.asset_id ? (
+                  assets.find(a => (selectedTask.company_id ? a.company_id === selectedTask.company_id : true) && a.asset_id?.toLowerCase() === selectedTask.asset_id?.toLowerCase()) ||
+                  assets.find(a => a.asset_id?.toLowerCase() === selectedTask.asset_id?.toLowerCase())
+                ) : null;
+
+                return (
+                  <div className="bg-indigo-50/50 border border-indigo-200/80 rounded-xl p-4 space-y-3 font-sans">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
+                          <Laptop className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-mono uppercase tracking-widest text-indigo-600 font-extrabold block">Hardware Asset Assigned</span>
+                          <h5 className="font-mono text-sm font-black text-indigo-950">
+                            {selectedTask.asset_id ? `Asset ID: #${selectedTask.asset_id}` : "General Support Call (No Asset ID)"}
+                          </h5>
+                        </div>
+                      </div>
+                      {selectedTask.asset_id && (
+                        <span className={`px-2 py-0.5 text-[9.5px] font-black uppercase rounded-md border ${
+                          (matchedAsset?.amc_status || (selectedTask.contract_type === "Non AMC" ? "Not in AMC" : "In AMC")) === "Not in AMC"
+                            ? "bg-amber-100 text-amber-800 border-amber-300"
+                            : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                        }`}>
+                          {matchedAsset?.amc_status || (selectedTask.contract_type === "Non AMC" ? "Not in AMC" : "In AMC")}
+                        </span>
+                      )}
+                    </div>
+
+                    {matchedAsset ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-white/80 border border-indigo-100 p-3 rounded-xl">
+                        <div>
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Device Type / Model</span>
+                          <p className="font-bold text-slate-800">{matchedAsset.asset || "Computer"} - {matchedAsset.model_no || matchedAsset.comp_name || "N/A"}</p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Assigned User / Employee</span>
+                          <p className="font-bold text-slate-800">{matchedAsset.employee_name || "Unassigned"}</p>
+                        </div>
+                        {matchedAsset.location && (
+                          <div>
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Location / Workstation Bay</span>
+                            <p className="font-medium text-slate-700">{matchedAsset.location}</p>
+                          </div>
+                        )}
+                        {matchedAsset.ip_address && (
+                          <div>
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">IP Address</span>
+                            <p className="font-mono text-slate-700">{matchedAsset.ip_address}</p>
+                          </div>
+                        )}
+                        {matchedAsset.os && (
+                          <div>
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Operating System</span>
+                            <p className="font-medium text-slate-700">{matchedAsset.os}</p>
+                          </div>
+                        )}
+                        {(matchedAsset.config_processor || matchedAsset.config_ram) && (
+                          <div>
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Hardware Specs</span>
+                            <p className="font-medium text-slate-700">{[matchedAsset.config_processor, matchedAsset.config_ram, matchedAsset.config_storage].filter(Boolean).join(" / ")}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : selectedTask.asset_id ? (
+                      <div className="bg-white/80 border border-indigo-100 p-3 rounded-xl text-xs">
+                        <p className="text-slate-700 font-medium">
+                          Target Hardware Tag: <strong className="font-mono text-indigo-700 font-bold select-all">#{selectedTask.asset_id}</strong>
+                        </p>
+                        <p className="text-[10.5px] text-slate-400 mt-0.5">Please locate and verify this hardware asset serial or tag on-site with the client.</p>
+                      </div>
+                    ) : (
+                      <div className="bg-white/80 border border-indigo-100 p-2.5 rounded-xl text-xs text-slate-500 italic">
+                        No specific hardware Asset ID was registered for this service ticket.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Problem Reported / Fault Diagnosis Card */}
+              <div className="space-y-1.5 bg-red-50/40 border border-red-200/80 p-4 rounded-xl font-sans">
+                <div className="flex items-center gap-1.5 text-red-700">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">
+                    Reported Problem / Fault Diagnosis
+                  </span>
+                </div>
+                <p className="text-xs text-slate-800 bg-white border border-red-100 p-3.5 rounded-xl leading-relaxed select-all font-medium whitespace-pre-wrap">
                   {selectedTask.problem_reported}
                 </p>
               </div>
@@ -830,7 +1015,7 @@ export default function EmployeeDashboard({
               {/* Task Servicing Location Match */}
               <div className="space-y-1 bg-slate-50 p-4 border border-slate-200 rounded-xl font-sans">
                 <span className="text-[10px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">Customer Location Address</span>
-                <p className="text-xs font-semibold text-slate-800">
+                <p className="text-xs font-semibold text-slate-800 select-all">
                   {selectedTask.address || "N/A - No dispatch address was provided."}
                 </p>
               </div>

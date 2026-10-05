@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { 
-  PlusCircle, Database, Cpu, Terminal, Layers, Users, BarChart4, Sparkles, Fuel, ChevronLeft, ChevronRight, LayoutDashboard, Building
+  PlusCircle, Database, Cpu, Terminal, Layers, Users, BarChart4, Sparkles, Fuel, ChevronLeft, ChevronRight, LayoutDashboard, Building, Clock, Receipt
 } from "lucide-react";
 import { Task, Employee, SqlLog, Company, CompanyAsset } from "../types";
 import TaskManagementSection from "./TaskManagementSection";
 import TodoManagementSection from "./TodoManagementSection";
 import EmployeeManagementSection from "./EmployeeManagementSection";
-import ReportsSection from "./ReportsSection";
+import AttendanceSection from "./AttendanceSection";
 import TravelPetrolSection from "./TravelPetrolSection";
 import DatabaseExplorerSection from "./DatabaseExplorerSection";
 import AnalyticsSection from "./AnalyticsSection";
 import CompanySection from "./CompanySection";
+import BillingSection from "./BillingSection";
 
 interface AdminDashboardProps {
   tasks: Task[];
@@ -23,6 +24,10 @@ interface AdminDashboardProps {
     problem_reported: string;
     assigned_to: number;
     address?: string;
+    contract_type?: string;
+    company_id?: number | null;
+    company_name?: string | null;
+    asset_id?: string | null;
   }) => Promise<void>;
   onResetDb: () => Promise<void>;
   onClearDb: () => Promise<void>;
@@ -31,7 +36,16 @@ interface AdminDashboardProps {
   sqlConsoleActive?: boolean;
   setSqlConsoleActive?: (active: boolean) => void;
   onUpdateRemarks: (taskId: number, remarks: string) => Promise<void>;
-  onUpdateTaskDetails?: (taskId: number, taskData: { customer_name: string; contact_details: string; problem_reported: string; address?: string }) => Promise<void>;
+  onUpdateTaskDetails?: (taskId: number, taskData: { 
+    customer_name: string; 
+    contact_details: string; 
+    problem_reported: string; 
+    address?: string;
+    contract_type?: string;
+    company_id?: number | null;
+    company_name?: string | null;
+    asset_id?: string | null;
+  }) => Promise<void>;
   onTogglePriority?: (taskId: number) => Promise<void>;
   onUpdatePassword?: (employeeId: number, newPassword: string) => Promise<void>;
 }
@@ -53,18 +67,18 @@ export default function AdminDashboard({
   onTogglePriority,
   onUpdatePassword
 }: AdminDashboardProps) {
-  // Master navigation state: "tasks" | "todos" | "employees" | "reports" | "travel" | "database" | "analytics" | "companies"
-  const [activeTab, setActiveTab] = useState<"tasks" | "todos" | "employees" | "reports" | "travel" | "database" | "analytics" | "companies">("tasks");
+  // Master navigation state: "tasks" | "todos" | "employees" | "attendance" | "travel" | "companies" | "database" | "analytics" | "billing"
+  const [activeTab, setActiveTab] = useState<"tasks" | "todos" | "employees" | "attendance" | "travel" | "companies" | "database" | "analytics" | "billing">("tasks");
 
   // Synchronize active tab with the main header SQL trigger
   useEffect(() => {
     if (sqlConsoleActive) {
-      setActiveTab("reports");
+      setActiveTab("database");
     }
   }, [sqlConsoleActive]);
 
   useEffect(() => {
-    if (activeTab !== "reports" && setSqlConsoleActive) {
+    if (activeTab !== "database" && setSqlConsoleActive) {
       setSqlConsoleActive(false);
     }
   }, [activeTab, setSqlConsoleActive]);
@@ -147,15 +161,15 @@ export default function AdminDashboard({
 
           <button
             type="button"
-            onClick={() => setActiveTab("reports")}
+            onClick={() => setActiveTab("attendance")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
-              activeTab === "reports"
+              activeTab === "attendance"
                 ? "bg-teal-50 text-teal-805 border border-teal-120 font-extrabold shadow-2xs"
                 : "text-slate-600 hover:text-slate-805 border border-transparent font-medium hover:bg-slate-50"
             }`}
           >
-            <BarChart4 className="h-4 w-4 text-teal-650 shrink-0" />
-            <span className="font-sans font-bold">Telemetry Reports</span>
+            <Clock className="h-4 w-4 text-teal-650 shrink-0" />
+            <span className="font-sans font-bold">Attendance Hub</span>
           </button>
 
           <button
@@ -167,8 +181,8 @@ export default function AdminDashboard({
                 : "text-slate-600 hover:text-slate-805 border border-transparent font-medium hover:bg-slate-50"
             }`}
           >
-            <LayoutDashboard className="h-4 w-4 text-amber-650 shrink-0" />
-            <span className="font-sans font-bold">Analytics</span>
+            <BarChart4 className="h-4 w-4 text-amber-650 shrink-0" />
+            <span className="font-sans font-bold">Performance Metrics</span>
           </button>
 
           <button
@@ -180,7 +194,7 @@ export default function AdminDashboard({
                 : "text-slate-600 hover:text-slate-850 border border-transparent font-medium hover:bg-slate-50"
             }`}
           >
-            <Fuel className="h-4 w-4 text-emerald-650 shrink-0" />
+            <Fuel className="h-4 w-4 text-emerald-600 shrink-0" />
             <span className="font-sans font-bold">Travel & Fuel Cost</span>
           </button>
 
@@ -209,6 +223,24 @@ export default function AdminDashboard({
             <Database className="h-4 w-4 text-purple-605 shrink-0" />
             <span className="font-sans font-bold">Database Tables</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("billing")}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
+              activeTab === "billing"
+                ? "bg-blue-50 text-blue-800 border border-blue-120 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-850 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <Receipt className="h-4 w-4 text-blue-600 shrink-0" />
+            <span className="font-sans flex items-center justify-between w-full font-bold">
+              <span>Billing</span>
+              <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                {tasks.filter(t => t.status === "Finished").length}
+              </span>
+            </span>
+          </button>
         </nav>
       </aside>
 
@@ -223,11 +255,12 @@ export default function AdminDashboard({
                 {activeTab === "tasks" && "Tasks & Tickets"}
                 {activeTab === "todos" && "To-Do Checklist"}
                 {activeTab === "employees" && "Engineers Hub"}
-                {activeTab === "reports" && "Telemetry Reports"}
-                {activeTab === "analytics" && "Analytics"}
+                {activeTab === "attendance" && "Attendance Registry"}
+                {activeTab === "analytics" && "Performance Metrics"}
                 {activeTab === "travel" && "Travel & Fuel Cost"}
-                {activeTab === "companies" && "Company & Asset Registry"}
+                {activeTab === "companies" && "Companies & Assets Hub"}
                 {activeTab === "database" && "Database Tables"}
+                {activeTab === "billing" && "Billing & Invoicing"}
               </span>
             </h2>
           </div>
@@ -239,6 +272,8 @@ export default function AdminDashboard({
           <TaskManagementSection 
             tasks={tasks}
             employees={employees}
+            companies={companies}
+            assets={assets}
             onAssignTask={onAssignTask}
             refreshLogs={refreshLogs}
             onUpdateRemarks={onUpdateRemarks}
@@ -263,17 +298,25 @@ export default function AdminDashboard({
           />
         )}
 
-        {activeTab === "reports" && (
-          <ReportsSection 
-            tasks={tasks}
+        {activeTab === "attendance" && (
+          <AttendanceSection 
+            currentUser={{ name: "Admin", role: "Admin", type: "admin" }}
             employees={employees}
-            refreshLogs={refreshLogs}
-            onResetDb={onResetDb}
-            onClearDb={onClearDb}
           />
         )}
         {activeTab === "travel" && (
           <TravelPetrolSection />
+        )}
+        {activeTab === "companies" && (
+          <CompanySection
+            companies={companies}
+            assets={assets}
+            employees={employees}
+            currentUser={{ name: "Admin", role: "Admin", type: "admin" }}
+            onRefresh={async () => {
+              refreshLogs();
+            }}
+          />
         )}
         {activeTab === "database" && (
           <DatabaseExplorerSection 
@@ -287,14 +330,10 @@ export default function AdminDashboard({
             employees={employees}
           />
         )}
-        {activeTab === "companies" && (
-          <CompanySection
-            companies={companies}
-            assets={assets}
-            currentUser={{ name: "Admin Dashboard", type: "admin" }}
-            onRefresh={async () => {
-              refreshLogs();
-            }}
+        {activeTab === "billing" && (
+          <BillingSection
+            tasks={tasks}
+            refreshLogs={refreshLogs}
           />
         )}
       </div>

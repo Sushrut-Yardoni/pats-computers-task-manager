@@ -1,28 +1,45 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { 
-  PlusCircle, Search, Cpu, Clock, CheckCircle2, ShieldCheck, Layers, Phone, Mail, X, ArrowRight, Calendar, BookmarkCheck, AlertCircle, Package, Trash2
+  PlusCircle, Search, Cpu, Clock, CheckCircle2, ShieldCheck, Layers, Phone, Mail, X, ArrowRight, Calendar, BookmarkCheck, AlertCircle, Package, Trash2, Building, Shield, Laptop, Check
 } from "lucide-react";
-import { Task, Employee } from "../types";
+import { Task, Employee, Company, CompanyAsset } from "../types";
 
 interface TaskManagementSectionProps {
   tasks: Task[];
   employees: Employee[];
+  companies?: Company[];
+  assets?: CompanyAsset[];
   onAssignTask: (taskData: {
     customer_name: string;
     contact_details: string;
     problem_reported: string;
     assigned_to: number;
     address?: string;
+    contract_type?: string;
+    company_id?: number | null;
+    company_name?: string | null;
+    asset_id?: string | null;
   }) => Promise<void>;
   refreshLogs: () => void;
   onUpdateRemarks?: (taskId: number, remarks: string) => Promise<void>;
-  onUpdateTaskDetails?: (taskId: number, taskData: { customer_name: string; contact_details: string; problem_reported: string; address?: string }) => Promise<void>;
+  onUpdateTaskDetails?: (taskId: number, taskData: { 
+    customer_name: string; 
+    contact_details: string; 
+    problem_reported: string; 
+    address?: string;
+    contract_type?: string;
+    company_id?: number | null;
+    company_name?: string | null;
+    asset_id?: string | null;
+  }) => Promise<void>;
   onTogglePriority?: (taskId: number) => Promise<void>;
 }
 
 export default function TaskManagementSection({
   tasks,
   employees,
+  companies = [],
+  assets = [],
   onAssignTask,
   refreshLogs,
   onUpdateRemarks,
@@ -30,6 +47,9 @@ export default function TaskManagementSection({
   onTogglePriority
 }: TaskManagementSectionProps) {
   // Local task assigner Form states
+  const [contractType, setContractType] = useState<"AMC" | "Non AMC">("AMC");
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
+  const [selectedAssetId, setSelectedAssetId] = useState<string>("");
   const [customerName, setCustomerName] = useState("");
   const [contactDetails, setContactDetails] = useState("");
   const [address, setAddress] = useState("");
@@ -37,6 +57,68 @@ export default function TaskManagementSection({
   const [assignedTo, setAssignedTo] = useState("");
   const [isAssigning, setIsAssigning] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
+
+  // Available companies filtered by AMC / Non AMC contract type
+  const availableCompanies = useMemo(() => {
+    return companies.filter(c => c.type === contractType);
+  }, [companies, contractType]);
+
+  // Assets belonging to currently selected company (from the assets sheet)
+  const companyAssets = useMemo(() => {
+    if (!selectedCompanyId || selectedCompanyId === "custom") return [];
+    return assets.filter(a => a.company_id === Number(selectedCompanyId));
+  }, [assets, selectedCompanyId]);
+
+  const handleContractTypeChange = (type: "AMC" | "Non AMC") => {
+    setContractType(type);
+    setSelectedCompanyId("");
+    setSelectedAssetId("");
+    setCustomerName("");
+    setAddress("");
+  };
+
+  const handleCompanyChange = (companyId: string) => {
+    setSelectedCompanyId(companyId);
+    setSelectedAssetId("");
+
+    if (!companyId) {
+      setCustomerName("");
+      return;
+    }
+
+    if (companyId === "custom") {
+      setCustomerName("");
+      return;
+    }
+
+    const comp = companies.find(c => String(c.id) === companyId);
+    if (comp) {
+      setCustomerName(comp.name);
+      // Auto-assign allocated engineer if available and active
+      if (comp.allocated_engineer_id) {
+        const emp = employees.find(e => e.id === comp.allocated_engineer_id && !e.ended_at);
+        if (emp) {
+          setAssignedTo(String(comp.allocated_engineer_id));
+        }
+      }
+    }
+  };
+
+  const handleAssetChange = (assetVal: string) => {
+    setSelectedAssetId(assetVal);
+    if (!assetVal || assetVal === "none") {
+      return;
+    }
+    const foundAsset = companyAssets.find(a => a.asset_id === assetVal);
+    if (foundAsset) {
+      if (foundAsset.location && !address) {
+        setAddress(foundAsset.location);
+      }
+      if (foundAsset.employee_name && !contactDetails) {
+        setContactDetails(`User: ${foundAsset.employee_name}`);
+      }
+    }
+  };
 
   // Local querying and filtering states
   const [searchQuery, setSearchQuery] = useState("");
@@ -119,7 +201,24 @@ export default function TaskManagementSection({
   const [editContactDetails, setEditContactDetails] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [editProblemReported, setEditProblemReported] = useState("");
+  const [editContractType, setEditContractType] = useState<string>("AMC");
+  const [editAssetId, setEditAssetId] = useState<string>("");
   const [savingDetails, setSavingDetails] = useState(false);
+
+  // Assets in the sheet for the currently inspected task's company
+  const editTaskCompanyAssets = useMemo(() => {
+    if (!selectedTask) return [];
+    if (selectedTask.company_id) {
+      return assets.filter(a => a.company_id === selectedTask.company_id);
+    }
+    if (selectedTask.company_name) {
+      const comp = companies.find(c => c.name.toLowerCase() === selectedTask.company_name?.toLowerCase());
+      if (comp) {
+        return assets.filter(a => a.company_id === comp.id);
+      }
+    }
+    return [];
+  }, [selectedTask, assets, companies]);
 
   // Admin delete state
   const [isDeleting, setIsDeleting] = useState(false);
@@ -138,6 +237,19 @@ export default function TaskManagementSection({
       return;
     }
 
+    // Asset ID can only be selected and assigned if it actually exists in the sheet
+    let finalAssetId: string | null = null;
+    if (selectedAssetId && selectedAssetId !== "none") {
+      const existsInSheet = companyAssets.some(a => a.asset_id.toLowerCase() === selectedAssetId.toLowerCase());
+      if (!existsInSheet) {
+        alert("The selected Asset ID does not exist in the company's asset sheet. Asset ID can only be selected if it exists in the sheet.");
+        return;
+      }
+      finalAssetId = selectedAssetId;
+    }
+
+    const selectedComp = companies.find(c => String(c.id) === selectedCompanyId);
+
     setIsAssigning(true);
     setFormSuccess(false);
     try {
@@ -146,7 +258,11 @@ export default function TaskManagementSection({
         contact_details: contactDetails.trim() || "N/A",
         problem_reported: problemReported.trim(),
         assigned_to: Number(assignedTo),
-        address: address.trim() || ""
+        address: address.trim() || "",
+        contract_type: contractType,
+        company_id: selectedCompanyId && selectedCompanyId !== "custom" ? Number(selectedCompanyId) : null,
+        company_name: selectedComp ? selectedComp.name : (customerName.trim() || null),
+        asset_id: finalAssetId
       });
       
       // Reset form controls
@@ -155,15 +271,17 @@ export default function TaskManagementSection({
       setProblemReported("");
       setAssignedTo("");
       setAddress("");
+      setSelectedCompanyId("");
+      setSelectedAssetId("");
       setFormSuccess(true);
       setTimeout(() => {
         setFormSuccess(false);
         setIsAssignRepairModalOpen(false);
-      }, 2000);
+      }, 1500);
       refreshLogs();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Failed to record task in relational DB index.");
+      alert(err.message || "Failed to record task in relational DB index.");
     } finally {
       setIsAssigning(false);
     }
@@ -181,6 +299,8 @@ export default function TaskManagementSection({
     setEditContactDetails(task.contact_details);
     setEditAddress(task.address || "");
     setEditProblemReported(task.problem_reported);
+    setEditContractType(task.contract_type || "AMC");
+    setEditAssetId(task.asset_id || "");
     setIsEditingDetails(false);
   };
 
@@ -227,20 +347,36 @@ export default function TaskManagementSection({
       return;
     }
 
+    // Asset ID can only be selected if it exists in the sheet
+    if (editAssetId.trim()) {
+      const existsInSheet = assets.some(a => 
+        a.asset_id.toLowerCase() === editAssetId.trim().toLowerCase() &&
+        (selectedTask.company_id ? a.company_id === selectedTask.company_id : true)
+      );
+      if (!existsInSheet) {
+        alert("The selected Asset ID does not exist in the company's asset sheet. Asset ID can only be selected if it exists in the sheet.");
+        return;
+      }
+    }
+
     setSavingDetails(true);
     try {
       await onUpdateTaskDetails(selectedTask.id, {
         customer_name: editCustomerName.trim(),
         contact_details: editContactDetails.trim(),
         problem_reported: editProblemReported.trim(),
-        address: editAddress.trim()
+        address: editAddress.trim(),
+        contract_type: editContractType,
+        asset_id: editAssetId.trim() || null
       });
       setSelectedTask(prev => prev ? {
         ...prev,
         customer_name: editCustomerName.trim(),
         contact_details: editContactDetails.trim(),
         problem_reported: editProblemReported.trim(),
-        address: editAddress.trim()
+        address: editAddress.trim(),
+        contract_type: editContractType,
+        asset_id: editAssetId.trim() || null
       } : null);
       setIsEditingDetails(false);
       alert("Task details updated successfully!");
@@ -407,79 +543,256 @@ export default function TaskManagementSection({
 
         {/* Registering Form Modal */}
         {isAssignRepairModalOpen && (
-          <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in select-text text-slate-800">
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-t-2xl" />
-              <div className="flex items-center justify-between gap-2 mb-4 border-b border-slate-100 pb-3">
-                <h3 className="font-display font-extrabold text-slate-900 text-sm">Assign Repair Ticket</h3>
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in select-text text-slate-800">
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative overflow-hidden max-h-[92vh] flex flex-col">
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 rounded-t-2xl" />
+              
+              <div className="flex items-center justify-between gap-2 mb-4 border-b border-slate-100 pb-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-blue-50 text-blue-600">
+                    <PlusCircle className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-extrabold text-slate-900 text-sm">Assign Repair Ticket</h3>
+                    <p className="text-[10px] text-slate-400">Select contract classification, target client & hardware asset</p>
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => setIsAssignRepairModalOpen(false)}
-                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-              <form onSubmit={handleCreateTask} className="space-y-3.5 text-xs">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
-                    Customer Full Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Ramesh Chandra"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-400 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
-                    Contact Details <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. +91 99000 12345 (Optional)"
-                    value={contactDetails}
-                    onChange={(e) => setContactDetails(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-400 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
-                    Customer Location Address <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. MG Road, Ashok Nagar, Bengaluru"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-400 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
-                    Problem Reported
-                  </label>
-                  <textarea
-                    placeholder="Provide description of support request..."
-                    value={problemReported}
-                    onChange={(e) => setProblemReported(e.target.value)}
-                    rows={4}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-400 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors resize-none"
-                    required
-                  />
-                </div>
-
+              <form onSubmit={handleCreateTask} className="space-y-3.5 text-xs overflow-y-auto pr-1">
+                {/* 1. Contract Type Selection */}
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 font-sans">
-                    Assign Engineer
+                    Contract Type (Select AMC / Non-AMC)
                   </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleContractTypeChange("AMC")}
+                      className={`py-2 px-3 rounded-xl border text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        contractType === "AMC"
+                          ? "bg-emerald-50 border-emerald-500 text-emerald-800 ring-2 ring-emerald-400/20 shadow-xs"
+                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      <Shield className="h-4 w-4 text-emerald-600" />
+                      <span>AMC Client</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleContractTypeChange("Non AMC")}
+                      className={`py-2 px-3 rounded-xl border text-xs font-extrabold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        contractType === "Non AMC"
+                          ? "bg-amber-50 border-amber-500 text-amber-800 ring-2 ring-amber-400/20 shadow-xs"
+                          : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      <Building className="h-4 w-4 text-amber-600" />
+                      <span>Non-AMC Client</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 2. Company Selector */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 font-sans">
+                      Select {contractType} Company
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      {availableCompanies.length} available
+                    </span>
+                  </div>
+                  <select
+                    value={selectedCompanyId}
+                    onChange={(e) => handleCompanyChange(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors"
+                  >
+                    <option value="">-- Choose {contractType} Company --</option>
+                    {availableCompanies.map((c) => {
+                      const sheetAssetCount = assets.filter(a => a.company_id === c.id).length;
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({sheetAssetCount} {sheetAssetCount === 1 ? "asset" : "assets"} in sheet) {c.allocated_engineer_name ? `(Allocated: ${c.allocated_engineer_name})` : ""}
+                        </option>
+                      );
+                    })}
+                    <option value="custom">+ Other / Custom Client (No sheet)</option>
+                  </select>
+                </div>
+
+                {/* 3. Asset ID Selector - ONLY ALLOWS SELECTING IF IT EXISTS IN THE SHEET */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 font-sans">
+                      Select Asset ID from Sheet
+                    </label>
+                    {selectedCompanyId && selectedCompanyId !== "custom" && (
+                      <span className={`text-[10px] font-mono ${companyAssets.length > 0 ? "text-emerald-700 font-bold" : "text-amber-600 font-bold"}`}>
+                        {companyAssets.length > 0 ? `✓ ${companyAssets.length} asset${companyAssets.length === 1 ? "" : "s"} in sheet` : "0 assets in sheet"}
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedCompanyId === "custom" ? (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 text-xs flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="font-bold block text-slate-700">Custom Client (No Sheet Registered)</strong>
+                        <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                          Asset ID can only be selected if it exists in the sheet. Custom clients do not have a registered hardware sheet, so tickets for custom clients are logged without an Asset ID.
+                        </p>
+                      </div>
+                    </div>
+                  ) : !selectedCompanyId ? (
+                    <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-400 text-xs italic">
+                      Please select a company above to select an Asset ID from its registered sheet.
+                    </div>
+                  ) : companyAssets.length > 0 ? (
+                    <div className="space-y-2">
+                      <select
+                        value={selectedAssetId}
+                        onChange={(e) => handleAssetChange(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-sans"
+                      >
+                        <option value="">-- Choose Asset from Sheet ({companyAssets.length} verified) --</option>
+                        {companyAssets.map((a) => (
+                          <option key={a.id} value={a.asset_id}>
+                            Asset #{a.asset_id} — {a.asset} ({a.model_no || a.comp_name || "Device"}) | {a.location ? `${a.location}` : "Office"} {a.employee_name ? `| User: ${a.employee_name}` : ""}
+                          </option>
+                        ))}
+                        <option value="none">General Support (No Asset ID)</option>
+                      </select>
+
+                      {/* Selected Asset Details Preview Card */}
+                      {selectedAssetId && selectedAssetId !== "none" && (() => {
+                        const chosenAsset = companyAssets.find(a => a.asset_id === selectedAssetId);
+                        if (!chosenAsset) return null;
+                        return (
+                          <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-1.5 text-xs animate-fade-in font-sans">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 font-bold text-indigo-900">
+                                <Laptop className="h-3.5 w-3.5 text-indigo-600" />
+                                <span>Sheet Verified Asset #{chosenAsset.asset_id}: {chosenAsset.asset} ({chosenAsset.model_no || chosenAsset.comp_name || "Device"})</span>
+                              </div>
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${
+                                chosenAsset.amc_status === "Not in AMC" ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                              }`}>
+                                {chosenAsset.amc_status || "In AMC"}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10.5px] text-slate-600 bg-white/80 p-2 rounded-lg border border-indigo-100">
+                              {chosenAsset.employee_name && <div><span className="text-slate-400 font-bold">User:</span> {chosenAsset.employee_name}</div>}
+                              {chosenAsset.location && <div><span className="text-slate-400 font-bold">Location:</span> {chosenAsset.location}</div>}
+                              {chosenAsset.ip_address && <div><span className="text-slate-400 font-bold">IP Address:</span> {chosenAsset.ip_address}</div>}
+                              {chosenAsset.os && <div><span className="text-slate-400 font-bold">OS:</span> {chosenAsset.os}</div>}
+                              {(chosenAsset.config_processor || chosenAsset.config_ram) && (
+                                <div className="col-span-2 text-slate-500 font-mono text-[10px]">
+                                  <span className="text-slate-400 font-bold">Specs:</span> {chosenAsset.config_processor} / {chosenAsset.config_ram} {chosenAsset.config_storage ? `/ ${chosenAsset.config_storage}` : ""}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-start gap-2">
+                      <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="font-bold block">No Assets Exist in Sheet for this Company</strong>
+                        <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                          Asset ID can only be selected if it exists in the company's asset sheet. This company currently has no registered assets. You can register hardware under <strong>Companies & Assets Hub</strong>.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Customer / Company Name and Contact */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
+                      Client / Company Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Acme Tech Corp"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
+                      Contact Details <span className="text-slate-400 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Phone, email, or user name..."
+                      value={contactDetails}
+                      onChange={(e) => setContactDetails(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* 5. Customer Location Address */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
+                    Customer Location / Workstation Address <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Floor 3, IT Bay 4, MG Road, Bengaluru"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
+                  />
+                </div>
+
+                {/* 6. Problem Description */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
+                    Problem Reported / Fault Diagnosis
+                  </label>
+                  <textarea
+                    placeholder="Provide description of support request or hardware problem..."
+                    value={problemReported}
+                    onChange={(e) => setProblemReported(e.target.value)}
+                    rows={3}
+                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors resize-none"
+                    required
+                  />
+                </div>
+
+                {/* 7. Assign Engineer */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 font-sans">
+                      Assign Service Engineer
+                    </label>
+                    {selectedCompanyId && (() => {
+                      const comp = companies.find(c => String(c.id) === selectedCompanyId);
+                      if (comp?.allocated_engineer_name) {
+                        return (
+                          <span className="text-[10px] text-indigo-600 font-bold">
+                            Company allocated: {comp.allocated_engineer_name}
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
                   <select
                     value={assignedTo}
                     onChange={(e) => setAssignedTo(e.target.value)}
@@ -491,7 +804,7 @@ export default function TaskManagementSection({
                     </option>
                     {[...employees].filter(emp => !emp.ended_at).sort((a, b) => a.id - b.id).map((emp) => (
                       <option key={emp.id} value={emp.id} className="text-slate-700">
-                        {emp.name} ({emp.role}) - ID: {emp.id}
+                        {emp.name} ({emp.role}) - ID: #{emp.id}
                       </option>
                     ))}
                   </select>
@@ -506,7 +819,7 @@ export default function TaskManagementSection({
                 <button
                   type="submit"
                   disabled={isAssigning}
-                  className="w-full py-2.5 px-3 rounded-xl text-white font-extrabold text-xs bg-blue-700 hover:bg-blue-800 transition-all flex items-center justify-center gap-1.5 shadow-md border border-blue-900 active:scale-95 uppercase tracking-wide cursor-pointer"
+                  className="w-full py-2.5 px-3 rounded-xl text-white font-extrabold text-xs bg-blue-700 hover:bg-blue-800 transition-all flex items-center justify-center gap-1.5 shadow-md border border-blue-900 active:scale-95 uppercase tracking-wide cursor-pointer mt-2 shrink-0"
                 >
                   <PlusCircle className="h-4 w-4" />
                   <span>{isAssigning ? "Posting relational insert..." : "Assign & Dispatch Ticket"}</span>
@@ -647,6 +960,20 @@ export default function TaskManagementSection({
                       <td className="px-3.5 py-3">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="font-extrabold text-slate-800 select-all text-[11.5px]">{task.customer_name}</p>
+                          {task.contract_type && (
+                            <span className={`px-1.5 py-0.5 text-[8px] font-extrabold uppercase rounded-md tracking-wider border ${
+                              task.contract_type === "AMC"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : "bg-amber-50 text-amber-700 border-amber-200"
+                            }`}>
+                              {task.contract_type}
+                            </span>
+                          )}
+                          {task.asset_id && (
+                            <span className="px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[8px] font-mono font-bold rounded">
+                              Asset: #{task.asset_id}
+                            </span>
+                          )}
                           {task.is_priority && (
                             <span className="px-1.5 py-0.5 bg-red-50 border border-red-200 text-red-700 text-[8px] font-extrabold uppercase rounded-md tracking-wider">
                               🔥 Urgent
@@ -658,6 +985,9 @@ export default function TaskManagementSection({
                             </span>
                           )}
                         </div>
+                        {task.company_name && task.company_name !== task.customer_name && (
+                          <p className="text-[10px] text-slate-500 font-semibold">{task.company_name}</p>
+                        )}
                         <p className="text-[9px] text-slate-400 font-mono mt-0.5 select-all">{task.contact_details.split("|")[0]}</p>
                       </td>
                       <td className="px-3.5 py-3 max-w-xs truncate font-medium text-slate-600 select-all" title={task.problem_reported}>
@@ -748,6 +1078,74 @@ export default function TaskManagementSection({
                   </div>
 
                   <div>
+                    <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">Contract Type</label>
+                    <select
+                      value={editContractType}
+                      onChange={(e) => setEditContractType(e.target.value)}
+                      className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-blue-500 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-sans"
+                    >
+                      <option value="AMC">AMC Client</option>
+                      <option value="Non AMC">Non-AMC Client</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-500 font-sans">
+                        Select Asset ID from Sheet
+                      </label>
+                      {editTaskCompanyAssets.length > 0 && (
+                        <span className="text-[10px] text-emerald-600 font-bold font-mono">
+                          {editTaskCompanyAssets.length} verified in sheet
+                        </span>
+                      )}
+                    </div>
+                    {editTaskCompanyAssets.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <select
+                          value={editAssetId}
+                          onChange={(e) => setEditAssetId(e.target.value)}
+                          className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-blue-500 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-sans"
+                        >
+                          <option value="">-- No Asset / General Support --</option>
+                          {editTaskCompanyAssets.map((a) => (
+                            <option key={a.id} value={a.asset_id}>
+                              Asset #{a.asset_id} — {a.asset} ({a.model_no || a.comp_name || "Device"}) {a.location ? `- ${a.location}` : ""} {a.employee_name ? `(${a.employee_name})` : ""}
+                            </option>
+                          ))}
+                        </select>
+                        {editAssetId && (() => {
+                          const matched = editTaskCompanyAssets.find(a => a.asset_id.toLowerCase() === editAssetId.toLowerCase());
+                          if (!matched) return null;
+                          return (
+                            <div className="p-2 bg-indigo-50/80 border border-indigo-200 rounded-lg text-[10.5px] text-indigo-900 flex items-center justify-between">
+                              <span className="font-bold flex items-center gap-1.5">
+                                <Laptop className="h-3.5 w-3.5 text-indigo-600" />
+                                {matched.asset} ({matched.model_no || "Hardware"}) - {matched.location || "Office"}
+                              </span>
+                              <span className={`text-[9px] px-2 py-0.5 rounded font-black border ${
+                                matched.amc_status === "Not in AMC" ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                              }`}>
+                                {matched.amc_status || "In AMC"}
+                              </span>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="font-bold block">No Assets in Sheet for this Company</strong>
+                          <p className="text-[10.5px] text-amber-700 mt-0.5">
+                            Asset ID can only be selected if it exists in the company's asset sheet. This client has no registered hardware assets in the sheet.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
                     <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">Contact Details</label>
                     <input
                       type="text"
@@ -787,6 +1185,8 @@ export default function TaskManagementSection({
                         setEditContactDetails(selectedTask.contact_details);
                         setEditAddress(selectedTask.address || "");
                         setEditProblemReported(selectedTask.problem_reported);
+                        setEditContractType(selectedTask.contract_type || "AMC");
+                        setEditAssetId(selectedTask.asset_id || "");
                         setIsEditingDetails(false);
                       }}
                       className="py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-[10px] font-bold uppercase transition-colors"
@@ -806,7 +1206,7 @@ export default function TaskManagementSection({
               ) : (
                 <>
                   {/* Client Context Information card */}
-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-1 relative">
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-1.5 relative">
                     {selectedTask.status !== "Finished" && (
                       <button
                         onClick={() => setIsEditingDetails(true)}
@@ -815,8 +1215,31 @@ export default function TaskManagementSection({
                         Edit Details
                       </button>
                     )}
-                    <span className="text-[9px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">Client Support Profile</span>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[9px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">Client Support Profile</span>
+                      {selectedTask.contract_type && (
+                        <span className={`px-2 py-0.5 text-[9px] font-extrabold uppercase rounded-md tracking-wider border ${
+                          selectedTask.contract_type === "AMC"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}>
+                          {selectedTask.contract_type}
+                        </span>
+                      )}
+                      {selectedTask.asset_id && (
+                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[9px] font-mono font-bold rounded-md flex items-center gap-1">
+                          <Laptop className="h-3 w-3" />
+                          <span>Asset: #{selectedTask.asset_id}</span>
+                        </span>
+                      )}
+                    </div>
                     <h4 className="text-base font-extrabold text-slate-900 select-all">{selectedTask.customer_name}</h4>
+                    {selectedTask.company_name && selectedTask.company_name !== selectedTask.customer_name && (
+                      <p className="text-xs font-bold text-slate-600 flex items-center gap-1">
+                        <Building className="h-3.5 w-3.5 text-slate-400" />
+                        <span>Company: {selectedTask.company_name}</span>
+                      </p>
+                    )}
                     
                     <div className="flex flex-col sm:flex-row gap-2 pt-2 text-xs text-slate-600 font-sans">
                       <a href={`tel:${selectedTask.contact_details.split("|")[0].trim()}`} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
@@ -834,6 +1257,49 @@ export default function TaskManagementSection({
                       )}
                     </div>
                   </div>
+
+                  {/* Hardware Asset Details if assigned */}
+                  {selectedTask.asset_id && (() => {
+                    const matchedAsset = assets.find(
+                      a => (selectedTask.company_id ? a.company_id === selectedTask.company_id : true) && a.asset_id?.toLowerCase() === selectedTask.asset_id?.toLowerCase()
+                    ) || assets.find(a => a.asset_id?.toLowerCase() === selectedTask.asset_id?.toLowerCase());
+
+                    return (
+                      <div className="bg-indigo-50/60 border border-indigo-200/80 rounded-xl p-3.5 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-indigo-900 font-bold text-xs">
+                            <Laptop className="h-4 w-4 text-indigo-600" />
+                            <span>Hardware Asset #{selectedTask.asset_id}</span>
+                          </div>
+                          {matchedAsset?.amc_status && (
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${
+                              matchedAsset.amc_status === "Not in AMC" ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                            }`}>
+                              {matchedAsset.amc_status}
+                            </span>
+                          )}
+                        </div>
+                        {matchedAsset ? (
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-700 bg-white/80 p-2.5 rounded-lg border border-indigo-100">
+                            <div><span className="text-slate-400 font-bold">Type / Model:</span> {matchedAsset.asset} - {matchedAsset.model_no || matchedAsset.comp_name || "N/A"}</div>
+                            <div><span className="text-slate-400 font-bold">Assigned User:</span> {matchedAsset.employee_name || "Unassigned"}</div>
+                            {matchedAsset.location && <div><span className="text-slate-400 font-bold">Location:</span> {matchedAsset.location}</div>}
+                            {matchedAsset.ip_address && <div><span className="text-slate-400 font-bold">IP Address:</span> {matchedAsset.ip_address}</div>}
+                            {matchedAsset.os && <div><span className="text-slate-400 font-bold">OS:</span> {matchedAsset.os}</div>}
+                            {(matchedAsset.config_processor || matchedAsset.config_ram) && (
+                              <div className="col-span-2 text-slate-500 font-mono text-[10.5px]">
+                                <span className="text-slate-400 font-bold">Specs:</span> {matchedAsset.config_processor} / {matchedAsset.config_ram}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-500 font-mono bg-white/70 p-2 rounded-lg border border-indigo-100">
+                            Asset ID registered on dispatch: #{selectedTask.asset_id}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Problem diagnosis */}
                   <div className="space-y-1">

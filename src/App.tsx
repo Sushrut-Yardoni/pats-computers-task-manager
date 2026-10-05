@@ -26,7 +26,7 @@ export default function App() {
   const [isSqlConsoleFocused, setIsSqlConsoleFocused] = useState(false);
 
   // Employee active view partition (synchronized to allow Header Settings to open Profile)
-  const [employeeActiveTab, setEmployeeActiveTab] = useState<"active" | "completed" | "travel" | "profile">("active");
+  const [employeeActiveTab, setEmployeeActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "attendance" | "companies">("active");
 
   // Fetch critical relational tables via the single unified sync endpoint
   const fetchData = async (silent = false) => {
@@ -94,6 +94,10 @@ export default function App() {
     problem_reported: string;
     assigned_to: number;
     address?: string;
+    contract_type?: string;
+    company_id?: number | null;
+    company_name?: string | null;
+    asset_id?: string | null;
   }) => {
     const resp = await fetch("/api/tasks", {
       method: "POST",
@@ -144,7 +148,16 @@ export default function App() {
 
   const handleUpdateTaskDetails = async (
     taskId: number,
-    taskData: { customer_name: string; contact_details: string; problem_reported: string; address?: string }
+    taskData: { 
+      customer_name: string; 
+      contact_details: string; 
+      problem_reported: string; 
+      address?: string;
+      contract_type?: string;
+      company_id?: number | null;
+      company_name?: string | null;
+      asset_id?: string | null;
+    }
   ) => {
     const resp = await fetch(`/api/tasks/${taskId}/update`, {
       method: "POST",
@@ -338,7 +351,7 @@ export default function App() {
               onTogglePriority={handleTogglePriority}
               onUpdatePassword={handleUpdatePassword}
             />
-          ) : currentUser.role.toLowerCase() === "accounts" ? (
+          ) : (currentUser.role.toLowerCase() === "employee" || currentUser.role.toLowerCase() === "employee dept" || currentUser.role.toLowerCase() === "accounts" || currentUser.role.toLowerCase() === "accounts dept") ? (
             <AccountsDashboard
               currentUser={currentUser}
               employees={employees}
@@ -348,6 +361,8 @@ export default function App() {
             <ManagerDashboard
               currentUser={currentUser}
               employees={employees}
+              companies={companies}
+              assets={assets}
               refreshLogs={() => fetchData(true)}
             />
           ) : (
