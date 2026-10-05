@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { 
+<<<<<<< HEAD
   PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Trash2, AlertCircle, Eye, UserPlus, Users, Columns, LayoutGrid, GripVertical, ChevronDown, FileSpreadsheet
 } from "lucide-react";
 import { TodoTask, Employee, DeletedTodoTask, isTargetMatch } from "../types";
 import TodoHistoryModal from "./TodoHistoryModal";
 import * as XLSX from "xlsx";
+=======
+  PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Trash2, AlertCircle, Eye, UserPlus, Users, Columns, LayoutGrid, GripVertical, ChevronDown
+} from "lucide-react";
+import { TodoTask, Employee, DeletedTodoTask, isTargetMatch } from "../types";
+import TodoHistoryModal from "./TodoHistoryModal";
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 
 interface TodoManagementSectionProps {
   currentUser?: { id: number; name: string; role: string; email_id?: string };
@@ -480,6 +487,7 @@ export default function TodoManagementSection({
   // Delete State
   const [isDeletingSubmitting, setIsDeletingSubmitting] = useState(false);
 
+<<<<<<< HEAD
   const handleDownloadExcel = () => {
     try {
       // 1. Prepare Active & Finished Tasks sheet
@@ -687,6 +695,8 @@ export default function TodoManagementSection({
     }
   };
 
+=======
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   const fetchTodos = async () => {
     setIsLoading(true);
     try {
@@ -1310,6 +1320,7 @@ export default function TodoManagementSection({
               <PlusCircle className="h-3.5 w-3.5" />
               Add To-Do Task
             </button>
+<<<<<<< HEAD
 
             {/* Excel Download button */}
             <button
@@ -1320,6 +1331,8 @@ export default function TodoManagementSection({
               <FileSpreadsheet className="h-3.5 w-3.5" />
               <span>Download Excel</span>
             </button>
+=======
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
           </div>
         </div>
 

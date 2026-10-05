@@ -177,9 +177,15 @@ export default function DatabaseExplorerSection({
         return {
           name: "tasks",
           primaryKey: "id",
+<<<<<<< HEAD
           foreignKeys: "assigned_to -> employees.id, company_id -> companies.id, asset_id -> company_assets.asset_id",
           description: "Registered diagnostic tickets, client descriptions, resolution status and associated technician tasks with AMC classification, company, and asset ID.",
           columns: ["id", "customer_name", "company_name", "contract_type", "asset_id", "assigned_to", "problem_reported", "status", "assigned_at", "accepted_at", "finished_at", "remarks", "is_priority"]
+=======
+          foreignKeys: "assigned_to -> employees.id",
+          description: "Registered diagnostic tickets, client descriptions, resolution status and associated technician tasks.",
+          columns: ["id", "customer_name", "contact_details", "problem_reported", "assigned_to", "status", "assigned_at", "accepted_at", "finished_at", "remarks", "is_priority"]
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
         };
       case "offline_travels":
         return {

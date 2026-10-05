@@ -2,13 +2,20 @@ import React, { useState, useEffect } from "react";
 import { 
   CheckCircle, Clock, AlertTriangle, Phone, Mail, 
   X, Cpu, Calendar, CheckSquare, MessageSquare, ArrowRight, Play, Check, Navigation, Package,
+<<<<<<< HEAD
   User, ShieldAlert, ChevronLeft, ChevronRight, Menu, AlertCircle, Settings, Building,
   Shield, Laptop, Search
+=======
+  User, ShieldAlert, ChevronLeft, ChevronRight, Menu, AlertCircle, Settings, Building
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 } from "lucide-react";
 import EmployeeTravelSection from "./EmployeeTravelSection";
 import { Task, Employee, Company, CompanyAsset } from "../types";
 import CompanySection from "./CompanySection";
+<<<<<<< HEAD
 import AttendanceSection from "./AttendanceSection";
+=======
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 
 interface EmployeeDashboardProps {
   currentEmployee: { id: number; name: string; role: string };
@@ -23,8 +30,13 @@ interface EmployeeDashboardProps {
   onUpdatePassword?: (employeeId: number, newPassword: string) => Promise<void>;
   onUpdateMaterials?: (taskId: number, materials: string | null) => Promise<void>;
   onUpdateProfile?: (employeeId: number, profileData: Partial<Employee>) => Promise<void>;
+<<<<<<< HEAD
   activeTab?: "active" | "completed" | "travel" | "profile" | "attendance" | "companies";
   onTabChange?: (tab: "active" | "completed" | "travel" | "profile" | "attendance" | "companies") => void;
+=======
+  activeTab?: "active" | "completed" | "travel" | "profile" | "companies";
+  onTabChange?: (tab: "active" | "completed" | "travel" | "profile" | "companies") => void;
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 }
 
 export default function EmployeeDashboard({
@@ -51,7 +63,11 @@ export default function EmployeeDashboard({
   const [showRemarksInput, setShowRemarksInput] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+<<<<<<< HEAD
   const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "attendance" | "companies">("active");
+=======
+  const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "companies">("active");
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   const activeTab = propsActiveTab !== undefined ? propsActiveTab : internalActiveTab;
   const setActiveTab = onTabChange !== undefined ? onTabChange : setInternalActiveTab;
 
@@ -88,21 +104,48 @@ export default function EmployeeDashboard({
   const fullEmployeeInfo = employees.find(e => e.id === currentEmployee.id) || currentEmployee;
 
   const [profPhone, setProfPhone] = useState("");
+<<<<<<< HEAD
   const [profBloodGroup, setProfBloodGroup] = useState("");
   const [profEmergencyContact, setProfEmergencyContact] = useState("");
+=======
+  const [profSkills, setProfSkills] = useState("");
+  const [profExperience, setProfExperience] = useState("");
+  const [profBloodGroup, setProfBloodGroup] = useState("");
+  const [profEmergencyContact, setProfEmergencyContact] = useState("");
+  const [profAddress, setProfAddress] = useState("");
+  const [profNotes, setProfNotes] = useState("");
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   const [profileSaving, setProfileSaving] = useState(false);
 
   useEffect(() => {
     if (fullEmployeeInfo) {
       setProfPhone((fullEmployeeInfo as any).phone || "");
+<<<<<<< HEAD
       setProfBloodGroup((fullEmployeeInfo as any).blood_group || "");
       setProfEmergencyContact((fullEmployeeInfo as any).emergency_contact || "");
+=======
+      setProfSkills((fullEmployeeInfo as any).skills || "");
+      setProfExperience((fullEmployeeInfo as any).experience || "");
+      setProfBloodGroup((fullEmployeeInfo as any).blood_group || "");
+      setProfEmergencyContact((fullEmployeeInfo as any).emergency_contact || "");
+      setProfAddress((fullEmployeeInfo as any).address || "");
+      setProfNotes((fullEmployeeInfo as any).notes || "");
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     }
   }, [
     fullEmployeeInfo.id,
     (fullEmployeeInfo as any).phone,
+<<<<<<< HEAD
     (fullEmployeeInfo as any).blood_group,
     (fullEmployeeInfo as any).emergency_contact
+=======
+    (fullEmployeeInfo as any).skills,
+    (fullEmployeeInfo as any).experience,
+    (fullEmployeeInfo as any).blood_group,
+    (fullEmployeeInfo as any).emergency_contact,
+    (fullEmployeeInfo as any).address,
+    (fullEmployeeInfo as any).notes
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   ]);
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
@@ -113,8 +156,17 @@ export default function EmployeeDashboard({
     try {
       await onUpdateProfile(currentEmployee.id, {
         phone: profPhone.trim() || null,
+<<<<<<< HEAD
         blood_group: profBloodGroup.trim() || null,
         emergency_contact: profEmergencyContact.trim() || null
+=======
+        skills: profSkills.trim() || null,
+        experience: profExperience.trim() || null,
+        blood_group: profBloodGroup.trim() || null,
+        emergency_contact: profEmergencyContact.trim() || null,
+        address: profAddress.trim() || null,
+        notes: profNotes.trim() || null
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       });
       alert("Your profile details have been updated successfully!");
     } catch (err: any) {
@@ -177,6 +229,7 @@ export default function EmployeeDashboard({
     }
   };
 
+<<<<<<< HEAD
   // Search and AMC / Non-AMC classification filters
   const [empSearchQuery, setEmpSearchQuery] = useState("");
   const [empContractFilter, setEmpContractFilter] = useState<"All" | "AMC" | "Non AMC">("All");
@@ -229,6 +282,24 @@ export default function EmployeeDashboard({
       return true;
     });
   }, [completedMyTasks, empTaskSelectedMonth, empContractFilter, empSearchQuery]);
+=======
+  // Filtered lists
+  const filteredActiveMyTasks = React.useMemo(() => {
+    return activeMyTasks.filter(task => {
+      if (empTaskSelectedMonth === "All") return true;
+      const dateStr = task.assigned_at || task.accepted_at;
+      return dateStr && dateStr.startsWith(empTaskSelectedMonth);
+    });
+  }, [activeMyTasks, empTaskSelectedMonth]);
+
+  const filteredCompletedMyTasks = React.useMemo(() => {
+    return completedMyTasks.filter(task => {
+      if (empTaskSelectedMonth === "All") return true;
+      const dateStr = task.finished_at || task.assigned_at;
+      return dateStr && dateStr.startsWith(empTaskSelectedMonth);
+    });
+  }, [completedMyTasks, empTaskSelectedMonth]);
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 
   const displayedMyTasks = React.useMemo(() => {
     const currentList = activeTab === "active" ? filteredActiveMyTasks : filteredCompletedMyTasks;
@@ -402,6 +473,7 @@ export default function EmployeeDashboard({
 
           <button
             type="button"
+<<<<<<< HEAD
             onClick={() => setActiveTab("attendance")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
               activeTab === "attendance"
@@ -415,6 +487,8 @@ export default function EmployeeDashboard({
 
           <button
             type="button"
+=======
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
             onClick={() => setActiveTab("travel")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
               activeTab === "travel"
@@ -431,11 +505,19 @@ export default function EmployeeDashboard({
             onClick={() => setActiveTab("companies")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
               activeTab === "companies"
+<<<<<<< HEAD
                 ? "bg-indigo-50 text-indigo-800 border border-indigo-100 font-extrabold shadow-2xs"
                 : "text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
             }`}
           >
             <Building className="h-4 w-4 text-indigo-600 shrink-0" />
+=======
+                ? "bg-blue-50 text-blue-850 border border-blue-100 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <Building className="h-4 w-4 text-blue-600 shrink-0" />
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
             {!isSidebarCollapsed && <span className="font-sans">Company Assets</span>}
           </button>
 
@@ -448,7 +530,11 @@ export default function EmployeeDashboard({
                 : "text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
             }`}
           >
+<<<<<<< HEAD
             <Settings className="h-4 w-4 text-indigo-650 shrink-0" />
+=======
+            <Settings className="h-4 w-4 text-indigo-600 shrink-0" />
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
             {!isSidebarCollapsed && <span className="font-sans">Settings</span>}
           </button>
         </nav>
@@ -476,6 +562,14 @@ export default function EmployeeDashboard({
           <div className="border-b border-slate-100 pb-4 flex justify-between items-center flex-wrap gap-2">
             <div>
               <h3 className="text-lg font-display font-bold text-slate-800">My Professional Identity</h3>
+<<<<<<< HEAD
+=======
+              <p className="text-xs text-slate-500 font-medium">View and update your personal and technical details for the dispatch roster.</p>
+            </div>
+            <div className="bg-indigo-50 border border-indigo-100/50 text-indigo-700 font-bold px-3 py-1 rounded-xl text-xs flex items-center gap-1">
+              <span className="h-2 w-2 bg-indigo-600 rounded-full animate-ping" />
+              <span>Staff ID: #{fullEmployeeInfo.id}</span>
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
             </div>
           </div>
 
@@ -558,10 +652,66 @@ export default function EmployeeDashboard({
                 />
               </div>
 
+<<<<<<< HEAD
 
             </div>
 
             <div className="flex justify-end items-center pt-2 border-t border-slate-100 flex-wrap gap-2 text-slate-800">
+=======
+              {/* Technical Skills Tag / Line (Editable) */}
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Technical Specializations & Certifications</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Cisco CCNA, Hardware Repair, Linux Server Admin, Liquid Cooling"
+                  value={profSkills}
+                  onChange={(e) => setProfSkills(e.target.value)}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all"
+                />
+              </div>
+
+              {/* Prior Professional Experience (Editable) */}
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Professional Experience Context</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 5+ years in Field Support, previously at Dell Hardware Support"
+                  value={profExperience}
+                  onChange={(e) => setProfExperience(e.target.value)}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all"
+                />
+              </div>
+
+              {/* Contact Address (Editable) */}
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Residential Address</label>
+                <textarea
+                  placeholder="Enter your current billing or residential address..."
+                  value={profAddress}
+                  onChange={(e) => setProfAddress(e.target.value)}
+                  rows={2}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 p-3 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all resize-none"
+                />
+              </div>
+
+              {/* Bio/Notes (Editable) */}
+              <div className="md:col-span-2">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Internal Professional Bio / Notes</label>
+                <textarea
+                  placeholder="Write a brief statement or note about your availability, diagnostic domains, or tools inventory..."
+                  value={profNotes}
+                  onChange={(e) => setProfNotes(e.target.value)}
+                  rows={3}
+                  className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-805 p-3 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-all resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-slate-100 flex-wrap gap-2 text-slate-800">
+              <span className="text-[10px] text-slate-400 font-mono italic font-medium">
+                All saved metadata becomes immediately visible under Admin Directory dashboards.
+              </span>
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
               <button
                 type="submit"
                 disabled={profileSaving}
@@ -586,7 +736,15 @@ export default function EmployeeDashboard({
                     <ShieldAlert className="h-4 w-4 text-emerald-600 animate-pulse" />
                     Workstation Security & Login Details
                   </h4>
+<<<<<<< HEAD
                 </div>
+=======
+                  <p className="text-[11px] text-slate-500 mt-0.5">Maintain separate, secure, and confidential credentials for PATS portal dispatch access.</p>
+                </div>
+                <span className="text-[9px] bg-emerald-100 text-emerald-800 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">
+                  Encrypted SSL DB
+                </span>
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
               </div>
 
               <form onSubmit={handleEmpPasswordUpdate} className="flex flex-col sm:flex-row gap-3 items-end">
@@ -614,17 +772,24 @@ export default function EmployeeDashboard({
         </div>
       ) : activeTab === "travel" ? (
         <EmployeeTravelSection myTasks={myTasks} employeeId={currentEmployee.id} petrolPrice={petrolPrice} />
+<<<<<<< HEAD
       ) : activeTab === "attendance" ? (
         <AttendanceSection 
           currentUser={{ id: currentEmployee.id, name: currentEmployee.name, role: currentEmployee.role, type: "employee" }}
           employees={employees}
         />
+=======
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       ) : activeTab === "companies" ? (
         <CompanySection
           companies={companies}
           assets={assets}
+<<<<<<< HEAD
           employees={employees}
           currentUser={{ id: currentEmployee.id, name: currentEmployee.name, role: currentEmployee.role, type: "employee" }}
+=======
+          currentUser={{ name: currentEmployee.name, type: "employee", id: currentEmployee.id }}
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
           onRefresh={async () => {
             if (onSyncCompany) {
               await onSyncCompany();
@@ -633,6 +798,7 @@ export default function EmployeeDashboard({
         />
       ) : (
         <div className="space-y-4">
+<<<<<<< HEAD
           {/* Search, Contract Type Filter, Month Filter and Record Limit row */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white border border-slate-200 p-3 rounded-2xl text-xs animate-fade-in shadow-2xs">
             <div className="flex flex-wrap items-center gap-2 flex-1">
@@ -705,6 +871,27 @@ export default function EmployeeDashboard({
 
               <div className="flex items-center gap-2">
                 <span className="text-[9px] font-extrabold uppercase text-slate-500 tracking-wider">Limit:</span>
+=======
+          {/* Month Filter and Record Limit row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-slate-200 p-3 rounded-2xl text-xs animate-fade-in shadow-2xs">
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 p-1.5 rounded-xl text-xs shrink-0">
+              <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Month:</span>
+              <select
+                value={empTaskSelectedMonth}
+                onChange={(e) => setEmpTaskSelectedMonth(e.target.value)}
+                className="bg-white border border-slate-200 text-slate-805 p-1 rounded-md text-[10.5px] font-extrabold focus:outline-none transition-all cursor-pointer font-sans"
+              >
+                <option value="All" className="font-bold">All Months</option>
+                {uniqueEmpTaskMonths.map(m => (
+                  <option key={m} value={m} className="font-bold">{formatEmpMonthKey(m)}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] font-extrabold uppercase text-slate-500 tracking-wider">Show Limit:</span>
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                 <div className="flex gap-1">
                   {([5, 10, 20, "All"] as const).map(num => (
                     <button
@@ -722,9 +909,14 @@ export default function EmployeeDashboard({
                   ))}
                 </div>
               </div>
+<<<<<<< HEAD
 
               <span className="text-[10px] text-slate-500 font-bold font-mono">
                 {displayedMyTasks.length} task{displayedMyTasks.length === 1 ? "" : "s"}
+=======
+              <span className="text-[10px] text-slate-500 font-bold font-mono">
+                Showing {displayedMyTasks.length} tasks
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
               </span>
             </div>
           </div>
@@ -749,11 +941,16 @@ export default function EmployeeDashboard({
                 <div className="absolute top-0 right-0 w-16 h-1 bg-slate-100 group-hover:bg-gradient-to-r group-hover:from-blue-600 group-hover:to-indigo-500 transition-all" />
                 
                 <div>
+<<<<<<< HEAD
                   <div className="flex items-center justify-between mb-3 flex-wrap gap-1.5">
+=======
+                  <div className="flex items-center justify-between mb-4">
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                     <span className="font-mono text-xs text-indigo-600 font-extrabold select-all">
                       #{task.id}
                     </span>
                     <div className="flex flex-wrap items-center gap-1">
+<<<<<<< HEAD
                       {task.contract_type && (
                         <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide border ${
                           task.contract_type === "AMC"
@@ -770,6 +967,8 @@ export default function EmployeeDashboard({
                           Asset: #{task.asset_id}
                         </span>
                       )}
+=======
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                       {task.is_priority && (
                         <span className="inline-flex items-center rounded-md bg-rose-50 px-1.5 py-0.5 text-[8.5px] font-extrabold text-rose-700 ring-1 ring-rose-200 uppercase tracking-wide">
                           🚨 Priority
@@ -798,6 +997,7 @@ export default function EmployeeDashboard({
                     </div>
                   </div>
 
+<<<<<<< HEAD
                   {task.company_name && task.company_name !== task.customer_name && (
                     <div className="text-[10.5px] font-bold text-slate-500 flex items-center gap-1 mb-0.5">
                       <Building className="h-3.5 w-3.5 text-slate-400 shrink-0" />
@@ -825,6 +1025,11 @@ export default function EmployeeDashboard({
                       <span className="truncate">{task.address}</span>
                     </div>
                   )}
+=======
+                  <h3 className="font-display font-extrabold text-slate-900 text-sm select-all">
+                    {task.customer_name}
+                  </h3>
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                 </div>
 
                 <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono">
@@ -870,6 +1075,7 @@ export default function EmployeeDashboard({
             {/* Modal Body Scroll */}
             <div className="p-6 overflow-y-auto space-y-5">
               
+<<<<<<< HEAD
               {/* Client & Contract Context Banner */}
               <div className="space-y-2 bg-slate-50 p-4 border border-slate-200 rounded-xl font-sans">
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -895,6 +1101,11 @@ export default function EmployeeDashboard({
                   </div>
                 )}
 
+=======
+              {/* Client General Metadata Context banner */}
+              <div className="space-y-1 bg-slate-50 p-4 border border-slate-200 rounded-xl">
+                <p className="text-[10px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">Client Context Details</p>
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                 <h4 className="text-base font-extrabold text-slate-900 select-all">
                   {selectedTask.customer_name}
                 </h4>
@@ -916,6 +1127,7 @@ export default function EmployeeDashboard({
                 </div>
               </div>
 
+<<<<<<< HEAD
               {/* Hardware Asset Technical Specifications Card */}
               {(() => {
                 const matchedAsset = selectedTask.asset_id ? (
@@ -1008,6 +1220,14 @@ export default function EmployeeDashboard({
                   </span>
                 </div>
                 <p className="text-xs text-slate-800 bg-white border border-red-100 p-3.5 rounded-xl leading-relaxed select-all font-medium whitespace-pre-wrap">
+=======
+              {/* Problem Description */}
+              <div className="space-y-1">
+                <h5 className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider font-mono">
+                  Fault / Problem Diagnosis
+                </h5>
+                <p className="text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-200 leading-relaxed select-all">
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                   {selectedTask.problem_reported}
                 </p>
               </div>
@@ -1015,7 +1235,11 @@ export default function EmployeeDashboard({
               {/* Task Servicing Location Match */}
               <div className="space-y-1 bg-slate-50 p-4 border border-slate-200 rounded-xl font-sans">
                 <span className="text-[10px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">Customer Location Address</span>
+<<<<<<< HEAD
                 <p className="text-xs font-semibold text-slate-800 select-all">
+=======
+                <p className="text-xs font-semibold text-slate-800">
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                   {selectedTask.address || "N/A - No dispatch address was provided."}
                 </p>
               </div>

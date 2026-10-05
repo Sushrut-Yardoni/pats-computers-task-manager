@@ -1,31 +1,48 @@
 import React, { useState, useEffect } from "react";
 import { 
+<<<<<<< HEAD
   PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Trash2, AlertCircle, Eye, UserPlus, Users, Columns, LayoutGrid, GripVertical, ChevronDown, Building
 } from "lucide-react";
 import { TodoTask, Employee, DeletedTodoTask, isTargetMatch, Company, CompanyAsset } from "../types";
 import TodoHistoryModal from "./TodoHistoryModal";
 import AttendanceSection from "./AttendanceSection";
 import CompanySection from "./CompanySection";
+=======
+  PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Trash2, AlertCircle, Eye, UserPlus, Users, Columns, LayoutGrid, GripVertical, ChevronDown
+} from "lucide-react";
+import { TodoTask, Employee, DeletedTodoTask, isTargetMatch } from "../types";
+import TodoHistoryModal from "./TodoHistoryModal";
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 
 interface ManagerDashboardProps {
   currentUser: { id: number; name: string; role: string; email_id?: string };
   employees: Employee[];
+<<<<<<< HEAD
   companies?: Company[];
   assets?: CompanyAsset[];
+=======
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   refreshLogs: () => void;
 }
 
 export default function ManagerDashboard({
   currentUser,
   employees,
+<<<<<<< HEAD
   companies = [],
   assets = [],
+=======
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   refreshLogs
 }: ManagerDashboardProps) {
   const [todos, setTodos] = useState<TodoTask[]>([]);
   const [deletedTodos, setDeletedTodos] = useState<DeletedTodoTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+<<<<<<< HEAD
   const [activeTab, setActiveTab] = useState<"todo" | "finished" | "deleted" | "attendance" | "companies">("todo");
+=======
+  const [activeTab, setActiveTab] = useState<"todo" | "finished" | "deleted">("todo");
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAccountsUser, setSelectedAccountsUser] = useState("");
   const [viewMode, setViewMode] = useState<"userColumns" | "grid">("userColumns");
@@ -1112,6 +1129,7 @@ export default function ManagerDashboard({
               <Trash2 className="h-3.5 w-3.5" />
               <span>Deleted Tasks</span>
             </button>
+<<<<<<< HEAD
             <button
               onClick={() => setActiveTab("attendance")}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all cursor-pointer ${
@@ -1134,6 +1152,8 @@ export default function ManagerDashboard({
               <Building className="h-3.5 w-3.5" />
               <span>Company Assets</span>
             </button>
+=======
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1175,6 +1195,7 @@ export default function ManagerDashboard({
             </button>
           </div>
         </div>
+<<<<<<< HEAD
         {activeTab === "companies" ? (
           <div className="pt-4">
             <CompanySection
@@ -1197,6 +1218,10 @@ export default function ManagerDashboard({
         ) : (
           <>
             {/* Filters and search */}
+=======
+
+        {/* Filters and search */}
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
         <div className="flex flex-col md:flex-row gap-2">
           {/* Search box */}
           <div className="relative flex-grow">
@@ -1443,8 +1468,11 @@ export default function ManagerDashboard({
             {(activeTab === "deleted" ? filteredDeletedTodos : filteredTodos).map(todo => renderTaskCard(todo))}
           </div>
         )}
+<<<<<<< HEAD
           </>
         )}
+=======
+>>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       </div>
 
       {/* Add To-Do Modal */}
