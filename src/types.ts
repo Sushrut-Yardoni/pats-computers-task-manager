@@ -28,13 +28,10 @@ export interface TaskHistoryEntry {
     remarks?: string | null;
     materials_carried?: string | null;
     status?: string;
-<<<<<<< HEAD
     contract_type?: string;
     company_id?: number | null;
     company_name?: string | null;
     asset_id?: string | null;
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   };
   after: {
     customer_name: string;
@@ -46,13 +43,10 @@ export interface TaskHistoryEntry {
     remarks?: string | null;
     materials_carried?: string | null;
     status?: string;
-<<<<<<< HEAD
     contract_type?: string;
     company_id?: number | null;
     company_name?: string | null;
     asset_id?: string | null;
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   };
 }
 
@@ -74,13 +68,10 @@ export interface Task {
   km_travelled?: number;
   materials_carried?: string | null;
   history?: TaskHistoryEntry[];
-<<<<<<< HEAD
   contract_type?: "AMC" | "Non AMC" | string;
   company_id?: number | null;
   company_name?: string | null;
   asset_id?: string | null;
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 }
 
 export interface TodoTaskHistoryEntry {
@@ -140,20 +131,15 @@ export interface Company {
   name: string;
   type: "AMC" | "Non AMC";
   created_at: string;
-<<<<<<< HEAD
   by_user?: string; // Backwards compatible optional property
   created_by: string;
   allocated_engineer_id?: number | null;
   allocated_engineer_name?: string | null;
-=======
-  created_by: string;
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 }
 
 export interface CompanyAsset {
   id: number;
   company_id: number;
-<<<<<<< HEAD
   location: string;
   asset_id: string;
   asset: string;
@@ -179,30 +165,6 @@ export interface CompanyAsset {
   status?: string;
   amc_status?: "In AMC" | "Not in AMC";
   created_at?: string;
-=======
-  asset: string;
-  asset_id: string;
-  location: string;
-  department: string;
-  monitor: string;
-  employee_name: string;
-  comp_name: string;
-  model_no: string;
-  configured_os: string;
-  os_key: string;
-  ms_office: string;
-  office_key: string;
-  other_app: string;
-  serial: string;
-  lan_ip: string;
-  mac_ip: string;
-  wifi_mac_ip: string;
-  antivirus_key: string;
-  key_val: string;
-  validity: string;
-  remarks: string;
-  created_at: string;
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 }
 
 export function isTargetMatch(targetRaw: string, userNameRaw: string, userEmailRaw?: string): boolean {

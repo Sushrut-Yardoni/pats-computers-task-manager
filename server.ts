@@ -1,7 +1,6 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
@@ -9,7 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 app.use(express.json());
 
 // Custom CORS middleware to allow cross-origin requests from mobile applications or external previews
@@ -116,12 +115,9 @@ const sqlLogs: SqlLog[] = [];
 // Helper to gracefully translate Supabase RLS and policy errors to highly helpful human prompts
 function translateSupabaseError(err: any, tableName: string): string {
   const msg = err?.message || String(err);
-<<<<<<< HEAD
   if (err?.code === "42P01" || msg.includes("does not exist")) {
     return `The '${tableName}' table does not exist in your Supabase database. Please copy and run the creation SQL DDL queries from the Attendance tab / Admin dashboard to provision it.`;
   }
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   if (msg.includes("row-level security") || msg.includes("policy") || msg.includes("RLS")) {
     return `Supabase Row-Level Security (RLS) is active on the '${tableName}' table. Please run "ALTER TABLE ${tableName} DISABLE ROW LEVEL SECURITY;" in your Supabase SQL Editor to allow public anonymous database transactions.`;
   }
@@ -190,13 +186,10 @@ interface Task {
   km_travelled?: number;
   materials_carried?: string | null;
   history?: TaskHistoryEntry[];
-<<<<<<< HEAD
   contract_type?: string;
   company_id?: number | null;
   company_name?: string | null;
   asset_id?: string | null;
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 }
 
 interface OfflineTravel {
@@ -248,17 +241,13 @@ interface Company {
   type: "AMC" | "Non AMC";
   created_at: string;
   created_by: string;
-<<<<<<< HEAD
   allocated_engineer_id?: number | null;
   allocated_engineer_name?: string | null;
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 }
 
 interface CompanyAsset {
   id: number;
   company_id: number;
-<<<<<<< HEAD
   location: string;
   asset_id: string;
   asset: string;
@@ -296,30 +285,6 @@ interface AttendanceRecord {
   out_time: string | null;
   in_location_coords: string | null;
   out_location_coords: string | null;
-=======
-  asset: string;
-  asset_id: string;
-  location: string;
-  department: string;
-  monitor: string;
-  employee_name: string;
-  comp_name: string;
-  model_no: string;
-  configured_os: string;
-  os_key: string;
-  ms_office: string;
-  office_key: string;
-  other_app: string;
-  serial: string;
-  lan_ip: string;
-  mac_ip: string;
-  wifi_mac_ip: string;
-  antivirus_key: string;
-  key_val: string;
-  validity: string;
-  remarks: string;
-  created_at: string;
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 }
 
 interface DatabaseSchema {
@@ -330,19 +295,13 @@ interface DatabaseSchema {
   deletedTodos?: DeletedTodoTask[];
   companies?: Company[];
   assets?: CompanyAsset[];
-<<<<<<< HEAD
   attendance?: AttendanceRecord[];
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   nextTaskId: number;
   nextTodoId?: number;
   nextOfflineTravelId?: number;
   nextCompanyId?: number;
   nextAssetId?: number;
-<<<<<<< HEAD
   nextAttendanceId?: number;
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   settings?: {
     petrol_price: number;
   };
@@ -470,7 +429,6 @@ function initDb(): DatabaseSchema {
         data.nextAssetId = data.assets.length > 0 ? Math.max(...data.assets.map(a => a.id)) + 1 : 1;
         migrated = true;
       }
-<<<<<<< HEAD
       if (!data.attendance) {
         data.attendance = [];
         migrated = true;
@@ -479,8 +437,6 @@ function initDb(): DatabaseSchema {
         data.nextAttendanceId = data.attendance.length > 0 ? Math.max(...data.attendance.map(a => a.id)) + 1 : 1;
         migrated = true;
       }
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       if (migrated) {
         try {
           fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
@@ -591,17 +547,11 @@ function initDb(): DatabaseSchema {
     ],
     deletedTodos: [],
     companies: [],
-<<<<<<< HEAD
     nextCompanyId: 1,
     assets: [],
     nextAssetId: 1,
     attendance: [],
     nextAttendanceId: 1,
-=======
-    assets: [],
-    nextCompanyId: 1,
-    nextAssetId: 1,
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     settings: {
       petrol_price: 100
     }
@@ -615,7 +565,6 @@ function initDb(): DatabaseSchema {
 
   // Log schema creation
   logSQL(
-<<<<<<< HEAD
     `CREATE TABLE employees (
   id INT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
@@ -715,9 +664,6 @@ CREATE INDEX idx_tasks_engineer_company_asset ON tasks(assigned_to, company_id, 
 CREATE INDEX idx_bills_task_id ON bills(task_id);
 CREATE INDEX idx_bills_printed ON bills(printed);
 CREATE INDEX idx_bill_items_bill_id ON bill_items(bill_id);`,
-=======
-    `CREATE TABLE employees (\n  id INT PRIMARY KEY,\n  name VARCHAR(100),\n  role VARCHAR(100),\n  joined_at VARCHAR(100),\n  ended_at VARCHAR(100) NULL,\n  email_id VARCHAR(50),\n  password VARCHAR(50)\n);\n\nCREATE TABLE tasks (\n  id INT PRIMARY KEY,\n  customer_name VARCHAR(255),\n  contact_details VARCHAR(255),\n  problem_reported TEXT,\n  assigned_to INT,\n  status VARCHAR(50),\n  assigned_at TIMESTAMP,\n  accepted_at TIMESTAMP NULL,\n  finished_at TIMESTAMP NULL,\n  remarks TEXT NULL,\n  FOREIGN KEY (assigned_to) REFERENCES employees(id)\n);`,
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     4
   );
 
@@ -1302,7 +1248,6 @@ app.get("/api/sync", async (req, res) => {
         if (isSupabaseConfigured && supabase) {
           const { data: cos } = await supabase.from("companies").select("*").order("id", { ascending: true });
           companiesList = cos || [];
-<<<<<<< HEAD
           const { data: ast } = await supabase.from("company_assets").select("*").order("id", { ascending: true });
           assetsList = ast || [];
         } else {
@@ -1311,22 +1256,6 @@ app.get("/api/sync", async (req, res) => {
         }
       } catch (err) {
         companiesList = db.companies || [];
-=======
-        } else {
-          companiesList = db.companies || [];
-        }
-      } catch (err) {
-        companiesList = db.companies || [];
-      }
-      try {
-        if (isSupabaseConfigured && supabase) {
-          const { data: ast } = await supabase.from("assets").select("*").order("id", { ascending: true });
-          assetsList = ast || [];
-        } else {
-          assetsList = db.assets || [];
-        }
-      } catch (err) {
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
         assetsList = db.assets || [];
       }
 
@@ -1372,16 +1301,11 @@ app.get("/api/sync", async (req, res) => {
 
 // Create a new company
 app.post("/api/companies", async (req, res) => {
-<<<<<<< HEAD
   const { name, type, created_by, allocated_engineer_id } = req.body;
-=======
-  const { name, type, created_by } = req.body;
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   if (!name || !type) {
     return res.status(400).json({ error: "Company name and type (AMC / Non AMC) are required." });
   }
 
-<<<<<<< HEAD
   if (!db.companies) db.companies = [];
   const nextId = db.companies.length > 0 
     ? Math.max(0, ...db.companies.map(c => Number(c.id) || 0)) + 1 
@@ -1394,36 +1318,22 @@ app.post("/api/companies", async (req, res) => {
     if (emp) engName = emp.name;
   }
 
-=======
-  const nextId = db.nextCompanyId || 1;
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   const newCompany = {
     id: nextId,
     name,
     type: type === "AMC" ? ("AMC" as const) : ("Non AMC" as const),
     created_by: created_by || "System",
-<<<<<<< HEAD
     created_at: new Date().toISOString(),
     allocated_engineer_id: engId,
     allocated_engineer_name: engName
   };
 
-=======
-    created_at: new Date().toISOString()
-  };
-
-  if (!db.companies) db.companies = [];
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   db.companies.push(newCompany);
   db.nextCompanyId = nextId + 1;
   saveDb();
 
   // Log SQL
-<<<<<<< HEAD
   logSQL(`INSERT INTO companies (id, name, type, created_by, allocated_engineer_id, created_at) VALUES (${nextId}, '${name.replace(/'/g, "''")}', '${type}', '${(created_by || "System").replace(/'/g, "''")}', ${engId || "NULL"}, NOW());`, 1);
-=======
-  logSQL(`INSERT INTO companies (id, name, type, created_by, created_at) VALUES (${nextId}, '${name}', '${type}', '${created_by || "System"}', NOW());`, 1);
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -1436,7 +1346,6 @@ app.post("/api/companies", async (req, res) => {
   res.status(201).json(newCompany);
 });
 
-<<<<<<< HEAD
 // Allocate engineer to a company
 app.post("/api/companies/:id/allocate", async (req, res) => {
   const companyId = Number(req.params.id);
@@ -1561,64 +1470,6 @@ app.post("/api/companies/:id/assets", async (req, res) => {
     validity: assetData.validity || "",
     status: assetData.status || "In Use",
     amc_status: assetData.amc_status === "Not in AMC" ? "Not in AMC" : "In AMC",
-=======
-// Create a new asset under a company
-app.post("/api/assets", async (req, res) => {
-  const {
-    company_id,
-    asset,
-    asset_id,
-    location,
-    department,
-    monitor,
-    employee_name,
-    comp_name,
-    model_no,
-    configured_os,
-    os_key,
-    ms_office,
-    office_key,
-    other_app,
-    serial,
-    lan_ip,
-    mac_ip,
-    wifi_mac_ip,
-    antivirus_key,
-    key_val,
-    validity,
-    remarks
-  } = req.body;
-
-  if (!company_id) {
-    return res.status(400).json({ error: "company_id is required." });
-  }
-
-  const nextId = db.nextAssetId || 1;
-  const newAsset = {
-    id: nextId,
-    company_id: Number(company_id),
-    asset: asset || "",
-    asset_id: asset_id || "",
-    location: location || "",
-    department: department || "",
-    monitor: monitor || "",
-    employee_name: employee_name || "",
-    comp_name: comp_name || "",
-    model_no: model_no || "",
-    configured_os: configured_os || "",
-    os_key: os_key || "",
-    ms_office: ms_office || "",
-    office_key: office_key || "",
-    other_app: other_app || "",
-    serial: serial || "",
-    lan_ip: lan_ip || "",
-    mac_ip: mac_ip || "",
-    wifi_mac_ip: wifi_mac_ip || "",
-    antivirus_key: antivirus_key || "",
-    key_val: key_val || "",
-    validity: validity || "",
-    remarks: remarks || "",
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     created_at: new Date().toISOString()
   };
 
@@ -1628,19 +1479,11 @@ app.post("/api/assets", async (req, res) => {
   saveDb();
 
   // Log SQL
-<<<<<<< HEAD
   logSQL(`INSERT INTO company_assets (id, company_id, location, asset_id, asset, employee_name, comp_name, model_no, serial_no, config_processor, config_ram, config_storage, os, os_key, os_type, office, office_key, office_type, lan_mac, wan_mac, ip_address, antivirus, antivirus_key, validity, status, amc_status, created_at) VALUES (${nextId}, ${companyId}, '${newAsset.location.replace(/'/g, "''")}', '${newAsset.asset_id.replace(/'/g, "''")}', '${newAsset.asset.replace(/'/g, "''")}', '${newAsset.employee_name.replace(/'/g, "''")}', '${newAsset.comp_name.replace(/'/g, "''")}', '${newAsset.model_no.replace(/'/g, "''")}', '${(newAsset.serial_no||"").replace(/'/g, "''")}', '${newAsset.config_processor.replace(/'/g, "''")}', '${newAsset.config_ram.replace(/'/g, "''")}', '${newAsset.config_storage.replace(/'/g, "''")}', '${newAsset.os.replace(/'/g, "''")}', '${(newAsset.os_key||"").replace(/'/g, "''")}', '${(newAsset.os_type||"").replace(/'/g, "''")}', '${newAsset.office.replace(/'/g, "''")}', '${(newAsset.office_key||"").replace(/'/g, "''")}', '${(newAsset.office_type||"").replace(/'/g, "''")}', '${(newAsset.lan_mac||"").replace(/'/g, "''")}', '${(newAsset.wan_mac||"").replace(/'/g, "''")}', '${newAsset.ip_address.replace(/'/g, "''")}', '${(newAsset.antivirus||"").replace(/'/g, "''")}', '${(newAsset.antivirus_key||"").replace(/'/g, "''")}', '${(newAsset.validity||"").replace(/'/g, "''")}', '${(newAsset.status||"").replace(/'/g, "''")}', '${newAsset.amc_status}', NOW());`, 1);
 
   if (isSupabaseConfigured && supabase) {
     try {
       await supabase.from("company_assets").insert([newAsset]);
-=======
-  logSQL(`INSERT INTO assets (id, company_id, asset, asset_id, serial, location, department) VALUES (${nextId}, ${company_id}, '${asset || ""}', '${asset_id || ""}', '${serial || ""}', '${location || ""}', '${department || ""}');`, 1);
-
-  if (isSupabaseConfigured && supabase) {
-    try {
-      await supabase.from("assets").insert([newAsset]);
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     } catch (e) {
       console.warn("Could not insert asset to Supabase:", e);
     }
@@ -1649,7 +1492,6 @@ app.post("/api/assets", async (req, res) => {
   res.status(201).json(newAsset);
 });
 
-<<<<<<< HEAD
 // Update a company asset (supports both POST and PUT)
 const handleAssetUpdate = async (req: express.Request, res: express.Response) => {
   const assetId = Number(req.params.id);
@@ -1792,8 +1634,6 @@ const handleCompanyAssetsDeleteAll = async (req: express.Request, res: express.R
 app.delete("/api/companies/:id/assets", handleCompanyAssetsDeleteAll);
 app.post("/api/companies/:id/assets/delete-all", handleCompanyAssetsDeleteAll);
 
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 // Get list of employees
 app.get("/api/employees", async (req, res) => {
   const sql = "SELECT * FROM employees ORDER BY name ASC;";
@@ -1884,7 +1724,6 @@ app.get("/api/tasks", async (req, res) => {
 
 // Admin assigns task
 app.post("/api/tasks", async (req, res) => {
-<<<<<<< HEAD
   const { 
     customer_name, 
     contact_details, 
@@ -1933,12 +1772,6 @@ app.post("/api/tasks", async (req, res) => {
       }
       validatedAssetId = matched.asset_id || cleanAssetId;
     }
-=======
-  const { customer_name, contact_details, problem_reported, assigned_to, address } = req.body;
-
-  if (!customer_name || !contact_details || !problem_reported || !assigned_to) {
-    return res.status(400).json({ error: "Missing required task fields" });
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   }
 
   if (isSupabaseConfigured && supabase) {
@@ -1949,11 +1782,7 @@ app.post("/api/tasks", async (req, res) => {
       const newTask: Task = {
         id: newId,
         customer_name,
-<<<<<<< HEAD
         contact_details: safeContact,
-=======
-        contact_details,
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
         problem_reported,
         assigned_to: Number(assigned_to),
         status: "Pending",
@@ -1961,7 +1790,6 @@ app.post("/api/tasks", async (req, res) => {
         accepted_at: null,
         finished_at: null,
         remarks: null,
-<<<<<<< HEAD
         address: address || "",
         contract_type: safeContractType,
         company_id: numCompanyId,
@@ -1989,15 +1817,6 @@ app.post("/api/tasks", async (req, res) => {
       }
 
       const query = `INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, address, contract_type, company_id, company_name, asset_id)\nVALUES (${newId}, '${customer_name.replace(/'/g, "''")}', '${safeContact.replace(/'/g, "''")}', '${problem_reported.replace(/'/g, "''")}', ${assigned_to}, 'Pending', '${newTask.assigned_at}', '${(address || "").replace(/'/g, "''")}', '${safeContractType}', ${numCompanyId || "NULL"}, '${(company_name || "").replace(/'/g, "''")}', '${(validatedAssetId || "").replace(/'/g, "''")}');`;
-=======
-        address: address || ""
-      };
-
-      const { error: insertErr } = await supabase.from("tasks").insert(newTask);
-      if (insertErr) throw insertErr;
-
-      const query = `INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, address)\nVALUES (${newId}, '${customer_name.replace(/'/g, "''")}', '${contact_details.replace(/'/g, "''")}', '${problem_reported.replace(/'/g, "''")}', ${assigned_to}, 'Pending', '${newTask.assigned_at}', '${(address || "").replace(/'/g, "''")}');`;
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       logSQL(query, 1);
 
       const { data: employee } = await supabase.from("employees").select("name").eq("id", assigned_to).single();
@@ -2014,11 +1833,7 @@ app.post("/api/tasks", async (req, res) => {
     const newTask: Task = {
       id: newId,
       customer_name,
-<<<<<<< HEAD
       contact_details: safeContact,
-=======
-      contact_details,
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       problem_reported,
       assigned_to: Number(assigned_to),
       status: "Pending",
@@ -2026,25 +1841,17 @@ app.post("/api/tasks", async (req, res) => {
       accepted_at: null,
       finished_at: null,
       remarks: null,
-<<<<<<< HEAD
       address: address || "",
       contract_type: safeContractType,
       company_id: numCompanyId,
       company_name: company_name || null,
       asset_id: validatedAssetId
-=======
-      address: address || ""
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     };
 
     db.tasks.unshift(newTask);
     saveDb();
 
-<<<<<<< HEAD
     const query = `INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, address, contract_type, company_id, company_name, asset_id)\nVALUES (${newId}, '${customer_name.replace(/'/g, "''")}', '${safeContact.replace(/'/g, "''")}', '${problem_reported.replace(/'/g, "''")}', ${assigned_to}, 'Pending', '${newTask.assigned_at}', '${(address || "").replace(/'/g, "''")}', '${safeContractType}', ${numCompanyId || "NULL"}, '${(company_name || "").replace(/'/g, "''")}', '${(validatedAssetId || "").replace(/'/g, "''")}');`;
-=======
-    const query = `INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, address)\nVALUES (${newId}, '${customer_name.replace(/'/g, "''")}', '${contact_details.replace(/'/g, "''")}', '${problem_reported.replace(/'/g, "''")}', ${assigned_to}, 'Pending', '${newTask.assigned_at}', '${(address || "").replace(/'/g, "''")}');`;
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     logSQL(query, 1);
 
     const emp = db.employees.find(e => e.id === newTask.assigned_to);
@@ -2532,7 +2339,6 @@ app.post("/api/tasks/:id/update", async (req, res) => {
     status, 
     remarks, 
     materials_carried, 
-<<<<<<< HEAD
     edited_by,
     contract_type,
     company_id,
@@ -2575,11 +2381,6 @@ app.post("/api/tasks/:id/update", async (req, res) => {
     }
   }
 
-=======
-    edited_by 
-  } = req.body;
-
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   if (isSupabaseConfigured && supabase) {
     try {
       const { data: task, error: fetchErr } = await supabase.from("tasks").select("*").eq("id", taskId).single();
@@ -2595,15 +2396,11 @@ app.post("/api/tasks/:id/update", async (req, res) => {
         assigned_to: task.assigned_to,
         status: task.status,
         remarks: task.remarks,
-<<<<<<< HEAD
         materials_carried: task.materials_carried,
         contract_type: task.contract_type,
         company_id: task.company_id,
         company_name: task.company_name,
         asset_id: task.asset_id
-=======
-        materials_carried: task.materials_carried
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       };
 
       const updatedFields: any = {
@@ -2614,15 +2411,11 @@ app.post("/api/tasks/:id/update", async (req, res) => {
         assigned_to: assigned_to !== undefined ? Number(assigned_to) : task.assigned_to,
         status: status !== undefined ? status : task.status,
         remarks: remarks !== undefined ? remarks : task.remarks,
-<<<<<<< HEAD
         materials_carried: materials_carried !== undefined ? materials_carried : task.materials_carried,
         contract_type: contract_type !== undefined ? contract_type : task.contract_type,
         company_id: company_id !== undefined ? (company_id ? Number(company_id) : null) : task.company_id,
         company_name: company_name !== undefined ? company_name : task.company_name,
         asset_id: validatedUpdateAssetId !== undefined ? validatedUpdateAssetId : task.asset_id
-=======
-        materials_carried: materials_carried !== undefined ? materials_carried : task.materials_carried
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       };
 
       // Construct history if edited_by is provided
@@ -2685,15 +2478,11 @@ app.post("/api/tasks/:id/update", async (req, res) => {
       assigned_to: task.assigned_to,
       status: task.status,
       remarks: task.remarks,
-<<<<<<< HEAD
       materials_carried: task.materials_carried,
       contract_type: task.contract_type,
       company_id: task.company_id,
       company_name: task.company_name,
       asset_id: task.asset_id
-=======
-      materials_carried: task.materials_carried
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     };
 
     const updatedFields = {
@@ -2704,15 +2493,11 @@ app.post("/api/tasks/:id/update", async (req, res) => {
       assigned_to: assigned_to !== undefined ? Number(assigned_to) : task.assigned_to,
       status: status !== undefined ? status : task.status,
       remarks: remarks !== undefined ? remarks : task.remarks,
-<<<<<<< HEAD
       materials_carried: materials_carried !== undefined ? materials_carried : task.materials_carried,
       contract_type: contract_type !== undefined ? contract_type : task.contract_type,
       company_id: company_id !== undefined ? (company_id ? Number(company_id) : null) : task.company_id,
       company_name: company_name !== undefined ? company_name : task.company_name,
       asset_id: validatedUpdateAssetId !== undefined ? validatedUpdateAssetId : task.asset_id
-=======
-      materials_carried: materials_carried !== undefined ? materials_carried : task.materials_carried
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     };
 
     // Construct history if edited_by is provided
@@ -3427,7 +3212,6 @@ app.get("/api/todos/deleted", (req, res) => {
   res.json(deletedTodos);
 });
 
-<<<<<<< HEAD
 // FETCH ALL ATTENDANCE RECORDS OR FILTER BY EMPLOYEE
 app.get("/api/attendance", async (req, res) => {
   const empIdParam = req.query.employee_id;
@@ -3610,8 +3394,6 @@ app.delete("/api/attendance", async (req, res) => {
   return res.json({ success: true, message: "All attendance records reset successfully." });
 });
 
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 // Fetch Offline travels
 app.get("/api/offline-travels", async (req, res) => {
   if (isSupabaseConfigured && supabase) {
@@ -4083,10 +3865,7 @@ app.post("/api/sql/reset", async (req, res) => {
       await supabase.from("offline_travels").delete().neq("id", 0);
       await supabase.from("tasks").delete().neq("id", 0);
       await supabase.from("employees").delete().neq("id", 0);
-<<<<<<< HEAD
       await supabase.from("attendance").delete().not("id", "is", null);
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       await supabase.from("settings").delete().neq("key", "");
 
       // re-seed values
@@ -4138,7 +3917,6 @@ app.post("/api/sql/clear", async (req, res) => {
       await supabase.from("employees").delete().not("id", "is", null);
       await supabase.from("todos_history").delete().not("id", "is", null);
       await supabase.from("todo").delete().not("id", "is", null);
-<<<<<<< HEAD
       await supabase.from("attendance").delete().not("id", "is", null);
 
       logSQL("DELETE FROM tasks;\nDELETE FROM employees;\nDELETE FROM sql_logs;\nDELETE FROM todos_history;\nDELETE FROM todo;\nDELETE FROM attendance;", 0);
@@ -4146,14 +3924,6 @@ app.post("/api/sql/clear", async (req, res) => {
       return res.json({
         message: "All tasks, engineers, logs, to-dos, and attendance records have been successfully removed from your Supabase database.",
         data: { employees: [], tasks: [], attendance: [] }
-=======
-
-      logSQL("DELETE FROM tasks;\nDELETE FROM employees;\nDELETE FROM sql_logs;\nDELETE FROM todos_history;\nDELETE FROM todo;", 0);
-
-      return res.json({
-        message: "All tasks, engineers, logs, and to-dos have been successfully removed from your Supabase database.",
-        data: { employees: [], tasks: [] }
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       });
     } catch (e: any) {
       return res.status(500).json({ error: translateSupabaseError(e, "database") });
@@ -4162,7 +3932,6 @@ app.post("/api/sql/clear", async (req, res) => {
     db.employees = [];
     db.tasks = [];
     db.todos = [];
-<<<<<<< HEAD
     db.attendance = [];
     db.nextTaskId = 1001;
     db.nextTodoId = 101;
@@ -4170,20 +3939,19 @@ app.post("/api/sql/clear", async (req, res) => {
     saveDb();
     logSQL("DELETE FROM tasks;\nDELETE FROM employees;\nDELETE FROM todos;\nDELETE FROM attendance;", 0);
     res.json({ message: "All tasks, engineers, to-do tasks, and attendance records have been successfully removed from the database.", data: db });
-=======
-    db.nextTaskId = 1001;
-    db.nextTodoId = 101;
-    saveDb();
-    logSQL("DELETE FROM tasks;\nDELETE FROM employees;\nDELETE FROM todos;", 0);
-    res.json({ message: "All tasks, engineers, and to-do tasks have been successfully removed from the database.", data: db });
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   }
 });
 
 // Vite server integrations
 async function startServer() {
-  // Vite developer middleware
-  if (process.env.DISABLE_HMR === "true" || process.env.NODE_ENV === "production") {
+  // Vite developer middleware vs Production static serving
+  const isProduction = 
+    process.env.NODE_ENV === "production" || 
+    process.env.RENDER === "true" || 
+    process.env.DISABLE_HMR === "true" ||
+    (Boolean(process.argv[1]) && process.argv[1].includes("dist"));
+
+  if (isProduction) {
     // Serves static production files
     const distPath = path.join(process.cwd(), "dist");
     
@@ -4195,6 +3963,7 @@ async function startServer() {
       });
     } else {
       // Dev mode fallback if dist folder is absent
+      const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",
@@ -4203,6 +3972,7 @@ async function startServer() {
     }
   } else {
     // Normal dev server mode
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

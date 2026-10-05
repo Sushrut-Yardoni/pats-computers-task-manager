@@ -1,32 +1,20 @@
-<<<<<<< HEAD
 import React, { useState, useMemo } from "react";
 import { 
   PlusCircle, Search, Cpu, Clock, CheckCircle2, ShieldCheck, Layers, Phone, Mail, X, ArrowRight, Calendar, BookmarkCheck, AlertCircle, Package, Trash2, Building, Shield, Laptop, Check
 } from "lucide-react";
 import { Task, Employee, Company, CompanyAsset } from "../types";
-=======
-import React, { useState } from "react";
-import { 
-  PlusCircle, Search, Cpu, Clock, CheckCircle2, ShieldCheck, Layers, Phone, Mail, X, ArrowRight, Calendar, BookmarkCheck, AlertCircle, Package, Trash2
-} from "lucide-react";
-import { Task, Employee } from "../types";
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 
 interface TaskManagementSectionProps {
   tasks: Task[];
   employees: Employee[];
-<<<<<<< HEAD
   companies?: Company[];
   assets?: CompanyAsset[];
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   onAssignTask: (taskData: {
     customer_name: string;
     contact_details: string;
     problem_reported: string;
     assigned_to: number;
     address?: string;
-<<<<<<< HEAD
     contract_type?: string;
     company_id?: number | null;
     company_name?: string | null;
@@ -44,23 +32,14 @@ interface TaskManagementSectionProps {
     company_name?: string | null;
     asset_id?: string | null;
   }) => Promise<void>;
-=======
-  }) => Promise<void>;
-  refreshLogs: () => void;
-  onUpdateRemarks?: (taskId: number, remarks: string) => Promise<void>;
-  onUpdateTaskDetails?: (taskId: number, taskData: { customer_name: string; contact_details: string; problem_reported: string; address?: string }) => Promise<void>;
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   onTogglePriority?: (taskId: number) => Promise<void>;
 }
 
 export default function TaskManagementSection({
   tasks,
   employees,
-<<<<<<< HEAD
   companies = [],
   assets = [],
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   onAssignTask,
   refreshLogs,
   onUpdateRemarks,
@@ -68,12 +47,9 @@ export default function TaskManagementSection({
   onTogglePriority
 }: TaskManagementSectionProps) {
   // Local task assigner Form states
-<<<<<<< HEAD
   const [contractType, setContractType] = useState<"AMC" | "Non AMC">("AMC");
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
   const [selectedAssetId, setSelectedAssetId] = useState<string>("");
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   const [customerName, setCustomerName] = useState("");
   const [contactDetails, setContactDetails] = useState("");
   const [address, setAddress] = useState("");
@@ -82,7 +58,6 @@ export default function TaskManagementSection({
   const [isAssigning, setIsAssigning] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
 
-<<<<<<< HEAD
   // Available companies filtered by AMC / Non AMC contract type
   const availableCompanies = useMemo(() => {
     return companies.filter(c => c.type === contractType);
@@ -145,8 +120,6 @@ export default function TaskManagementSection({
     }
   };
 
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   // Local querying and filtering states
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | "Pending" | "In Progress" | "Finished">("All");
@@ -228,7 +201,6 @@ export default function TaskManagementSection({
   const [editContactDetails, setEditContactDetails] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [editProblemReported, setEditProblemReported] = useState("");
-<<<<<<< HEAD
   const [editContractType, setEditContractType] = useState<string>("AMC");
   const [editAssetId, setEditAssetId] = useState<string>("");
   const [savingDetails, setSavingDetails] = useState(false);
@@ -248,10 +220,6 @@ export default function TaskManagementSection({
     return [];
   }, [selectedTask, assets, companies]);
 
-=======
-  const [savingDetails, setSavingDetails] = useState(false);
-
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   // Admin delete state
   const [isDeleting, setIsDeleting] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
@@ -269,7 +237,6 @@ export default function TaskManagementSection({
       return;
     }
 
-<<<<<<< HEAD
     // Asset ID can only be selected and assigned if it actually exists in the sheet
     let finalAssetId: string | null = null;
     if (selectedAssetId && selectedAssetId !== "none") {
@@ -283,8 +250,6 @@ export default function TaskManagementSection({
 
     const selectedComp = companies.find(c => String(c.id) === selectedCompanyId);
 
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     setIsAssigning(true);
     setFormSuccess(false);
     try {
@@ -293,15 +258,11 @@ export default function TaskManagementSection({
         contact_details: contactDetails.trim() || "N/A",
         problem_reported: problemReported.trim(),
         assigned_to: Number(assignedTo),
-<<<<<<< HEAD
         address: address.trim() || "",
         contract_type: contractType,
         company_id: selectedCompanyId && selectedCompanyId !== "custom" ? Number(selectedCompanyId) : null,
         company_name: selectedComp ? selectedComp.name : (customerName.trim() || null),
         asset_id: finalAssetId
-=======
-        address: address.trim() || ""
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       });
       
       // Reset form controls
@@ -310,28 +271,17 @@ export default function TaskManagementSection({
       setProblemReported("");
       setAssignedTo("");
       setAddress("");
-<<<<<<< HEAD
       setSelectedCompanyId("");
       setSelectedAssetId("");
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       setFormSuccess(true);
       setTimeout(() => {
         setFormSuccess(false);
         setIsAssignRepairModalOpen(false);
-<<<<<<< HEAD
       }, 1500);
       refreshLogs();
     } catch (err: any) {
       console.error(err);
       alert(err.message || "Failed to record task in relational DB index.");
-=======
-      }, 2000);
-      refreshLogs();
-    } catch (err) {
-      console.error(err);
-      alert("Failed to record task in relational DB index.");
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     } finally {
       setIsAssigning(false);
     }
@@ -349,11 +299,8 @@ export default function TaskManagementSection({
     setEditContactDetails(task.contact_details);
     setEditAddress(task.address || "");
     setEditProblemReported(task.problem_reported);
-<<<<<<< HEAD
     setEditContractType(task.contract_type || "AMC");
     setEditAssetId(task.asset_id || "");
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     setIsEditingDetails(false);
   };
 
@@ -400,7 +347,6 @@ export default function TaskManagementSection({
       return;
     }
 
-<<<<<<< HEAD
     // Asset ID can only be selected if it exists in the sheet
     if (editAssetId.trim()) {
       const existsInSheet = assets.some(a => 
@@ -413,34 +359,24 @@ export default function TaskManagementSection({
       }
     }
 
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     setSavingDetails(true);
     try {
       await onUpdateTaskDetails(selectedTask.id, {
         customer_name: editCustomerName.trim(),
         contact_details: editContactDetails.trim(),
         problem_reported: editProblemReported.trim(),
-<<<<<<< HEAD
         address: editAddress.trim(),
         contract_type: editContractType,
         asset_id: editAssetId.trim() || null
-=======
-        address: editAddress.trim()
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       });
       setSelectedTask(prev => prev ? {
         ...prev,
         customer_name: editCustomerName.trim(),
         contact_details: editContactDetails.trim(),
         problem_reported: editProblemReported.trim(),
-<<<<<<< HEAD
         address: editAddress.trim(),
         contract_type: editContractType,
         asset_id: editAssetId.trim() || null
-=======
-        address: editAddress.trim()
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
       } : null);
       setIsEditingDetails(false);
       alert("Task details updated successfully!");
@@ -607,7 +543,6 @@ export default function TaskManagementSection({
 
         {/* Registering Form Modal */}
         {isAssignRepairModalOpen && (
-<<<<<<< HEAD
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in select-text text-slate-800">
             <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative overflow-hidden max-h-[92vh] flex flex-col">
               <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-emerald-600 rounded-t-2xl" />
@@ -626,23 +561,11 @@ export default function TaskManagementSection({
                   type="button"
                   onClick={() => setIsAssignRepairModalOpen(false)}
                   className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-=======
-          <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in select-text text-slate-800">
-            <div className="bg-white border border-slate-200 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-t-2xl" />
-              <div className="flex items-center justify-between gap-2 mb-4 border-b border-slate-100 pb-3">
-                <h3 className="font-display font-extrabold text-slate-900 text-sm">Assign Repair Ticket</h3>
-                <button
-                  type="button"
-                  onClick={() => setIsAssignRepairModalOpen(false)}
-                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
 
-<<<<<<< HEAD
               <form onSubmit={handleCreateTask} className="space-y-3.5 text-xs overflow-y-auto pr-1">
                 {/* 1. Contract Type Selection */}
                 <div>
@@ -848,24 +771,10 @@ export default function TaskManagementSection({
                     onChange={(e) => setProblemReported(e.target.value)}
                     rows={3}
                     className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors resize-none"
-=======
-              <form onSubmit={handleCreateTask} className="space-y-3.5 text-xs">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
-                    Customer Full Name
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Ramesh Chandra"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-400 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                     required
                   />
                 </div>
 
-<<<<<<< HEAD
                 {/* 7. Assign Engineer */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -884,52 +793,6 @@ export default function TaskManagementSection({
                       return null;
                     })()}
                   </div>
-=======
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
-                    Contact Details <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. +91 99000 12345 (Optional)"
-                    value={contactDetails}
-                    onChange={(e) => setContactDetails(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-400 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
-                    Customer Location Address <span className="text-slate-400 font-normal">(Optional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. MG Road, Ashok Nagar, Bengaluru"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-400 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
-                    Problem Reported
-                  </label>
-                  <textarea
-                    placeholder="Provide description of support request..."
-                    value={problemReported}
-                    onChange={(e) => setProblemReported(e.target.value)}
-                    rows={4}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-400 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors resize-none"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 font-sans">
-                    Assign Engineer
-                  </label>
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                   <select
                     value={assignedTo}
                     onChange={(e) => setAssignedTo(e.target.value)}
@@ -941,11 +804,7 @@ export default function TaskManagementSection({
                     </option>
                     {[...employees].filter(emp => !emp.ended_at).sort((a, b) => a.id - b.id).map((emp) => (
                       <option key={emp.id} value={emp.id} className="text-slate-700">
-<<<<<<< HEAD
                         {emp.name} ({emp.role}) - ID: #{emp.id}
-=======
-                        {emp.name} ({emp.role}) - ID: {emp.id}
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                       </option>
                     ))}
                   </select>
@@ -960,11 +819,7 @@ export default function TaskManagementSection({
                 <button
                   type="submit"
                   disabled={isAssigning}
-<<<<<<< HEAD
                   className="w-full py-2.5 px-3 rounded-xl text-white font-extrabold text-xs bg-blue-700 hover:bg-blue-800 transition-all flex items-center justify-center gap-1.5 shadow-md border border-blue-900 active:scale-95 uppercase tracking-wide cursor-pointer mt-2 shrink-0"
-=======
-                  className="w-full py-2.5 px-3 rounded-xl text-white font-extrabold text-xs bg-blue-700 hover:bg-blue-800 transition-all flex items-center justify-center gap-1.5 shadow-md border border-blue-900 active:scale-95 uppercase tracking-wide cursor-pointer"
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                 >
                   <PlusCircle className="h-4 w-4" />
                   <span>{isAssigning ? "Posting relational insert..." : "Assign & Dispatch Ticket"}</span>
@@ -1105,7 +960,6 @@ export default function TaskManagementSection({
                       <td className="px-3.5 py-3">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="font-extrabold text-slate-800 select-all text-[11.5px]">{task.customer_name}</p>
-<<<<<<< HEAD
                           {task.contract_type && (
                             <span className={`px-1.5 py-0.5 text-[8px] font-extrabold uppercase rounded-md tracking-wider border ${
                               task.contract_type === "AMC"
@@ -1120,8 +974,6 @@ export default function TaskManagementSection({
                               Asset: #{task.asset_id}
                             </span>
                           )}
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                           {task.is_priority && (
                             <span className="px-1.5 py-0.5 bg-red-50 border border-red-200 text-red-700 text-[8px] font-extrabold uppercase rounded-md tracking-wider">
                               🔥 Urgent
@@ -1133,12 +985,9 @@ export default function TaskManagementSection({
                             </span>
                           )}
                         </div>
-<<<<<<< HEAD
                         {task.company_name && task.company_name !== task.customer_name && (
                           <p className="text-[10px] text-slate-500 font-semibold">{task.company_name}</p>
                         )}
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                         <p className="text-[9px] text-slate-400 font-mono mt-0.5 select-all">{task.contact_details.split("|")[0]}</p>
                       </td>
                       <td className="px-3.5 py-3 max-w-xs truncate font-medium text-slate-600 select-all" title={task.problem_reported}>
@@ -1229,7 +1078,6 @@ export default function TaskManagementSection({
                   </div>
 
                   <div>
-<<<<<<< HEAD
                     <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">Contract Type</label>
                     <select
                       value={editContractType}
@@ -1298,8 +1146,6 @@ export default function TaskManagementSection({
                   </div>
 
                   <div>
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                     <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-500 mb-1">Contact Details</label>
                     <input
                       type="text"
@@ -1339,11 +1185,8 @@ export default function TaskManagementSection({
                         setEditContactDetails(selectedTask.contact_details);
                         setEditAddress(selectedTask.address || "");
                         setEditProblemReported(selectedTask.problem_reported);
-<<<<<<< HEAD
                         setEditContractType(selectedTask.contract_type || "AMC");
                         setEditAssetId(selectedTask.asset_id || "");
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                         setIsEditingDetails(false);
                       }}
                       className="py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-[10px] font-bold uppercase transition-colors"
@@ -1363,11 +1206,7 @@ export default function TaskManagementSection({
               ) : (
                 <>
                   {/* Client Context Information card */}
-<<<<<<< HEAD
                   <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-1.5 relative">
-=======
-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-1 relative">
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                     {selectedTask.status !== "Finished" && (
                       <button
                         onClick={() => setIsEditingDetails(true)}
@@ -1376,7 +1215,6 @@ export default function TaskManagementSection({
                         Edit Details
                       </button>
                     )}
-<<<<<<< HEAD
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[9px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">Client Support Profile</span>
                       {selectedTask.contract_type && (
@@ -1402,10 +1240,6 @@ export default function TaskManagementSection({
                         <span>Company: {selectedTask.company_name}</span>
                       </p>
                     )}
-=======
-                    <span className="text-[9px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">Client Support Profile</span>
-                    <h4 className="text-base font-extrabold text-slate-900 select-all">{selectedTask.customer_name}</h4>
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                     
                     <div className="flex flex-col sm:flex-row gap-2 pt-2 text-xs text-slate-600 font-sans">
                       <a href={`tel:${selectedTask.contact_details.split("|")[0].trim()}`} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
@@ -1424,7 +1258,6 @@ export default function TaskManagementSection({
                     </div>
                   </div>
 
-<<<<<<< HEAD
                   {/* Hardware Asset Details if assigned */}
                   {selectedTask.asset_id && (() => {
                     const matchedAsset = assets.find(
@@ -1468,8 +1301,6 @@ export default function TaskManagementSection({
                     );
                   })()}
 
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
                   {/* Problem diagnosis */}
                   <div className="space-y-1">
                     <span className="text-[10px] font-extrabold text-slate-500 uppercase font-mono">Reported Diagnosis Details</span>

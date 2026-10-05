@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { 
-<<<<<<< HEAD
   PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Calendar, ChevronRight, Eye, Receipt, Printer, Check
-=======
-  PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Calendar, ChevronRight, Eye
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
 } from "lucide-react";
 import { TodoTask, Employee, isTargetMatch } from "../types";
 import TodoHistoryModal from "./TodoHistoryModal";
@@ -22,7 +18,6 @@ export default function AccountsDashboard({
 }: AccountsDashboardProps) {
   const [todos, setTodos] = useState<TodoTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-<<<<<<< HEAD
   const [activeTab, setActiveTab] = useState<"todo" | "finished" | "billing">("todo");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -52,11 +47,6 @@ export default function AccountsDashboard({
     setActiveAccountsBill(null);
   };
 
-=======
-  const [activeTab, setActiveTab] = useState<"todo" | "finished">("todo");
-  const [searchQuery, setSearchQuery] = useState("");
-
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingTodo, setEditingTodo] = useState<TodoTask | null>(null);
@@ -486,7 +476,6 @@ export default function AccountsDashboard({
               <CheckSquare className="h-3.5 w-3.5" />
               <span>Task History / Finished</span>
             </button>
-<<<<<<< HEAD
             <button
               onClick={() => setActiveTab("billing")}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all ${
@@ -498,8 +487,6 @@ export default function AccountsDashboard({
               <Receipt className="h-3.5 w-3.5" />
               <span>Generated Bills ({savedBills.filter(b => !b.printed).length})</span>
             </button>
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -567,7 +554,6 @@ export default function AccountsDashboard({
         </div>
 
         {/* Tasks List - Card View */}
-<<<<<<< HEAD
         {activeTab === "billing" ? (
           <div className="space-y-4 animate-fade-in">
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
@@ -618,9 +604,6 @@ export default function AccountsDashboard({
             )}
           </div>
         ) : isLoading ? (
-=======
-        {isLoading ? (
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
           <div className="bg-white border border-slate-200 rounded-2xl text-center py-12 text-slate-400 italic text-xs shadow-xs">
             Loading To-Do checklist tasks...
           </div>
@@ -1133,7 +1116,6 @@ export default function AccountsDashboard({
         </div>
       )}
 
-<<<<<<< HEAD
       {/* Accounts Bill Preview & Print Modal */}
       {activeAccountsBill && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-fade-in select-text text-slate-800">
@@ -1276,8 +1258,6 @@ export default function AccountsDashboard({
         </div>
       )}
 
-=======
->>>>>>> 581f8e293bea64a3203b0cf8d0acd18732017625
     </div>
   );
 }

@@ -28,8 +28,6 @@ export default function App() {
   // Employee active view partition (synchronized to allow Header Settings to open Profile)
   const [employeeActiveTab, setEmployeeActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "attendance" | "companies">("active");
 
-  const [employeeActiveTab, setEmployeeActiveTab] = useState<"active" | "completed" | "travel" | "profile">("active");
-
   // Fetch critical relational tables via the single unified sync endpoint
   const fetchData = async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -160,7 +158,6 @@ export default function App() {
       company_name?: string | null;
       asset_id?: string | null;
     }
-    taskData: { customer_name: string; contact_details: string; problem_reported: string; address?: string }
   ) => {
     const resp = await fetch(`/api/tasks/${taskId}/update`, {
       method: "POST",
