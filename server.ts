@@ -258,6 +258,8 @@ interface CompanyAsset {
   config_processor: string;
   config_ram: string;
   config_storage: string;
+  monitor?: string;
+  monitor_serial_no?: string;
   os: string;
   os_key?: string;
   os_type?: string;
@@ -266,7 +268,7 @@ interface CompanyAsset {
   office_type?: string;
   lan_mac?: string;
   wan_mac?: string;
-  ip_address: string;
+  ip_address?: string;
   antivirus?: string;
   antivirus_key?: string;
   validity?: string;
@@ -597,6 +599,8 @@ CREATE TABLE company_assets (
   config_processor VARCHAR(100),
   config_ram VARCHAR(50),
   config_storage VARCHAR(100),
+  monitor VARCHAR(255),
+  monitor_serial_no VARCHAR(255),
   amc_status VARCHAR(50) DEFAULT 'In AMC',
   created_at TIMESTAMP DEFAULT NOW()
 );
@@ -1442,7 +1446,9 @@ app.post("/api/companies/:id/assets", async (req, res) => {
   const companyId = Number(req.params.id);
   const assetData = req.body;
 
-  const nextId = db.nextAssetId || 1;
+  if (!db.assets) db.assets = [];
+  const maxExistingAssetId = db.assets.reduce((max, a) => Math.max(max, Number(a.id) || 0), 0);
+  const nextId = Math.max(db.nextAssetId || 1, maxExistingAssetId + 1);
   const newAsset: CompanyAsset = {
     id: nextId,
     company_id: companyId,
@@ -1456,6 +1462,8 @@ app.post("/api/companies/:id/assets", async (req, res) => {
     config_processor: assetData.config_processor || "",
     config_ram: assetData.config_ram || "",
     config_storage: assetData.config_storage || "",
+    monitor: assetData.monitor || "",
+    monitor_serial_no: assetData.monitor_serial_no || "",
     os: assetData.os || "",
     os_key: assetData.os_key || "",
     os_type: assetData.os_type || "",
@@ -1479,7 +1487,7 @@ app.post("/api/companies/:id/assets", async (req, res) => {
   saveDb();
 
   // Log SQL
-  logSQL(`INSERT INTO company_assets (id, company_id, location, asset_id, asset, employee_name, comp_name, model_no, serial_no, config_processor, config_ram, config_storage, os, os_key, os_type, office, office_key, office_type, lan_mac, wan_mac, ip_address, antivirus, antivirus_key, validity, status, amc_status, created_at) VALUES (${nextId}, ${companyId}, '${newAsset.location.replace(/'/g, "''")}', '${newAsset.asset_id.replace(/'/g, "''")}', '${newAsset.asset.replace(/'/g, "''")}', '${newAsset.employee_name.replace(/'/g, "''")}', '${newAsset.comp_name.replace(/'/g, "''")}', '${newAsset.model_no.replace(/'/g, "''")}', '${(newAsset.serial_no||"").replace(/'/g, "''")}', '${newAsset.config_processor.replace(/'/g, "''")}', '${newAsset.config_ram.replace(/'/g, "''")}', '${newAsset.config_storage.replace(/'/g, "''")}', '${newAsset.os.replace(/'/g, "''")}', '${(newAsset.os_key||"").replace(/'/g, "''")}', '${(newAsset.os_type||"").replace(/'/g, "''")}', '${newAsset.office.replace(/'/g, "''")}', '${(newAsset.office_key||"").replace(/'/g, "''")}', '${(newAsset.office_type||"").replace(/'/g, "''")}', '${(newAsset.lan_mac||"").replace(/'/g, "''")}', '${(newAsset.wan_mac||"").replace(/'/g, "''")}', '${newAsset.ip_address.replace(/'/g, "''")}', '${(newAsset.antivirus||"").replace(/'/g, "''")}', '${(newAsset.antivirus_key||"").replace(/'/g, "''")}', '${(newAsset.validity||"").replace(/'/g, "''")}', '${(newAsset.status||"").replace(/'/g, "''")}', '${newAsset.amc_status}', NOW());`, 1);
+  logSQL(`INSERT INTO company_assets (id, company_id, location, asset_id, asset, employee_name, comp_name, model_no, serial_no, config_processor, config_ram, config_storage, monitor, monitor_serial_no, os, os_key, os_type, office, office_key, office_type, lan_mac, wan_mac, ip_address, antivirus, antivirus_key, validity, status, amc_status, created_at) VALUES (${nextId}, ${companyId}, '${newAsset.location.replace(/'/g, "''")}', '${newAsset.asset_id.replace(/'/g, "''")}', '${newAsset.asset.replace(/'/g, "''")}', '${newAsset.employee_name.replace(/'/g, "''")}', '${newAsset.comp_name.replace(/'/g, "''")}', '${newAsset.model_no.replace(/'/g, "''")}', '${(newAsset.serial_no||"").replace(/'/g, "''")}', '${newAsset.config_processor.replace(/'/g, "''")}', '${newAsset.config_ram.replace(/'/g, "''")}', '${newAsset.config_storage.replace(/'/g, "''")}', '${(newAsset.monitor||"").replace(/'/g, "''")}', '${(newAsset.monitor_serial_no||"").replace(/'/g, "''")}', '${newAsset.os.replace(/'/g, "''")}', '${(newAsset.os_key||"").replace(/'/g, "''")}', '${(newAsset.os_type||"").replace(/'/g, "''")}', '${newAsset.office.replace(/'/g, "''")}', '${(newAsset.office_key||"").replace(/'/g, "''")}', '${(newAsset.office_type||"").replace(/'/g, "''")}', '${(newAsset.lan_mac||"").replace(/'/g, "''")}', '${(newAsset.wan_mac||"").replace(/'/g, "''")}', '${(newAsset.ip_address||"").replace(/'/g, "''")}', '${(newAsset.antivirus||"").replace(/'/g, "''")}', '${(newAsset.antivirus_key||"").replace(/'/g, "''")}', '${(newAsset.validity||"").replace(/'/g, "''")}', '${(newAsset.status||"").replace(/'/g, "''")}', '${newAsset.amc_status}', NOW());`, 1);
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -1520,6 +1528,8 @@ const handleAssetUpdate = async (req: express.Request, res: express.Response) =>
       config_processor: "",
       config_ram: "",
       config_storage: "",
+      monitor: "",
+      monitor_serial_no: "",
       os: "",
       office: "",
       ip_address: ""
@@ -1540,7 +1550,7 @@ const handleAssetUpdate = async (req: express.Request, res: express.Response) =>
   saveDb();
 
   // Log SQL
-  logSQL(`UPDATE company_assets SET location='${(updatedAsset.location||"").replace(/'/g, "''")}', asset_id='${(updatedAsset.asset_id||"").replace(/'/g, "''")}', asset='${(updatedAsset.asset||"").replace(/'/g, "''")}', employee_name='${(updatedAsset.employee_name||"").replace(/'/g, "''")}', comp_name='${(updatedAsset.comp_name||"").replace(/'/g, "''")}', model_no='${(updatedAsset.model_no||"").replace(/'/g, "''")}', serial_no='${(updatedAsset.serial_no||"").replace(/'/g, "''")}', config_processor='${(updatedAsset.config_processor||"").replace(/'/g, "''")}', config_ram='${(updatedAsset.config_ram||"").replace(/'/g, "''")}', config_storage='${(updatedAsset.config_storage||"").replace(/'/g, "''")}', os='${(updatedAsset.os||"").replace(/'/g, "''")}', os_key='${(updatedAsset.os_key||"").replace(/'/g, "''")}', os_type='${(updatedAsset.os_type||"").replace(/'/g, "''")}', office='${(updatedAsset.office||"").replace(/'/g, "''")}', office_key='${(updatedAsset.office_key||"").replace(/'/g, "''")}', office_type='${(updatedAsset.office_type||"").replace(/'/g, "''")}', lan_mac='${(updatedAsset.lan_mac||"").replace(/'/g, "''")}', wan_mac='${(updatedAsset.wan_mac||"").replace(/'/g, "''")}', ip_address='${(updatedAsset.ip_address||"").replace(/'/g, "''")}', antivirus='${(updatedAsset.antivirus||"").replace(/'/g, "''")}', antivirus_key='${(updatedAsset.antivirus_key||"").replace(/'/g, "''")}', validity='${(updatedAsset.validity||"").replace(/'/g, "''")}', status='${(updatedAsset.status||"").replace(/'/g, "''")}', amc_status='${(updatedAsset.amc_status||"In AMC").replace(/'/g, "''")}' WHERE id = ${assetId};`, 1);
+  logSQL(`UPDATE company_assets SET location='${(updatedAsset.location||"").replace(/'/g, "''")}', asset_id='${(updatedAsset.asset_id||"").replace(/'/g, "''")}', asset='${(updatedAsset.asset||"").replace(/'/g, "''")}', employee_name='${(updatedAsset.employee_name||"").replace(/'/g, "''")}', comp_name='${(updatedAsset.comp_name||"").replace(/'/g, "''")}', model_no='${(updatedAsset.model_no||"").replace(/'/g, "''")}', serial_no='${(updatedAsset.serial_no||"").replace(/'/g, "''")}', config_processor='${(updatedAsset.config_processor||"").replace(/'/g, "''")}', config_ram='${(updatedAsset.config_ram||"").replace(/'/g, "''")}', config_storage='${(updatedAsset.config_storage||"").replace(/'/g, "''")}', monitor='${(updatedAsset.monitor||"").replace(/'/g, "''")}', monitor_serial_no='${(updatedAsset.monitor_serial_no||"").replace(/'/g, "''")}', os='${(updatedAsset.os||"").replace(/'/g, "''")}', os_key='${(updatedAsset.os_key||"").replace(/'/g, "''")}', os_type='${(updatedAsset.os_type||"").replace(/'/g, "''")}', office='${(updatedAsset.office||"").replace(/'/g, "''")}', office_key='${(updatedAsset.office_key||"").replace(/'/g, "''")}', office_type='${(updatedAsset.office_type||"").replace(/'/g, "''")}', lan_mac='${(updatedAsset.lan_mac||"").replace(/'/g, "''")}', wan_mac='${(updatedAsset.wan_mac||"").replace(/'/g, "''")}', ip_address='${(updatedAsset.ip_address||"").replace(/'/g, "''")}', antivirus='${(updatedAsset.antivirus||"").replace(/'/g, "''")}', antivirus_key='${(updatedAsset.antivirus_key||"").replace(/'/g, "''")}', validity='${(updatedAsset.validity||"").replace(/'/g, "''")}', status='${(updatedAsset.status||"").replace(/'/g, "''")}', amc_status='${(updatedAsset.amc_status||"In AMC").replace(/'/g, "''")}' WHERE id = ${assetId};`, 1);
 
   if (isSupabaseConfigured && supabase) {
     try {

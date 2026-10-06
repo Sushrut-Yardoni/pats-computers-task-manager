@@ -150,6 +150,8 @@ export interface CompanyAsset {
   config_processor: string;
   config_ram: string;
   config_storage: string;
+  monitor?: string;
+  monitor_serial_no?: string;
   os: string;
   os_key?: string;
   os_type?: string;
@@ -158,7 +160,7 @@ export interface CompanyAsset {
   office_type?: string;
   lan_mac?: string;
   wan_mac?: string;
-  ip_address: string;
+  ip_address?: string;
   antivirus?: string;
   antivirus_key?: string;
   validity?: string;

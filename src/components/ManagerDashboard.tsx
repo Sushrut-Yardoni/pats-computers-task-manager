@@ -12,7 +12,7 @@ interface ManagerDashboardProps {
   employees: Employee[];
   companies?: Company[];
   assets?: CompanyAsset[];
-  refreshLogs: () => void;
+  refreshLogs: () => Promise<void> | void;
 }
 
 export default function ManagerDashboard({
@@ -1183,7 +1183,7 @@ export default function ManagerDashboard({
               employees={employees}
               currentUser={{ id: currentUser.id, name: currentUser.name, role: currentUser.role, type: "manager" }}
               onRefresh={async () => {
-                refreshLogs();
+                await refreshLogs();
               }}
             />
           </div>

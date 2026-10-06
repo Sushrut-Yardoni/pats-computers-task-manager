@@ -38,8 +38,8 @@ export default function CompanySection({
     if (isAdminOrManager) {
       return companies;
     }
-    return companies.filter(c => c.type === "Non AMC" || c.allocated_engineer_id === currentEmployeeId);
-  }, [companies, isAdminOrManager, currentEmployeeId]);
+    return companies.filter(c => c.type === "Non AMC" || Number(c.allocated_engineer_id) === Number(currentEmployeeId) || (currentUser?.name && c.created_by === currentUser.name));
+  }, [companies, isAdminOrManager, currentEmployeeId, currentUser]);
 
   // Search & Filtering
   const [searchQuery, setSearchQuery] = useState("");
@@ -84,6 +84,8 @@ export default function CompanySection({
     config_processor: "",
     config_ram: "",
     config_storage: "",
+    monitor: "",
+    monitor_serial_no: "",
     os: "",
     os_key: "",
     os_type: "",
@@ -159,9 +161,9 @@ export default function CompanySection({
       setCompanyType("AMC");
       setCompanyAllocatedEngineerId(!isAdminOrManager && currentEmployeeId ? currentEmployeeId : "");
       setShowCompanyModal(false);
-      alert("Company successfully registered!");
+      showToast("Company successfully registered!");
     } catch (err: any) {
-      alert("Error: " + err.message);
+      showToast("Error: " + err.message, true);
     } finally {
       setIsSubmittingCompany(false);
     }
@@ -196,6 +198,8 @@ export default function CompanySection({
       config_processor: asset.config_processor || (asset as any).processor || "",
       config_ram: asset.config_ram || (asset as any).ram || "",
       config_storage: asset.config_storage || (asset as any).storage || "",
+      monitor: asset.monitor || (asset as any).monitor_model || "",
+      monitor_serial_no: asset.monitor_serial_no || (asset as any).monitor_serial || "",
       os: asset.os || (asset as any).configured_os || "",
       os_key: asset.os_key || "",
       os_type: asset.os_type || "",
@@ -225,30 +229,9 @@ export default function CompanySection({
     e.preventDefault();
     if (!assetModal) return;
 
-    const isPrinter = assetForm.asset === "Printer";
-
-    // Validate mandatory fields:
-    // If printer: LOCATION, ASSET ID, MAKE/MODEL
-    // If other: LOCATION, ASSET ID, ASSET, EMPLOYEE NAME, COMP NAME, MAKE/MODEL, CONFIG, OS, OFFICE, IP ADDRESS
-    const missing: string[] = [];
-    if (!assetForm.location.trim()) missing.push("LOCATION");
-    if (!assetForm.asset_id.trim()) missing.push("ASSET ID");
-    if (!assetForm.model_no.trim()) missing.push("MAKE/MODEL");
-
-    if (!isPrinter) {
-      if (!assetForm.asset.trim()) missing.push("ASSET TYPE");
-      if (!assetForm.employee_name.trim()) missing.push("EMPLOYEE NAME");
-      if (!assetForm.comp_name.trim()) missing.push("COMP NAME");
-      if (!assetForm.config_processor.trim() || !assetForm.config_ram.trim() || !assetForm.config_storage.trim()) {
-        missing.push("CONFIG (Processor, RAM & Storage)");
-      }
-      if (!assetForm.os.trim()) missing.push("OS");
-      if (!assetForm.office.trim()) missing.push("OFFICE");
-      if (!assetForm.ip_address.trim()) missing.push("IP ADDRESS");
-    }
-
-    if (missing.length > 0) {
-      setAssetFormError(`Mandatory fields required: ${missing.join(", ")}`);
+    // Validate essential field: ASSET ID
+    if (!assetForm.asset_id.trim()) {
+      setAssetFormError("Asset ID is required (e.g. AST-101)");
       return;
     }
 
@@ -270,7 +253,7 @@ export default function CompanySection({
           const err = await resp.json();
           throw new Error(err.error || "Failed to create asset");
         }
-        alert("Asset added successfully!");
+        showToast("Asset added successfully!");
       } else if (assetModal.mode === "edit" && assetModal.assetToEdit) {
         const resp = await fetch(`/api/assets/${assetModal.assetToEdit.id}/update`, {
           method: "POST",
@@ -285,13 +268,13 @@ export default function CompanySection({
           const err = await resp.json();
           throw new Error(err.error || "Failed to update asset");
         }
-        alert("Asset updated successfully!");
+        showToast("Asset updated successfully!");
       }
 
       await onRefresh();
       setAssetModal(null);
     } catch (err: any) {
-      alert("Error: " + err.message);
+      showToast("Error: " + err.message, true);
     } finally {
       setIsSubmittingAsset(false);
     }
@@ -319,9 +302,9 @@ export default function CompanySection({
 
       await onRefresh();
       setReallocatingCompany(null);
-      alert("Engineer allocation updated successfully!");
+      showToast("Engineer allocation updated successfully!");
     } catch (err: any) {
-      alert("Error: " + err.message);
+      showToast("Error: " + err.message, true);
     } finally {
       setIsReallocating(false);
     }
@@ -424,15 +407,29 @@ export default function CompanySection({
     }
   };
 
-  // Assets belonging to viewing company (In AMC first, Not in AMC at the end of the sheet)
+  // Assets belonging to viewing company (In AMC first, In Use assets arranged ascending as per asset id)
   const companyAssets = useMemo(() => {
     if (!viewingCompanyForExcel) return [];
-    const matched = assets.filter(a => a.company_id === viewingCompanyForExcel.id);
+    const matched = assets.filter(a => Number(a.company_id) === Number(viewingCompanyForExcel.id));
     return [...matched].sort((a, b) => {
+      // 1. In AMC first, Not in AMC at the end of the sheet
       const aIsNonAmc = a.amc_status === "Not in AMC" ? 1 : 0;
       const bIsNonAmc = b.amc_status === "Not in AMC" ? 1 : 0;
       if (aIsNonAmc !== bIsNonAmc) {
         return aIsNonAmc - bIsNonAmc;
+      }
+
+      // 2. In Use assets arranged first
+      const aIsInUse = (a.status || "In Use") === "In Use" ? 0 : 1;
+      const bIsInUse = (b.status || "In Use") === "In Use" ? 0 : 1;
+      if (aIsInUse !== bIsInUse) {
+        return aIsInUse - bIsInUse;
+      }
+
+      // 3. Ascending order as per asset id (natural alphanumeric collation e.g. AST-1, AST-2, AST-10)
+      if (a.asset_id && b.asset_id) {
+        const cmp = a.asset_id.localeCompare(b.asset_id, undefined, { numeric: true, sensitivity: "base" });
+        if (cmp !== 0) return cmp;
       }
       return a.id - b.id;
     });
@@ -480,6 +477,8 @@ export default function CompanySection({
       hasWanMac: hasData("wan_mac"),
       hasStatus: hasData("status"),
       hasConfig: printerAssets.some(p => (p.config_processor?.trim() && p.config_processor !== "N/A") || (p.config_ram?.trim() && p.config_ram !== "N/A") || (p.config_storage?.trim() && p.config_storage !== "N/A")),
+      hasMonitor: hasData("monitor"),
+      hasMonitorSerial: hasData("monitor_serial_no"),
       hasOs: printerAssets.some(p => p.os?.trim() && p.os !== "N/A"),
       hasOffice: printerAssets.some(p => p.office?.trim() && p.office !== "N/A"),
       hasAntivirus: hasData("antivirus")
@@ -499,6 +498,8 @@ export default function CompanySection({
         a.model_no.toLowerCase().includes(query) ||
         (a.ip_address && a.ip_address.toLowerCase().includes(query)) ||
         (a.serial_no && a.serial_no.toLowerCase().includes(query)) ||
+        (a.monitor && a.monitor.toLowerCase().includes(query)) ||
+        (a.monitor_serial_no && a.monitor_serial_no.toLowerCase().includes(query)) ||
         (a.amc_status && a.amc_status.toLowerCase().includes(query)) ||
         (a.os && a.os.toLowerCase().includes(query)) ||
         (a.office && a.office.toLowerCase().includes(query))
@@ -509,7 +510,7 @@ export default function CompanySection({
   // CSV Exporter for active sheet
   const handleExportCsv = () => {
     if (!viewingCompanyForExcel || currentSheetAssets.length === 0) {
-      alert(`No ${activeExcelTab === "printers" ? "printer" : "system"} records available to export.`);
+      showToast(`No ${activeExcelTab === "printers" ? "printer" : "system"} records available to export.`, true);
       return;
     }
 
@@ -525,7 +526,7 @@ export default function CompanySection({
     if (activeExcelTab === "printers") {
       // Dynamic printer headers based on entered data
       headers = [
-        "ID",
+        "#",
         "LOCATION",
         "ASSET ID",
         "ASSET TYPE",
@@ -540,13 +541,15 @@ export default function CompanySection({
       if (printerDynamicColumns.hasWanMac) headers.push("WIFI MAC");
       if (printerDynamicColumns.hasStatus) headers.push("STATUS");
       if (printerDynamicColumns.hasConfig) headers.push("CONFIG");
+      if (printerDynamicColumns.hasMonitor) headers.push("MONITOR");
+      if (printerDynamicColumns.hasMonitorSerial) headers.push("MONITOR SERIAL NO.");
       if (printerDynamicColumns.hasOs) headers.push("OS / DRIVER");
       if (printerDynamicColumns.hasOffice) headers.push("OFFICE");
       if (printerDynamicColumns.hasAntivirus) headers.push("ANTIVIRUS");
 
-      rows = printerAssets.map(a => {
+      rows = printerAssets.map((a, index) => {
         const row = [
-          a.id,
+          index + 1,
           escapeCsv(a.location),
           escapeCsv(a.asset_id),
           escapeCsv(a.asset),
@@ -561,6 +564,8 @@ export default function CompanySection({
         if (printerDynamicColumns.hasWanMac) row.push(escapeCsv(a.wan_mac || ""));
         if (printerDynamicColumns.hasStatus) row.push(escapeCsv(a.status || ""));
         if (printerDynamicColumns.hasConfig) row.push(escapeCsv([a.config_processor, a.config_ram, a.config_storage].filter(Boolean).join(" / ")));
+        if (printerDynamicColumns.hasMonitor) row.push(escapeCsv(a.monitor || ""));
+        if (printerDynamicColumns.hasMonitorSerial) row.push(escapeCsv(a.monitor_serial_no || ""));
         if (printerDynamicColumns.hasOs) row.push(escapeCsv(a.os || ""));
         if (printerDynamicColumns.hasOffice) row.push(escapeCsv(a.office || ""));
         if (printerDynamicColumns.hasAntivirus) row.push(escapeCsv(a.antivirus || ""));
@@ -568,7 +573,7 @@ export default function CompanySection({
       });
     } else {
       headers = [
-        "ID",
+        "#",
         "LOCATION",
         "ASSET ID",
         "ASSET TYPE",
@@ -577,9 +582,9 @@ export default function CompanySection({
         "COMP NAME",
         "MAKE/MODEL",
         "SERIAL NO.",
-        "PROCESSOR",
-        "RAM",
-        "STORAGE",
+        "CONFIG (CPU / RAM / STORAGE)",
+        "MONITOR",
+        "MONITOR SERIAL NO.",
         "OS",
         "OS KEY",
         "OS TYPE",
@@ -595,8 +600,8 @@ export default function CompanySection({
         "STATUS"
       ];
 
-      rows = systemAssets.map(a => [
-        a.id,
+      rows = systemAssets.map((a, index) => [
+        index + 1,
         escapeCsv(a.location),
         escapeCsv(a.asset_id),
         escapeCsv(a.asset),
@@ -605,9 +610,9 @@ export default function CompanySection({
         escapeCsv(a.comp_name),
         escapeCsv(a.model_no),
         escapeCsv(a.serial_no || ""),
-        escapeCsv(a.config_processor),
-        escapeCsv(a.config_ram),
-        escapeCsv(a.config_storage),
+        escapeCsv([a.config_processor, a.config_ram, a.config_storage].filter(Boolean).join(" / ")),
+        escapeCsv(a.monitor || ""),
+        escapeCsv(a.monitor_serial_no || ""),
         escapeCsv(a.os),
         escapeCsv(a.os_key || ""),
         escapeCsv(a.os_type || ""),
@@ -616,11 +621,11 @@ export default function CompanySection({
         escapeCsv(a.office_type || ""),
         escapeCsv(a.lan_mac || ""),
         escapeCsv(a.wan_mac || ""),
-        escapeCsv(a.ip_address),
+        escapeCsv(a.ip_address || ""),
         escapeCsv(a.antivirus || ""),
         escapeCsv(a.antivirus_key || ""),
         escapeCsv(a.validity || ""),
-        escapeCsv(a.status || "")
+        escapeCsv(a.status || "In Use")
       ].join(","));
     }
 
@@ -1107,7 +1112,7 @@ export default function CompanySection({
 
                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                      Employee Name (User) {assetForm.asset !== "Printer" && <span className="text-rose-500">*</span>}
+                      Employee Name (User)
                     </label>
                     <input
                       type="text"
@@ -1115,13 +1120,12 @@ export default function CompanySection({
                       value={assetForm.employee_name}
                       onChange={(e) => setAssetForm({ ...assetForm, employee_name: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-medium focus:outline-none focus:bg-white focus:border-indigo-500"
-                      required={assetForm.asset !== "Printer"}
                     />
                   </div>
 
                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                      Comp / Device Name {assetForm.asset !== "Printer" && <span className="text-rose-500">*</span>}
+                      Comp / Device Name
                     </label>
                     <input
                       type="text"
@@ -1129,7 +1133,6 @@ export default function CompanySection({
                       value={assetForm.comp_name}
                       onChange={(e) => setAssetForm({ ...assetForm, comp_name: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-mono font-semibold focus:outline-none focus:bg-white focus:border-indigo-500"
-                      required={assetForm.asset !== "Printer"}
                     />
                   </div>
 
@@ -1178,43 +1181,69 @@ export default function CompanySection({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                      Processor {assetForm.asset !== "Printer" && <span className="text-rose-500">*</span>}
+                      Processor
                     </label>
                     <input
                       type="text"
-                      placeholder={assetForm.asset === "Printer" ? "N/A" : "e.g. Intel Core i5 11th Gen / Ryzen 5"}
+                      placeholder="e.g. Intel Core i5 11th Gen / Ryzen 5"
                       value={assetForm.config_processor}
                       onChange={(e) => setAssetForm({ ...assetForm, config_processor: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-medium focus:outline-none focus:bg-white focus:border-indigo-500"
-                      required={assetForm.asset !== "Printer"}
                     />
                   </div>
 
                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                      RAM Capacity {assetForm.asset !== "Printer" && <span className="text-rose-500">*</span>}
+                      RAM Capacity
                     </label>
                     <input
                       type="text"
-                      placeholder={assetForm.asset === "Printer" ? "N/A" : "e.g. 16 GB DDR4"}
+                      placeholder="e.g. 16 GB DDR4"
                       value={assetForm.config_ram}
                       onChange={(e) => setAssetForm({ ...assetForm, config_ram: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-medium focus:outline-none focus:bg-white focus:border-indigo-500"
-                      required={assetForm.asset !== "Printer"}
                     />
                   </div>
 
                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                      Storage Type & Size {assetForm.asset !== "Printer" && <span className="text-rose-500">*</span>}
+                      Storage Type & Size
                     </label>
                     <input
                       type="text"
-                      placeholder={assetForm.asset === "Printer" ? "N/A" : "e.g. 512 GB NVMe SSD"}
+                      placeholder="e.g. 512 GB NVMe SSD"
                       value={assetForm.config_storage}
                       onChange={(e) => setAssetForm({ ...assetForm, config_storage: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-medium focus:outline-none focus:bg-white focus:border-indigo-500"
-                      required={assetForm.asset !== "Printer"}
+                    />
+                  </div>
+                </div>
+
+                {/* Monitor & Monitor Serial No. fields after Config */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                      Monitor (Model / Size)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Dell 24-inch FHD / HP P22v"
+                      value={assetForm.monitor || ""}
+                      onChange={(e) => setAssetForm({ ...assetForm, monitor: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-medium focus:outline-none focus:bg-white focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
+                      Monitor Serial No.
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. CN-0V2Y9F-74261-XXX"
+                      value={assetForm.monitor_serial_no || ""}
+                      onChange={(e) => setAssetForm({ ...assetForm, monitor_serial_no: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-mono focus:outline-none focus:bg-white focus:border-indigo-500"
                     />
                   </div>
                 </div>
@@ -1234,15 +1263,14 @@ export default function CompanySection({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                      Operating System {assetForm.asset !== "Printer" && <span className="text-rose-500">*</span>}
+                      Operating System
                     </label>
                     <input
                       type="text"
-                      placeholder={assetForm.asset === "Printer" ? "N/A" : "e.g. Windows 11 Pro"}
+                      placeholder="e.g. Windows 11 Pro"
                       value={assetForm.os}
                       onChange={(e) => setAssetForm({ ...assetForm, os: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-medium focus:outline-none focus:bg-white focus:border-indigo-500"
-                      required={assetForm.asset !== "Printer"}
                     />
                   </div>
 
@@ -1274,15 +1302,14 @@ export default function CompanySection({
 
                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                      Office Suite {assetForm.asset !== "Printer" && <span className="text-rose-500">*</span>}
+                      Office Suite
                     </label>
                     <input
                       type="text"
-                      placeholder={assetForm.asset === "Printer" ? "N/A" : "e.g. MS Office 2021 / Office 365"}
+                      placeholder="e.g. MS Office 2021 / Office 365"
                       value={assetForm.office}
                       onChange={(e) => setAssetForm({ ...assetForm, office: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-medium focus:outline-none focus:bg-white focus:border-indigo-500"
-                      required={assetForm.asset !== "Printer"}
                     />
                   </div>
 
@@ -1323,15 +1350,14 @@ export default function CompanySection({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-600 uppercase mb-1">
-                      IP Address {assetForm.asset !== "Printer" && <span className="text-rose-500">*</span>}
+                      IP Address <span className="text-slate-400 font-normal lowercase">(optional)</span>
                     </label>
                     <input
                       type="text"
-                      placeholder={assetForm.asset === "Printer" ? "e.g. 192.168.1.200 (optional if USB)" : "e.g. 192.168.1.150"}
+                      placeholder={assetForm.asset === "Printer" ? "e.g. 192.168.1.200 (optional)" : "e.g. 192.168.1.150 (optional)"}
                       value={assetForm.ip_address}
                       onChange={(e) => setAssetForm({ ...assetForm, ip_address: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-mono font-bold focus:outline-none focus:bg-white focus:border-indigo-500"
-                      required={assetForm.asset !== "Printer"}
                     />
                   </div>
 
@@ -1581,56 +1607,60 @@ export default function CompanySection({
             {/* Excel Sheet Scrollable Grid */}
             <div className="flex-1 overflow-auto bg-slate-200/50 p-2">
               <div className="bg-white border border-slate-300 rounded shadow-xs overflow-hidden inline-block min-w-full">
-                <table className="border-collapse text-left text-xs font-sans min-w-full">
+                <table className="table-auto w-max min-w-full border-collapse text-left text-xs font-sans">
                   {/* Excel Column Headers (Letters) */}
                   <thead className="bg-[#f3f2f1] text-[#323130] text-[10px] font-mono border-b border-slate-300 select-none">
                     {activeExcelTab === "printers" ? (
                       <tr>
-                        <th className="border-r border-slate-300 px-2 py-1.5 text-center bg-[#e1dfdd] w-10 sticky left-0 z-20 font-bold">#</th>
-                        <th className="border-r border-slate-300 px-2 py-1.5 bg-[#e1dfdd] text-center w-28 sticky left-10 z-20 font-bold">ACTIONS</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">LOCATION</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">ASSET ID</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">ASSET TYPE</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold bg-[#e1dfdd] text-center">AMC STATUS</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">MAKE/MODEL</th>
-                        {printerDynamicColumns.hasSerial && <th className="border-r border-slate-300 px-3 py-1.5 font-bold">SERIAL NO.</th>}
-                        {printerDynamicColumns.hasIp && <th className="border-r border-slate-300 px-3 py-1.5 font-bold">IP ADDRESS</th>}
-                        {printerDynamicColumns.hasEmployee && <th className="border-r border-slate-300 px-3 py-1.5 font-bold">ASSIGNED TO / USER</th>}
-                        {printerDynamicColumns.hasCompName && <th className="border-r border-slate-300 px-3 py-1.5 font-bold">DEVICE NAME</th>}
-                        {printerDynamicColumns.hasLanMac && <th className="border-r border-slate-300 px-3 py-1.5 font-bold">LAN MAC</th>}
-                        {printerDynamicColumns.hasWanMac && <th className="border-r border-slate-300 px-3 py-1.5 font-bold">WIFI MAC</th>}
-                        {printerDynamicColumns.hasStatus && <th className="border-r border-slate-300 px-3 py-1.5 font-bold">STATUS</th>}
-                        {printerDynamicColumns.hasConfig && <th className="border-r border-slate-300 px-3 py-1.5 font-bold">CONFIG</th>}
-                        {printerDynamicColumns.hasOs && <th className="border-r border-slate-300 px-3 py-1.5 font-bold">OS / DRIVER</th>}
-                        {printerDynamicColumns.hasOffice && <th className="border-r border-slate-300 px-3 py-1.5 font-bold">OFFICE</th>}
-                        {printerDynamicColumns.hasAntivirus && <th className="border-r border-slate-300 px-3 py-1.5 font-bold">ANTIVIRUS</th>}
+                        <th className="border-r border-slate-300 px-2 py-1.5 text-center bg-[#e1dfdd] w-12 sticky left-0 z-20 font-bold whitespace-nowrap">#</th>
+                        <th className="border-r border-slate-300 px-2 py-1.5 bg-[#e1dfdd] text-center w-28 sticky left-12 z-20 font-bold whitespace-nowrap">ACTIONS</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">LOCATION</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">ASSET ID</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">ASSET TYPE</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold bg-[#e1dfdd] text-center whitespace-nowrap">AMC STATUS</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">MAKE/MODEL</th>
+                        {printerDynamicColumns.hasSerial && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">SERIAL NO.</th>}
+                        {printerDynamicColumns.hasIp && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">IP ADDRESS</th>}
+                        {printerDynamicColumns.hasEmployee && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">ASSIGNED TO / USER</th>}
+                        {printerDynamicColumns.hasCompName && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">DEVICE NAME</th>}
+                        {printerDynamicColumns.hasLanMac && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">LAN MAC</th>}
+                        {printerDynamicColumns.hasWanMac && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">WIFI MAC</th>}
+                        {printerDynamicColumns.hasStatus && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">STATUS</th>}
+                        {printerDynamicColumns.hasConfig && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">CONFIG</th>}
+                        {printerDynamicColumns.hasMonitor && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">MONITOR</th>}
+                        {printerDynamicColumns.hasMonitorSerial && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">MONITOR SERIAL NO.</th>}
+                        {printerDynamicColumns.hasOs && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">OS / DRIVER</th>}
+                        {printerDynamicColumns.hasOffice && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">OFFICE</th>}
+                        {printerDynamicColumns.hasAntivirus && <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">ANTIVIRUS</th>}
                       </tr>
                     ) : (
                       <tr>
-                        <th className="border-r border-slate-300 px-2 py-1.5 text-center bg-[#e1dfdd] w-10 sticky left-0 z-20 font-bold">#</th>
-                        <th className="border-r border-slate-300 px-2 py-1.5 bg-[#e1dfdd] text-center w-28 sticky left-10 z-20 font-bold">ACTIONS</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">LOCATION</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">ASSET ID</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">ASSET TYPE</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold bg-[#e1dfdd] text-center">AMC STATUS</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">EMPLOYEE NAME</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">COMP NAME</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">MAKE/MODEL</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">SERIAL NO.</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">CONFIG (CPU / RAM / STORAGE)</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">OS</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">OS KEY</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">OS TYPE</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">OFFICE</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">OFFICE KEY</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">OFFICE TYPE</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">LAN MAC</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">WAN MAC</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">IP ADDRESS</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">ANTIVIRUS</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">KEY</th>
-                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold">VALIDITY</th>
-                        <th className="px-3 py-1.5 font-bold">STATUS</th>
+                        <th className="border-r border-slate-300 px-2 py-1.5 text-center bg-[#e1dfdd] w-12 sticky left-0 z-20 font-bold whitespace-nowrap">#</th>
+                        <th className="border-r border-slate-300 px-2 py-1.5 bg-[#e1dfdd] text-center w-28 sticky left-12 z-20 font-bold whitespace-nowrap">ACTIONS</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">LOCATION</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">ASSET ID</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">ASSET TYPE</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold bg-[#e1dfdd] text-center whitespace-nowrap">AMC STATUS</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">EMPLOYEE NAME</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">COMP NAME</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">MAKE/MODEL</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">SERIAL NO.</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">CONFIG (CPU / RAM / STORAGE)</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">MONITOR</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">MONITOR SERIAL NO.</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">OS</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">OS KEY</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">OS TYPE</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">OFFICE</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">OFFICE KEY</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">OFFICE TYPE</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">LAN MAC</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">WAN MAC</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">IP ADDRESS</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">ANTIVIRUS</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">KEY</th>
+                        <th className="border-r border-slate-300 px-3 py-1.5 font-bold whitespace-nowrap">VALIDITY</th>
+                        <th className="px-3 py-1.5 font-bold whitespace-nowrap">STATUS</th>
                       </tr>
                     )}
                   </thead>
@@ -1651,10 +1681,12 @@ export default function CompanySection({
                                 (printerDynamicColumns.hasWanMac ? 1 : 0) +
                                 (printerDynamicColumns.hasStatus ? 1 : 0) +
                                 (printerDynamicColumns.hasConfig ? 1 : 0) +
+                                (printerDynamicColumns.hasMonitor ? 1 : 0) +
+                                (printerDynamicColumns.hasMonitorSerial ? 1 : 0) +
                                 (printerDynamicColumns.hasOs ? 1 : 0) +
                                 (printerDynamicColumns.hasOffice ? 1 : 0) +
                                 (printerDynamicColumns.hasAntivirus ? 1 : 0)
-                              : 24
+                              : 26
                           } 
                           className="p-8 text-center text-slate-400 font-sans italic bg-white"
                         >
@@ -1771,6 +1803,16 @@ export default function CompanySection({
                               {[asset.config_processor, asset.config_ram, asset.config_storage].filter(Boolean).join(" / ") || "-"}
                             </td>
                           )}
+                          {printerDynamicColumns.hasMonitor && (
+                            <td className="border-r border-slate-200 px-3 py-2 whitespace-nowrap text-slate-800 font-sans">
+                              {asset.monitor || "-"}
+                            </td>
+                          )}
+                          {printerDynamicColumns.hasMonitorSerial && (
+                            <td className="border-r border-slate-200 px-3 py-2 whitespace-nowrap text-slate-600 font-mono text-[11px]">
+                              {asset.monitor_serial_no || "-"}
+                            </td>
+                          )}
                           {printerDynamicColumns.hasOs && (
                             <td className="border-r border-slate-200 px-3 py-2 whitespace-nowrap text-slate-700">
                               {asset.os || "-"}
@@ -1862,6 +1904,12 @@ export default function CompanySection({
                           </td>
                           <td className="border-r border-slate-200 px-3 py-2 whitespace-nowrap text-slate-800 bg-amber-50/20">
                             <span className="font-sans font-semibold">{asset.config_processor}</span>, {asset.config_ram}, {asset.config_storage}
+                          </td>
+                          <td className="border-r border-slate-200 px-3 py-2 whitespace-nowrap text-slate-800 font-sans">
+                            {asset.monitor || "-"}
+                          </td>
+                          <td className="border-r border-slate-200 px-3 py-2 whitespace-nowrap text-slate-600 font-mono text-[11px]">
+                            {asset.monitor_serial_no || "-"}
                           </td>
                           <td className="border-r border-slate-200 px-3 py-2 whitespace-nowrap text-slate-800 font-sans">
                             {asset.os}

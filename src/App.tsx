@@ -28,6 +28,12 @@ export default function App() {
   // Employee active view partition (synchronized to allow Header Settings to open Profile)
   const [employeeActiveTab, setEmployeeActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "attendance" | "companies">("active");
 
+  const [appNotice, setAppNotice] = useState<{ message: string; isError?: boolean } | null>(null);
+  const showAppNotice = (message: string, isError = false) => {
+    setAppNotice({ message, isError });
+    setTimeout(() => setAppNotice(null), 4000);
+  };
+
   // Fetch critical relational tables via the single unified sync endpoint
   const fetchData = async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -250,9 +256,9 @@ export default function App() {
       const resp = await fetch("/api/sql/reset", { method: "POST" });
       if (!resp.ok) throw new Error("Could not reset");
       await fetchData();
-      alert("Relational database restored to clean factory seed state successfully!");
+      showAppNotice("Relational database restored to clean factory seed state successfully!");
     } catch (err: any) {
-      alert("Error resetting database: " + err.message);
+      showAppNotice("Error resetting database: " + err.message, true);
     } finally {
       setIsLoading(false);
     }
@@ -264,9 +270,9 @@ export default function App() {
       const resp = await fetch("/api/sql/clear", { method: "POST" });
       if (!resp.ok) throw new Error("Could not clear database");
       await fetchData();
-      alert("All tasks and engineers have been successfully removed from the database!");
+      showAppNotice("All tasks and engineers have been successfully removed from the database!");
     } catch (err: any) {
-      alert("Error wiping database: " + err.message);
+      showAppNotice("Error wiping database: " + err.message, true);
     } finally {
       setIsLoading(false);
     }
@@ -385,6 +391,24 @@ export default function App() {
             />
           )}
         </main>
+
+        {appNotice && (
+          <div className={`fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold border transition-all ${
+            appNotice.isError 
+              ? "bg-rose-900 text-white border-rose-700 shadow-rose-900/30" 
+              : "bg-emerald-900 text-white border-emerald-700 shadow-emerald-900/30"
+          }`}>
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{appNotice.message}</span>
+            <button 
+              type="button" 
+              onClick={() => setAppNotice(null)}
+              className="ml-2 hover:opacity-75 cursor-pointer text-white/80"
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

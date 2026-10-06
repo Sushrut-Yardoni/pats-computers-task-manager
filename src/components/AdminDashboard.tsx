@@ -32,7 +32,7 @@ interface AdminDashboardProps {
   onResetDb: () => Promise<void>;
   onClearDb: () => Promise<void>;
   sqlLogs: SqlLog[];
-  refreshLogs: () => void;
+  refreshLogs: () => Promise<void> | void;
   sqlConsoleActive?: boolean;
   setSqlConsoleActive?: (active: boolean) => void;
   onUpdateRemarks: (taskId: number, remarks: string) => Promise<void>;
@@ -314,7 +314,7 @@ export default function AdminDashboard({
             employees={employees}
             currentUser={{ name: "Admin", role: "Admin", type: "admin" }}
             onRefresh={async () => {
-              refreshLogs();
+              await refreshLogs();
             }}
           />
         )}

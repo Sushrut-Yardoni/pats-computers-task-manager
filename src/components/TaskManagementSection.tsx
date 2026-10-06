@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { 
-  PlusCircle, Search, Cpu, Clock, CheckCircle2, ShieldCheck, Layers, Phone, Mail, X, ArrowRight, Calendar, BookmarkCheck, AlertCircle, Package, Trash2, Building, Shield, Laptop, Check
+  PlusCircle, Search, Cpu, Clock, CheckCircle2, ShieldCheck, Layers, Phone, Mail, X, ArrowRight, Calendar, BookmarkCheck, AlertCircle, Package, Trash2, Building, Shield, Laptop, Check, Plus
 } from "lucide-react";
 import { Task, Employee, Company, CompanyAsset } from "../types";
 
@@ -58,6 +58,97 @@ export default function TaskManagementSection({
   const [isAssigning, setIsAssigning] = useState(false);
   const [formSuccess, setFormSuccess] = useState(false);
 
+  // Quick Add Company and Quick Add Asset states
+  const [showQuickAddCompanyModal, setShowQuickAddCompanyModal] = useState(false);
+  const [quickCompanyName, setQuickCompanyName] = useState("");
+  const [quickCompanyType, setQuickCompanyType] = useState<"AMC" | "Non AMC">("AMC");
+  const [isSubmittingQuickCompany, setIsSubmittingQuickCompany] = useState(false);
+
+  const [showQuickAddAssetModal, setShowQuickAddAssetModal] = useState(false);
+  const [quickAssetId, setQuickAssetId] = useState("");
+  const [quickAssetType, setQuickAssetType] = useState("Desktop");
+  const [quickMakeModel, setQuickMakeModel] = useState("");
+  const [quickLocation, setQuickLocation] = useState("");
+  const [quickAmcStatus, setQuickAmcStatus] = useState<"In AMC" | "Not in AMC">("In AMC");
+  const [isSubmittingQuickAsset, setIsSubmittingQuickAsset] = useState(false);
+
+  // Non-intrusive Toast state for task desk
+  const [taskToast, setTaskToast] = useState<{ text: string; isError?: boolean } | null>(null);
+  const showTaskToast = (text: string, isError = false) => {
+    setTaskToast({ text, isError });
+    setTimeout(() => setTaskToast(null), 4000);
+  };
+
+  const handleQuickCreateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickCompanyName.trim()) return;
+    setIsSubmittingQuickCompany(true);
+    try {
+      const resp = await fetch("/api/companies", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: quickCompanyName.trim(),
+          type: quickCompanyType,
+          created_by: "Service Desk"
+        })
+      });
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || "Failed to create company");
+      }
+      const newCo = await resp.json();
+      await refreshLogs();
+      setContractType(quickCompanyType);
+      setSelectedCompanyId(String(newCo.id));
+      setCustomerName(newCo.name);
+      setQuickCompanyName("");
+      setShowQuickAddCompanyModal(false);
+      showTaskToast(`Company "${newCo.name}" added successfully!`);
+    } catch (err: any) {
+      showTaskToast(err.message || "Failed to create company", true);
+    } finally {
+      setIsSubmittingQuickCompany(false);
+    }
+  };
+
+  const handleQuickCreateAsset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickAssetId.trim() || !selectedCompanyId || selectedCompanyId === "custom") return;
+    setIsSubmittingQuickAsset(true);
+    try {
+      const resp = await fetch(`/api/companies/${selectedCompanyId}/assets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          company_id: Number(selectedCompanyId),
+          asset_id: quickAssetId.trim(),
+          asset: quickAssetType,
+          model_no: quickMakeModel.trim() || "Hardware",
+          location: quickLocation.trim() || "Office",
+          amc_status: quickAmcStatus,
+          status: "In Use"
+        })
+      });
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || "Failed to create asset");
+      }
+      const newAsset = await resp.json();
+      await refreshLogs();
+      setSelectedAssetId(newAsset.asset_id);
+      setQuickAssetId("");
+      setQuickMakeModel("");
+      setQuickLocation("");
+      setShowQuickAddAssetModal(false);
+      showTaskToast(`Asset "${newAsset.asset_id}" registered successfully!`);
+    } catch (err: any) {
+      showTaskToast(err.message || "Failed to create asset", true);
+    } finally {
+      setIsSubmittingQuickAsset(false);
+    }
+  };
+
   // Available companies filtered by AMC / Non AMC contract type
   const availableCompanies = useMemo(() => {
     return companies.filter(c => c.type === contractType);
@@ -66,7 +157,17 @@ export default function TaskManagementSection({
   // Assets belonging to currently selected company (from the assets sheet)
   const companyAssets = useMemo(() => {
     if (!selectedCompanyId || selectedCompanyId === "custom") return [];
-    return assets.filter(a => a.company_id === Number(selectedCompanyId));
+    const matched = assets.filter(a => Number(a.company_id) === Number(selectedCompanyId));
+    return [...matched].sort((a, b) => {
+      const aIsInUse = (a.status || "In Use") === "In Use" ? 0 : 1;
+      const bIsInUse = (b.status || "In Use") === "In Use" ? 0 : 1;
+      if (aIsInUse !== bIsInUse) return aIsInUse - bIsInUse;
+      if (a.asset_id && b.asset_id) {
+        const cmp = a.asset_id.localeCompare(b.asset_id, undefined, { numeric: true, sensitivity: "base" });
+        if (cmp !== 0) return cmp;
+      }
+      return a.id - b.id;
+    });
   }, [assets, selectedCompanyId]);
 
   const handleContractTypeChange = (type: "AMC" | "Non AMC") => {
@@ -208,16 +309,25 @@ export default function TaskManagementSection({
   // Assets in the sheet for the currently inspected task's company
   const editTaskCompanyAssets = useMemo(() => {
     if (!selectedTask) return [];
+    let matched: CompanyAsset[] = [];
     if (selectedTask.company_id) {
-      return assets.filter(a => a.company_id === selectedTask.company_id);
-    }
-    if (selectedTask.company_name) {
+      matched = assets.filter(a => a.company_id === selectedTask.company_id);
+    } else if (selectedTask.company_name) {
       const comp = companies.find(c => c.name.toLowerCase() === selectedTask.company_name?.toLowerCase());
       if (comp) {
-        return assets.filter(a => a.company_id === comp.id);
+        matched = assets.filter(a => a.company_id === comp.id);
       }
     }
-    return [];
+    return [...matched].sort((a, b) => {
+      const aIsInUse = (a.status || "In Use") === "In Use" ? 0 : 1;
+      const bIsInUse = (b.status || "In Use") === "In Use" ? 0 : 1;
+      if (aIsInUse !== bIsInUse) return aIsInUse - bIsInUse;
+      if (a.asset_id && b.asset_id) {
+        const cmp = a.asset_id.localeCompare(b.asset_id, undefined, { numeric: true, sensitivity: "base" });
+        if (cmp !== 0) return cmp;
+      }
+      return a.id - b.id;
+    });
   }, [selectedTask, assets, companies]);
 
   // Admin delete state
@@ -396,11 +506,11 @@ export default function TaskManagementSection({
     try {
       await onUpdateRemarks(selectedTask.id, editingRemarks.trim());
       setSelectedTask(prev => prev ? { ...prev, remarks: editingRemarks.trim() || null } : null);
-      alert("Relational task remarks updated successfully!");
+      showTaskToast("Relational task remarks updated successfully!");
       refreshLogs();
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to update remarks.");
+      showTaskToast(err.message || "Failed to update remarks.", true);
     } finally {
       setSavingRemarks(false);
     }
@@ -412,9 +522,10 @@ export default function TaskManagementSection({
       await onTogglePriority(selectedTask.id);
       setSelectedTask(prev => prev ? { ...prev, is_priority: !prev.is_priority } : null);
       refreshLogs();
+      showTaskToast(`Priority status ${!selectedTask.is_priority ? "marked as HIGH" : "removed"}`);
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to toggle priority status.");
+      showTaskToast(err.message || "Failed to toggle priority status.", true);
     }
   };
 
@@ -606,9 +717,17 @@ export default function TaskManagementSection({
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 font-sans">
                       Select {contractType} Company
                     </label>
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      {availableCompanies.length} available
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setQuickCompanyType(contractType);
+                        setShowQuickAddCompanyModal(true);
+                      }}
+                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer hover:underline"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>Add Company</span>
+                    </button>
                   </div>
                   <select
                     value={selectedCompanyId}
@@ -616,14 +735,11 @@ export default function TaskManagementSection({
                     className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors"
                   >
                     <option value="">-- Choose {contractType} Company --</option>
-                    {availableCompanies.map((c) => {
-                      const sheetAssetCount = assets.filter(a => a.company_id === c.id).length;
-                      return (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({sheetAssetCount} {sheetAssetCount === 1 ? "asset" : "assets"} in sheet) {c.allocated_engineer_name ? `(Allocated: ${c.allocated_engineer_name})` : ""}
-                        </option>
-                      );
-                    })}
+                    {availableCompanies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
                     <option value="custom">+ Other / Custom Client (No sheet)</option>
                   </select>
                 </div>
@@ -635,9 +751,17 @@ export default function TaskManagementSection({
                       Select Asset ID from Sheet
                     </label>
                     {selectedCompanyId && selectedCompanyId !== "custom" && (
-                      <span className={`text-[10px] font-mono ${companyAssets.length > 0 ? "text-emerald-700 font-bold" : "text-amber-600 font-bold"}`}>
-                        {companyAssets.length > 0 ? `✓ ${companyAssets.length} asset${companyAssets.length === 1 ? "" : "s"} in sheet` : "0 assets in sheet"}
-                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickAmcStatus(contractType === "AMC" ? "In AMC" : "Not in AMC");
+                          setShowQuickAddAssetModal(true);
+                        }}
+                        className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer hover:underline"
+                      >
+                        <Plus className="h-3 w-3" />
+                        <span>Add Asset</span>
+                      </button>
                     )}
                   </div>
 
@@ -656,62 +780,40 @@ export default function TaskManagementSection({
                       Please select a company above to select an Asset ID from its registered sheet.
                     </div>
                   ) : companyAssets.length > 0 ? (
-                    <div className="space-y-2">
-                      <select
-                        value={selectedAssetId}
-                        onChange={(e) => handleAssetChange(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-sans"
-                      >
-                        <option value="">-- Choose Asset from Sheet ({companyAssets.length} verified) --</option>
-                        {companyAssets.map((a) => (
-                          <option key={a.id} value={a.asset_id}>
-                            Asset #{a.asset_id} — {a.asset} ({a.model_no || a.comp_name || "Device"}) | {a.location ? `${a.location}` : "Office"} {a.employee_name ? `| User: ${a.employee_name}` : ""}
-                          </option>
-                        ))}
-                        <option value="none">General Support (No Asset ID)</option>
-                      </select>
-
-                      {/* Selected Asset Details Preview Card */}
-                      {selectedAssetId && selectedAssetId !== "none" && (() => {
-                        const chosenAsset = companyAssets.find(a => a.asset_id === selectedAssetId);
-                        if (!chosenAsset) return null;
-                        return (
-                          <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-1.5 text-xs animate-fade-in font-sans">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-1.5 font-bold text-indigo-900">
-                                <Laptop className="h-3.5 w-3.5 text-indigo-600" />
-                                <span>Sheet Verified Asset #{chosenAsset.asset_id}: {chosenAsset.asset} ({chosenAsset.model_no || chosenAsset.comp_name || "Device"})</span>
-                              </div>
-                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${
-                                chosenAsset.amc_status === "Not in AMC" ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-emerald-100 text-emerald-800 border-emerald-300"
-                              }`}>
-                                {chosenAsset.amc_status || "In AMC"}
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10.5px] text-slate-600 bg-white/80 p-2 rounded-lg border border-indigo-100">
-                              {chosenAsset.employee_name && <div><span className="text-slate-400 font-bold">User:</span> {chosenAsset.employee_name}</div>}
-                              {chosenAsset.location && <div><span className="text-slate-400 font-bold">Location:</span> {chosenAsset.location}</div>}
-                              {chosenAsset.ip_address && <div><span className="text-slate-400 font-bold">IP Address:</span> {chosenAsset.ip_address}</div>}
-                              {chosenAsset.os && <div><span className="text-slate-400 font-bold">OS:</span> {chosenAsset.os}</div>}
-                              {(chosenAsset.config_processor || chosenAsset.config_ram) && (
-                                <div className="col-span-2 text-slate-500 font-mono text-[10px]">
-                                  <span className="text-slate-400 font-bold">Specs:</span> {chosenAsset.config_processor} / {chosenAsset.config_ram} {chosenAsset.config_storage ? `/ ${chosenAsset.config_storage}` : ""}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
+                    <select
+                      value={selectedAssetId}
+                      onChange={(e) => handleAssetChange(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-sans"
+                    >
+                      <option value="">-- Choose Asset from Sheet --</option>
+                      {companyAssets.map((a) => (
+                        <option key={a.id} value={a.asset_id}>
+                          {a.asset_id}
+                        </option>
+                      ))}
+                      <option value="none">General Support (No Asset ID)</option>
+                    </select>
                   ) : (
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-start gap-2">
-                      <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <strong className="font-bold block">No Assets Exist in Sheet for this Company</strong>
-                        <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
-                          Asset ID can only be selected if it exists in the company's asset sheet. This company currently has no registered assets. You can register hardware under <strong>Companies & Assets Hub</strong>.
-                        </p>
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="font-bold block">No Assets Exist in Sheet for this Company</strong>
+                          <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
+                            Click "+ Add Asset" above to add hardware to this company's sheet.
+                          </p>
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickAmcStatus(contractType === "AMC" ? "In AMC" : "Not in AMC");
+                          setShowQuickAddAssetModal(true);
+                        }}
+                        className="px-2.5 py-1 bg-amber-200 hover:bg-amber-300 text-amber-900 rounded-lg text-[10.5px] font-bold shrink-0 transition-colors cursor-pointer"
+                      >
+                        + Add Asset
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1094,44 +1196,20 @@ export default function TaskManagementSection({
                       <label className="block text-[9px] font-extrabold uppercase tracking-wider text-slate-500 font-sans">
                         Select Asset ID from Sheet
                       </label>
-                      {editTaskCompanyAssets.length > 0 && (
-                        <span className="text-[10px] text-emerald-600 font-bold font-mono">
-                          {editTaskCompanyAssets.length} verified in sheet
-                        </span>
-                      )}
                     </div>
                     {editTaskCompanyAssets.length > 0 ? (
-                      <div className="space-y-1.5">
-                        <select
-                          value={editAssetId}
-                          onChange={(e) => setEditAssetId(e.target.value)}
-                          className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-blue-500 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-sans"
-                        >
-                          <option value="">-- No Asset / General Support --</option>
-                          {editTaskCompanyAssets.map((a) => (
-                            <option key={a.id} value={a.asset_id}>
-                              Asset #{a.asset_id} — {a.asset} ({a.model_no || a.comp_name || "Device"}) {a.location ? `- ${a.location}` : ""} {a.employee_name ? `(${a.employee_name})` : ""}
-                            </option>
-                          ))}
-                        </select>
-                        {editAssetId && (() => {
-                          const matched = editTaskCompanyAssets.find(a => a.asset_id.toLowerCase() === editAssetId.toLowerCase());
-                          if (!matched) return null;
-                          return (
-                            <div className="p-2 bg-indigo-50/80 border border-indigo-200 rounded-lg text-[10.5px] text-indigo-900 flex items-center justify-between">
-                              <span className="font-bold flex items-center gap-1.5">
-                                <Laptop className="h-3.5 w-3.5 text-indigo-600" />
-                                {matched.asset} ({matched.model_no || "Hardware"}) - {matched.location || "Office"}
-                              </span>
-                              <span className={`text-[9px] px-2 py-0.5 rounded font-black border ${
-                                matched.amc_status === "Not in AMC" ? "bg-amber-100 text-amber-800 border-amber-300" : "bg-emerald-100 text-emerald-800 border-emerald-300"
-                              }`}>
-                                {matched.amc_status || "In AMC"}
-                              </span>
-                            </div>
-                          );
-                        })()}
-                      </div>
+                      <select
+                        value={editAssetId}
+                        onChange={(e) => setEditAssetId(e.target.value)}
+                        className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-blue-500 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-sans"
+                      >
+                        <option value="">-- No Asset / General Support --</option>
+                        {editTaskCompanyAssets.map((a) => (
+                          <option key={a.id} value={a.asset_id}>
+                            {a.asset_id}
+                          </option>
+                        ))}
+                      </select>
                     ) : (
                       <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] flex items-start gap-2">
                         <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
@@ -1591,6 +1669,236 @@ export default function TaskManagementSection({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 🏢 Quick Add Company Modal */}
+      {showQuickAddCompanyModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-slate-800">
+          <div className="bg-white border border-slate-200 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl p-5 space-y-4 relative">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Building className="h-4 w-4 text-blue-600" />
+                <h4 className="font-extrabold text-sm uppercase text-slate-900 tracking-wide">
+                  Add New Client Company
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQuickAddCompanyModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleQuickCreateCompany} className="space-y-3.5 pt-1 text-xs">
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide mb-1">
+                  Company Registered Name *
+                </label>
+                <input
+                  type="text"
+                  value={quickCompanyName}
+                  onChange={(e) => setQuickCompanyName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-semibold focus:outline-none focus:bg-white focus:border-blue-500 transition-all text-slate-800"
+                  placeholder="e.g. Acme Tech Solutions"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide mb-1">
+                  Contract Status
+                </label>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <button
+                    type="button"
+                    onClick={() => setQuickCompanyType("AMC")}
+                    className={`py-2 px-3 text-xs font-bold rounded-xl border text-center transition-all cursor-pointer ${
+                      quickCompanyType === "AMC"
+                        ? "bg-emerald-50 border-emerald-500 text-emerald-800 ring-2 ring-emerald-500/20"
+                        : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                    }`}
+                  >
+                    AMC Client
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickCompanyType("Non AMC")}
+                    className={`py-2 px-3 text-xs font-bold rounded-xl border text-center transition-all cursor-pointer ${
+                      quickCompanyType === "Non AMC"
+                        ? "bg-amber-50 border-amber-500 text-amber-800 ring-2 ring-amber-500/20"
+                        : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                    }`}
+                  >
+                    Non AMC Client
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickAddCompanyModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-700 transition-colors uppercase cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingQuickCompany || !quickCompanyName.trim()}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold transition-colors uppercase tracking-wider cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmittingQuickCompany ? "Saving..." : "Save Company"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 💻 Quick Add Asset Modal */}
+      {showQuickAddAssetModal && selectedCompanyId && selectedCompanyId !== "custom" && (() => {
+        const comp = companies.find(c => String(c.id) === selectedCompanyId);
+        return (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in text-slate-800">
+            <div className="bg-white border border-slate-200 w-full max-w-md rounded-2xl overflow-hidden shadow-2xl p-5 space-y-4 relative">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Laptop className="h-4 w-4 text-indigo-600" />
+                  <div>
+                    <h4 className="font-extrabold text-sm uppercase text-slate-900 tracking-wide">
+                      Add Hardware Asset
+                    </h4>
+                    <p className="text-[10px] text-slate-500">{comp?.name || "Selected Client"}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowQuickAddAssetModal(false)}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleQuickCreateAsset} className="space-y-3.5 pt-1 text-xs">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide mb-1">
+                    Asset ID *
+                  </label>
+                  <input
+                    type="text"
+                    value={quickAssetId}
+                    onChange={(e) => setQuickAssetId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-mono font-bold text-indigo-700 focus:outline-none focus:bg-white focus:border-indigo-500 transition-all"
+                    placeholder="e.g. AST-101 / PC-ACME-01"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide mb-1">
+                      Device Type
+                    </label>
+                    <select
+                      value={quickAssetType}
+                      onChange={(e) => setQuickAssetType(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold focus:outline-none focus:bg-white focus:border-indigo-500"
+                    >
+                      <option value="Desktop">Desktop</option>
+                      <option value="Laptop">Laptop</option>
+                      <option value="Server">Server</option>
+                      <option value="Printer">Printer</option>
+                      <option value="All-in-One">All-in-One</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide mb-1">
+                      AMC Status
+                    </label>
+                    <select
+                      value={quickAmcStatus}
+                      onChange={(e) => setQuickAmcStatus(e.target.value as any)}
+                      className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs font-bold focus:outline-none focus:bg-white focus:border-indigo-500"
+                    >
+                      <option value="In AMC">In AMC</option>
+                      <option value="Not in AMC">Not in AMC</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide mb-1">
+                      Make / Model (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={quickMakeModel}
+                      onChange={(e) => setQuickMakeModel(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs focus:outline-none focus:bg-white focus:border-indigo-500"
+                      placeholder="e.g. Dell Optiplex 3080"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-slate-500 uppercase tracking-wide mb-1">
+                      Location / Desk (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={quickLocation}
+                      onChange={(e) => setQuickLocation(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 px-3 py-2 rounded-xl text-xs focus:outline-none focus:bg-white focus:border-indigo-500"
+                      placeholder="e.g. Floor 2 / Bay 4"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 justify-end border-t border-slate-100 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickAddAssetModal(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-700 transition-colors uppercase cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmittingQuickAsset || !quickAssetId.trim()}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold transition-colors uppercase tracking-wider cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmittingQuickAsset ? "Saving..." : "Save Asset"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 🔔 Task Desk Toast Notification */}
+      {taskToast && (
+        <div className={`fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold border transition-all ${
+          taskToast.isError 
+            ? "bg-rose-900 text-white border-rose-700 shadow-rose-900/30" 
+            : "bg-emerald-900 text-white border-emerald-700 shadow-emerald-900/30"
+        }`}>
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{taskToast.text}</span>
+          <button 
+            type="button" 
+            onClick={() => setTaskToast(null)}
+            className="ml-2 hover:opacity-75 cursor-pointer text-white/80"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>
