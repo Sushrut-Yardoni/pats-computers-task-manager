@@ -51,6 +51,7 @@ export default function TaskManagementSection({
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
   const [selectedAssetId, setSelectedAssetId] = useState<string>("");
   const [customerName, setCustomerName] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
   const [contactDetails, setContactDetails] = useState("");
   const [address, setAddress] = useState("");
   const [problemReported, setProblemReported] = useState("");
@@ -360,12 +361,14 @@ export default function TaskManagementSection({
 
     const selectedComp = companies.find(c => String(c.id) === selectedCompanyId);
 
+    const combinedContact = [clientPhone.trim() ? `Phone: ${clientPhone.trim()}` : "", contactDetails.trim()].filter(Boolean).join(" | ");
+
     setIsAssigning(true);
     setFormSuccess(false);
     try {
       await onAssignTask({
         customer_name: customerName.trim(),
-        contact_details: contactDetails.trim() || "N/A",
+        contact_details: combinedContact || "N/A",
         problem_reported: problemReported.trim(),
         assigned_to: Number(assignedTo),
         address: address.trim() || "",
@@ -377,6 +380,7 @@ export default function TaskManagementSection({
       
       // Reset form controls
       setCustomerName("");
+      setClientPhone("");
       setContactDetails("");
       setProblemReported("");
       setAssignedTo("");
@@ -819,8 +823,8 @@ export default function TaskManagementSection({
                   )}
                 </div>
 
-                {/* 4. Customer / Company Name and Contact */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 4. Customer / Company Name and Phone / Contact */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
                       Client / Company Name
@@ -837,11 +841,24 @@ export default function TaskManagementSection({
 
                   <div>
                     <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
-                      Contact Details <span className="text-slate-400 font-normal">(Optional)</span>
+                      Client Phone Number <span className="text-blue-600 font-bold">(Calling)</span>
+                    </label>
+                    <input
+                      type="tel"
+                      placeholder="e.g. +91 98765 43210"
+                      value={clientPhone}
+                      onChange={(e) => setClientPhone(e.target.value)}
+                      className="w-full bg-blue-50/50 border border-blue-200 hover:border-blue-300 focus:border-blue-500 text-slate-900 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors font-mono font-bold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1 font-sans">
+                      Additional Contact <span className="text-slate-400 font-normal">(Email/User)</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="Phone, email, or user name..."
+                      placeholder="Email or contact person..."
                       value={contactDetails}
                       onChange={(e) => setContactDetails(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
