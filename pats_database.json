@@ -1176,7 +1176,7 @@
       "created_at": "2026-10-07T02:31:33.114+00:00"
     }
   ],
-  "nextCompanyId": 18,
+  "nextCompanyId": 19,
   "assets": [
     {
       "id": 1,
@@ -4091,37 +4091,6 @@
       "amc_status": "In AMC",
       "monitor": null,
       "monitor_serial_no": null
-    },
-    {
-      "id": 95,
-      "company_id": 18,
-      "location": "HQ 2nd Floor",
-      "asset_id": "GL-AST-01",
-      "asset": "Desktop",
-      "employee_name": "Amit Roy",
-      "comp_name": "GL-DESK-01",
-      "model_no": "Dell OptiPlex 7090",
-      "config_processor": "Intel i7-11700",
-      "config_ram": "16GB DDR4",
-      "config_storage": "512GB NVMe SSD",
-      "os": "Windows 11 Pro",
-      "office": "",
-      "ip_address": "",
-      "serial_no": "",
-      "os_key": "",
-      "os_type": "",
-      "office_key": "",
-      "office_type": "",
-      "lan_mac": "",
-      "wan_mac": "",
-      "antivirus": "",
-      "antivirus_key": "",
-      "validity": "",
-      "status": "In Use",
-      "created_at": "2026-10-07T05:15:53.772+00:00",
-      "amc_status": "In AMC",
-      "monitor": "",
-      "monitor_serial_no": ""
     },
     {
       "id": 96,

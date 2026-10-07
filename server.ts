@@ -436,12 +436,6 @@ function initDb(): DatabaseSchema {
       if (!data.companies) {
         data.companies = [];
         migrated = true;
-      } else {
-        const filteredCos = data.companies.filter((c: any) => c.name !== "Global Logistics Ltd");
-        if (filteredCos.length !== data.companies.length) {
-          data.companies = filteredCos;
-          migrated = true;
-        }
       }
       if (typeof data.nextCompanyId !== "number") {
         data.nextCompanyId = data.companies.length > 0 ? Math.max(...data.companies.map(c => c.id)) + 1 : 1;
@@ -1453,57 +1447,21 @@ app.get("/api/sync", async (req, res) => {
         if (isSupabaseConfigured && supabase) {
           const { data: cos, error: cosErr } = await supabase.from("companies").select("*").order("id", { ascending: true });
           if (!cosErr && cos) {
-            // Delete Global Logistics Ltd from remote Supabase table if it exists
-            const globalLogisticsRows = cos.filter(c => c.name === "Global Logistics Ltd");
-            if (globalLogisticsRows.length > 0) {
-              for (const row of globalLogisticsRows) {
-                await supabase.from("companies").delete().eq("id", row.id);
-              }
-            }
-
-            const cleanCos = cos.filter(c => c.name !== "Global Logistics Ltd");
-            const existingRemoteIds = new Set(cleanCos.map(c => Number(c.id)));
-            const enrichedRemoteCos = cleanCos.map(c => {
+            companiesList = cos.map(c => {
               const emp = (db.employees || []).find(e => e.id === c.allocated_engineer_id);
               return {
                 ...c,
                 allocated_engineer_name: c.allocated_engineer_name || emp?.name || null
               };
             });
-
-            const mergedCos = [...enrichedRemoteCos];
-            (db.companies || []).forEach(localCo => {
-              if (localCo.name !== "Global Logistics Ltd" && !existingRemoteIds.has(Number(localCo.id))) {
-                mergedCos.push(localCo);
-                if (supabase) {
-                  const { allocated_engineer_name, ...sbCo } = localCo;
-                  Promise.resolve(supabase.from("companies").insert([sbCo])).catch((e) => {
-                    console.warn("Backfill company to Supabase failed:", e?.message || e);
-                  });
-                }
-              }
-            });
-            companiesList = mergedCos.filter(c => c.name !== "Global Logistics Ltd");
-            db.companies = companiesList;
+            db.companies = cos;
             saveDb();
           }
 
           const { data: ast, error: astErr } = await supabase.from("company_assets").select("*").order("id", { ascending: true });
           if (!astErr && ast) {
-            const existingAstIds = new Set(ast.map(a => Number(a.id)));
-            const mergedAst = [...ast];
-            (db.assets || []).forEach(localAst => {
-              if (!existingAstIds.has(Number(localAst.id))) {
-                mergedAst.push(localAst);
-                if (supabase) {
-                  Promise.resolve(supabase.from("company_assets").insert([localAst])).catch((e) => {
-                    console.warn("Backfill asset to Supabase failed:", e?.message || e);
-                  });
-                }
-              }
-            });
-            assetsList = mergedAst;
-            db.assets = mergedAst;
+            assetsList = ast;
+            db.assets = ast;
             saveDb();
           }
         }
@@ -1560,7 +1518,26 @@ app.get("/api/sync", async (req, res) => {
 });
 
 // Fetch all companies
-app.get("/api/companies", (req, res) => {
+app.get("/api/companies", async (req, res) => {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: cos, error: cosErr } = await supabase.from("companies").select("*").order("id", { ascending: true });
+      if (!cosErr && cos) {
+        const enriched = cos.map(c => {
+          const emp = (db.employees || []).find(e => e.id === c.allocated_engineer_id);
+          return {
+            ...c,
+            allocated_engineer_name: c.allocated_engineer_name || emp?.name || null
+          };
+        });
+        db.companies = cos;
+        saveDb();
+        return res.json(enriched);
+      }
+    } catch (e) {
+      console.warn("Could not query companies from Supabase, falling back to local:", e);
+    }
+  }
   const enriched = (db.companies || []).map(c => {
     const emp = (db.employees || []).find(e => e.id === c.allocated_engineer_id);
     return {
@@ -1579,9 +1556,21 @@ app.post("/api/companies", async (req, res) => {
   }
 
   if (!db.companies) db.companies = [];
-  const nextId = db.companies.length > 0 
+  let nextId = db.companies.length > 0 
     ? Math.max(0, ...db.companies.map(c => Number(c.id) || 0)) + 1 
     : 1;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: maxRow } = await supabase.from("companies").select("id").order("id", { ascending: false }).limit(1);
+      if (maxRow && maxRow.length > 0 && Number(maxRow[0].id) >= nextId) {
+        nextId = Number(maxRow[0].id) + 1;
+      }
+    } catch {
+      // fallback to nextId
+    }
+  }
+
   const engId = allocated_engineer_id ? Number(allocated_engineer_id) : null;
   
   let engName = null;
