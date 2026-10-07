@@ -1174,18 +1174,9 @@
       "allocated_engineer_id": 102,
       "allocated_engineer_name": "Nilesh Yadav",
       "created_at": "2026-10-07T02:31:33.114+00:00"
-    },
-    {
-      "id": 18,
-      "name": "Global Logistics Ltd",
-      "type": "AMC",
-      "created_by": "Rahul Sharma",
-      "allocated_engineer_id": 101,
-      "allocated_engineer_name": "Chiranjiv Shinde",
-      "created_at": "2026-10-07T05:15:43.599+00:00"
     }
   ],
-  "nextCompanyId": 19,
+  "nextCompanyId": 18,
   "assets": [
     {
       "id": 1,
@@ -4193,9 +4184,45 @@
       "amc_status": "In AMC",
       "monitor": "DELL",
       "monitor_serial_no": "NA"
+    },
+    {
+      "id": 98,
+      "company_id": 12,
+      "location": "BHOSARI",
+      "asset_id": "SERVER",
+      "asset": "Desktop",
+      "employee_name": "Main Cabin",
+      "comp_name": "SERVER",
+      "model_no": "Dell VOSTRO 3681",
+      "config_processor": "i5-10GEN",
+      "config_ram": "8GB",
+      "config_storage": "256GB SSD+ 1TB HDD",
+      "os": "WINDOWS 11 HSL",
+      "office": "MICROSOFT OFFICE 2016 ",
+      "ip_address": "",
+      "serial_no": "CRP2MQ3",
+      "os_key": "7NX6TQBX78RD3DX4P3HKWTY6Q",
+      "os_type": "",
+      "office_key": "",
+      "office_type": "PRO",
+      "lan_mac": "‎74-86-E2-11-E2-45",
+      "wan_mac": "",
+      "antivirus": "EPS",
+      "antivirus_key": "5D182-R6012-A28A0-18743",
+      "validity": "03-02-2027",
+      "status": "In Use",
+      "created_at": "2026-10-07T09:02:09.015+00:00",
+      "amc_status": "In AMC",
+      "monitor": "DELL 19.5",
+      "monitor_serial_no": ""
     }
   ],
   "nextAssetId": 96,
   "attendance": [],
-  "nextAttendanceId": 1
+  "nextAttendanceId": 1,
+  "push_subscriptions": [],
+  "vapid_keys": {
+    "publicKey": "BCtA3YWEyx7KE9jZp7hR_tF6oYoZCe3oP35-6_EUmcQf9c0BTYgy36xsgagaeqXyDNTOYt6rRhd4epveqCNog4o",
+    "privateKey": "eK4FhYir4DhX1pP8Bp6-rxHYq6Etkj2zxc78XCV4sI0"
+  }
 }
