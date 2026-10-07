@@ -10,6 +10,7 @@ import { Task, Employee, Company, CompanyAsset } from "../types";
 import CompanySection from "./CompanySection";
 import AttendanceSection from "./AttendanceSection";
 import { notificationManager } from "../utils/notificationManager";
+import { extractCleanPhoneNumber, getCleanTelUri, extractSecondaryContact } from "../utils/phoneUtils";
 
 interface EmployeeDashboardProps {
   currentEmployee: { id: number; name: string; role: string };
@@ -1076,18 +1077,22 @@ export default function EmployeeDashboard({
                 </h4>
                 
                 <div className="flex flex-col sm:flex-row gap-2 pt-1 text-xs text-slate-600 font-sans">
-                  <a href={`tel:${selectedTask.contact_details.split("|")[0].trim()}`} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
-                    <Phone className="h-3.5 w-3.5 text-slate-400" />
-                    <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-all">{selectedTask.contact_details.split("|")[0].trim()}</span>
-                  </a>
-                  {selectedTask.contact_details.includes("|") && (
-                    <span className="hidden sm:inline text-slate-300">|</span>
+                  {extractCleanPhoneNumber(selectedTask.contact_details) && (
+                    <a href={getCleanTelUri(selectedTask.contact_details)} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
+                      <Phone className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-all">
+                        {extractCleanPhoneNumber(selectedTask.contact_details)}
+                      </span>
+                    </a>
                   )}
-                  {selectedTask.contact_details.includes("|") && (
-                    <span className="flex items-center gap-1.5 select-all text-slate-500">
-                      <Mail className="h-3.5 w-3.5 text-slate-400" />
-                      <span>{selectedTask.contact_details.split("|")[1].trim()}</span>
-                    </span>
+                  {extractSecondaryContact(selectedTask.contact_details) && (
+                    <>
+                      <span className="hidden sm:inline text-slate-300">|</span>
+                      <span className="flex items-center gap-1.5 select-all text-slate-500">
+                        <Mail className="h-3.5 w-3.5 text-slate-400" />
+                        <span>{extractSecondaryContact(selectedTask.contact_details)}</span>
+                      </span>
+                    </>
                   )}
                 </div>
               </div>

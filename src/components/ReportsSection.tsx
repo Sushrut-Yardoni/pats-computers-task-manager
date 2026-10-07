@@ -4,6 +4,7 @@ import {
 
 } from "lucide-react";
 import { Task, Employee } from "../types";
+import { extractCleanPhoneNumber, getCleanTelUri, extractSecondaryContact } from "../utils/phoneUtils";
 
 interface ReportsSectionProps {
   tasks: Task[];
@@ -547,7 +548,7 @@ export default function ReportsSection({
                           <td className="px-3.5 py-3 font-mono text-indigo-600 font-extrabold text-[11px]">#{task.id}</td>
                           <td className="px-3.5 py-3">
                             <p className="font-extrabold text-slate-800 text-[11px]">{task.customer_name}</p>
-                            <p className="text-[10px] text-slate-400 font-mono tracking-tight">{task.contact_details.split("|")[0].trim()}</p>
+                            <p className="text-[10px] text-slate-400 font-mono tracking-tight">{extractCleanPhoneNumber(task.contact_details)}</p>
                           </td>
                           <td className="px-3.5 py-3">
                             <p className="font-semibold text-slate-700">{task.employee_name || "Unassigned"}</p>
@@ -621,18 +622,22 @@ export default function ReportsSection({
                 <h4 className="text-base font-extrabold text-slate-900 select-all">{selectedTask.customer_name}</h4>
                 
                 <div className="flex flex-col sm:flex-row gap-2 pt-2 text-xs font-sans text-slate-600">
-                  <a href={`tel:${selectedTask.contact_details.split("|")[0].trim()}`} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
-                    <Phone className="h-3.5 w-3.5 text-slate-400" />
-                    <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-all">{selectedTask.contact_details.split("|")[0].trim()}</span>
-                  </a>
-                  {selectedTask.contact_details.includes("|") && (
-                    <span className="hidden sm:inline text-slate-300">|</span>
+                  {extractCleanPhoneNumber(selectedTask.contact_details) && (
+                    <a href={getCleanTelUri(selectedTask.contact_details)} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
+                      <Phone className="h-3.5 w-3.5 text-slate-400" />
+                      <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-all">
+                        {extractCleanPhoneNumber(selectedTask.contact_details)}
+                      </span>
+                    </a>
                   )}
-                  {selectedTask.contact_details.includes("|") && (
-                    <span className="flex items-center gap-1.5 text-slate-500 select-all">
-                      <Mail className="h-3.5 w-3.5 text-slate-400" />
-                      <span>{selectedTask.contact_details.split("|")[1].trim()}</span>
-                    </span>
+                  {extractSecondaryContact(selectedTask.contact_details) && (
+                    <>
+                      <span className="hidden sm:inline text-slate-300">|</span>
+                      <span className="flex items-center gap-1.5 text-slate-500 select-all">
+                        <Mail className="h-3.5 w-3.5 text-slate-400" />
+                        <span>{extractSecondaryContact(selectedTask.contact_details)}</span>
+                      </span>
+                    </>
                   )}
                 </div>
               </div>

@@ -4,7 +4,7 @@ import {
   Building, Plus, Search, User, CalendarRange, Edit3, Eye, FileSpreadsheet, 
   Download, X, Check, Laptop, Shield, Network, RefreshCw, Cpu, Layers, 
   HardDrive, Key, AlertCircle, Tag, ArrowRight, UserCheck, Users, Printer, Monitor,
-  Trash2, FileText
+  Trash2, FileText, Lock
 } from "lucide-react";
 import { Company, CompanyAsset, Employee } from "../types";
 
@@ -30,6 +30,13 @@ export default function CompanySection({
   const isAdminOrManager = isAdmin || isManager;
   const currentEmployeeId = currentUser?.id;
 
+  // Helper to verify if current user can view/manage assets for a given company
+  const canAccessCompanyAssets = (company?: Company | null) => {
+    if (isAdminOrManager) return true;
+    if (!company) return false;
+    return Number(company.allocated_engineer_id) === Number(currentEmployeeId);
+  };
+
   // Local optimistic state for instant UI response
   const [localExtraCompanies, setLocalExtraCompanies] = useState<Company[]>([]);
 
@@ -46,20 +53,19 @@ export default function CompanySection({
   }, [companies, localExtraCompanies]);
 
   // Filter companies visible to this user
-  // Default to "all" so newly created companies are never hidden
-  const [scopeFilter, setScopeFilter] = useState<"all" | "my">("all");
+  // Engineers default to "my" allocated companies, Admins default to "all"
+  const [scopeFilter, setScopeFilter] = useState<"all" | "my">(() => {
+    return isAdminOrManager ? "all" : "my";
+  });
 
   const visibleCompanies = useMemo(() => {
     if (isAdminOrManager || scopeFilter === "all") {
       return allCompanies;
     }
     return allCompanies.filter(c => 
-      c.type === "Non AMC" || 
-      Number(c.allocated_engineer_id) === Number(currentEmployeeId) || 
-      (currentUser?.name && c.created_by?.toLowerCase() === currentUser.name.toLowerCase()) ||
-      (currentUser?.email_id && c.created_by?.toLowerCase() === currentUser.email_id.toLowerCase())
+      Number(c.allocated_engineer_id) === Number(currentEmployeeId)
     );
-  }, [allCompanies, isAdminOrManager, scopeFilter, currentEmployeeId, currentUser]);
+  }, [allCompanies, isAdminOrManager, scopeFilter, currentEmployeeId]);
 
   // Search & Filtering
   const [searchQuery, setSearchQuery] = useState("");
@@ -193,6 +199,10 @@ export default function CompanySection({
 
   // Open Add Asset Modal
   const openAddAssetModal = (company: Company) => {
+    if (!canAccessCompanyAssets(company)) {
+      showToast(`Access restricted: Only the allocated engineer (${company.allocated_engineer_name || "Assigned Engineer"}) and Admin can manage this company's assets.`, true);
+      return;
+    }
     const isPrinterTab = activeExcelTab === "printers";
     setAssetForm({
       ...initialAssetForm,
@@ -209,6 +219,10 @@ export default function CompanySection({
 
   // Open Edit Asset Modal
   const openEditAssetModal = (company: Company, asset: CompanyAsset) => {
+    if (!canAccessCompanyAssets(company)) {
+      showToast(`Access restricted: Only the allocated engineer and Admin can modify assets.`, true);
+      return;
+    }
     setAssetForm({
       location: asset.location || "",
       asset_id: asset.asset_id || "",
@@ -250,6 +264,10 @@ export default function CompanySection({
   const handleSubmitAsset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assetModal) return;
+    if (!canAccessCompanyAssets(assetModal.company)) {
+      showToast("Access restricted: You do not have permission to manage assets for this company.", true);
+      return;
+    }
 
     // Validate essential field: ASSET ID
     if (!assetForm.asset_id.trim()) {
@@ -531,7 +549,7 @@ export default function CompanySection({
 
   // Excel (.xlsx) Exporter with rich formatting and multiple sheets
   const handleExportExcel = () => {
-    if (!viewingCompanyForExcel) return;
+    if (!viewingCompanyForExcel || !canAccessCompanyAssets(viewingCompanyForExcel)) return;
     try {
       const wb = XLSX.utils.book_new();
 
@@ -676,7 +694,7 @@ export default function CompanySection({
 
   // CSV Exporter for active sheet using UTF-8 BOM and Blob
   const handleExportCsv = () => {
-    if (!viewingCompanyForExcel) return;
+    if (!viewingCompanyForExcel || !canAccessCompanyAssets(viewingCompanyForExcel)) return;
 
     const escapeCsv = (val: any) => {
       if (val === null || val === undefined) return '""';
@@ -855,16 +873,49 @@ export default function CompanySection({
           </div>
         </div>
 
-        {/* Search Input Bar */}
-        <div className="relative mt-5">
-          <Search className="absolute left-3.5 top-3.5 h-4 w-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search by company name, contract type (AMC / Non AMC), or allocated engineer..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 pl-10 pr-4 py-2.5 rounded-2xl text-xs focus:outline-none focus:border-indigo-500 focus:bg-white transition-all font-medium text-slate-800"
-          />
+        {/* Scope Toggle & Search Input Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-5">
+          {!isAdminOrManager ? (
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl w-fit border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setScopeFilter("my")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  scopeFilter === "my"
+                    ? "bg-white text-indigo-700 shadow-xs border border-slate-200/80"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                My Allocated Companies ({allCompanies.filter(c => Number(c.allocated_engineer_id) === Number(currentEmployeeId)).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setScopeFilter("all")}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  scopeFilter === "all"
+                    ? "bg-white text-indigo-700 shadow-xs border border-slate-200/80"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                All Companies Directory ({allCompanies.length})
+              </button>
+            </div>
+          ) : (
+            <div className="text-xs font-semibold text-slate-500">
+              Full Administrator & Manager Access • All Company Assets Visible
+            </div>
+          )}
+
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search companies, contract type, or allocated engineer..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 pl-10 pr-4 py-2 rounded-2xl text-xs focus:outline-none focus:border-indigo-500 focus:bg-white transition-all font-medium text-slate-800"
+            />
+          </div>
         </div>
       </div>
 
@@ -908,7 +959,8 @@ export default function CompanySection({
               <tbody className="divide-y divide-slate-100 bg-white font-medium text-slate-700">
                 {filteredCompanies.map((company, index) => {
                   const companyAssetCount = assets.filter(a => a.company_id === company.id).length;
-                  const isAllocatedToMe = company.allocated_engineer_id === currentEmployeeId;
+                  const isAllocatedToMe = Number(company.allocated_engineer_id) === Number(currentEmployeeId);
+                  const canAccessAssets = canAccessCompanyAssets(company);
 
                   return (
                     <tr key={company.id} className="hover:bg-slate-50/70 transition-colors">
@@ -973,36 +1025,52 @@ export default function CompanySection({
                       )}
 
                       <td className="px-4 py-3.5 whitespace-nowrap text-center">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
-                          <Laptop className="h-3 w-3 text-slate-500" />
-                          <span>{companyAssetCount}</span>
-                        </span>
+                        {canAccessAssets ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                            <Laptop className="h-3 w-3 text-slate-500" />
+                            <span>{companyAssetCount}</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100/70 text-slate-400 border border-slate-200" title="Assets restricted to allocated engineer">
+                            <Lock className="h-3 w-3 text-slate-400" />
+                            <span>Restricted</span>
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {/* Add Asset Option */}
-                          <button
-                            type="button"
-                            onClick={() => openAddAssetModal(company)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all cursor-pointer border border-indigo-200/60 shadow-2xs active:scale-95"
-                          >
-                            <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
-                            <span>Add Asset</span>
-                          </button>
+                          {canAccessAssets ? (
+                            <>
+                              {/* Add Asset Option */}
+                              <button
+                                type="button"
+                                onClick={() => openAddAssetModal(company)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all cursor-pointer border border-indigo-200/60 shadow-2xs active:scale-95"
+                              >
+                                <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+                                <span>Add Asset</span>
+                              </button>
 
-                          {/* View Asset Table Option */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setViewingCompanyForExcel(company);
-                              setExcelSearchQuery("");
-                              setActiveExcelTab("systems");
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
-                          >
-                            <FileSpreadsheet className="h-3.5 w-3.5" />
-                            <span>View Asset Table</span>
-                          </button>
+                              {/* View Asset Table Option */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setViewingCompanyForExcel(company);
+                                  setExcelSearchQuery("");
+                                  setActiveExcelTab("systems");
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                              >
+                                <FileSpreadsheet className="h-3.5 w-3.5" />
+                                <span>View Asset Table</span>
+                              </button>
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-500 rounded-xl text-xs font-semibold border border-slate-200" title={`Only ${company.allocated_engineer_name || "the allocated engineer"} and Admin can view assets for this company`}>
+                              <Lock className="h-3.5 w-3.5 text-slate-400" />
+                              <span>Allocated to {company.allocated_engineer_name ? company.allocated_engineer_name.split(" ")[0] : "Other Engineer"}</span>
+                            </span>
+                          )}
 
                           {/* Admin Only: Delete Full Company From Records */}
                           {isAdminOrManager && (
@@ -1641,7 +1709,7 @@ export default function CompanySection({
       )}
 
       {/* 📊 EXCEL SHEET VIEW MODAL */}
-      {viewingCompanyForExcel && (
+      {viewingCompanyForExcel && canAccessCompanyAssets(viewingCompanyForExcel) && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 animate-fade-in text-slate-800">
           <div className="bg-white border border-slate-300 w-full max-w-[98vw] xl:max-w-7xl h-[92vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col">
             

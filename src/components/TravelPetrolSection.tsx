@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Fuel, Save, Navigation, Eye, X, Calendar, User, Phone, MapPin, ClipboardList, Clock, Package, AlertCircle } from "lucide-react";
 import { OfflineTravel, Task, Employee } from "../types";
+import { extractCleanPhoneNumber, getCleanTelUri } from "../utils/phoneUtils";
 
 export default function TravelPetrolSection() {
   const [petrolPrice, setPetrolPrice] = useState<number>(100);
@@ -394,7 +395,16 @@ export default function TravelPetrolSection() {
                         <span className="text-slate-500 font-semibold block">Contact Details</span>
                         <div className="font-extrabold text-slate-800 flex items-center gap-1.5 font-mono">
                           <Phone className="h-3.5 w-3.5 text-slate-400" />
-                          <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200/60 shadow-xs">{activeTaskDetails.contact_details.split("|")[0].trim()}</span>
+                          {extractCleanPhoneNumber(activeTaskDetails.contact_details) ? (
+                            <a 
+                              href={getCleanTelUri(activeTaskDetails.contact_details)} 
+                              className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-colors"
+                            >
+                              {extractCleanPhoneNumber(activeTaskDetails.contact_details)}
+                            </a>
+                          ) : (
+                            <span className="text-slate-400 font-normal">N/A</span>
+                          )}
                         </div>
                       </div>
                     </div>

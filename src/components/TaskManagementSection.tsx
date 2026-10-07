@@ -3,6 +3,7 @@ import {
   PlusCircle, Search, Cpu, Clock, CheckCircle2, ShieldCheck, Layers, Phone, Mail, X, ArrowRight, Calendar, BookmarkCheck, AlertCircle, Package, Trash2, Building, Shield, Laptop, Check, Plus
 } from "lucide-react";
 import { Task, Employee, Company, CompanyAsset } from "../types";
+import { extractCleanPhoneNumber, getCleanTelUri, extractSecondaryContact } from "../utils/phoneUtils";
 
 interface TaskManagementSectionProps {
   tasks: Task[];
@@ -361,7 +362,8 @@ export default function TaskManagementSection({
 
     const selectedComp = companies.find(c => String(c.id) === selectedCompanyId);
 
-    const combinedContact = [clientPhone.trim() ? `Phone: ${clientPhone.trim()}` : "", contactDetails.trim()].filter(Boolean).join(" | ");
+    const cleanPhone = clientPhone.replace(/^(phone|tel|mobile|ph|contact|call)\s*[:\-]?\s*/i, "").trim();
+    const combinedContact = [cleanPhone, contactDetails.trim()].filter(Boolean).join(" | ");
 
     setIsAssigning(true);
     setFormSuccess(false);
@@ -1108,7 +1110,7 @@ export default function TaskManagementSection({
                         {task.company_name && task.company_name !== task.customer_name && (
                           <p className="text-[10px] text-slate-500 font-semibold">{task.company_name}</p>
                         )}
-                        <p className="text-[9px] text-slate-400 font-mono mt-0.5 select-all">{task.contact_details.split("|")[0]}</p>
+                        <p className="text-[9px] text-slate-400 font-mono mt-0.5 select-all">{extractCleanPhoneNumber(task.contact_details)}</p>
                       </td>
                       <td className="px-3.5 py-3 max-w-xs truncate font-medium text-slate-600 select-all" title={task.problem_reported}>
                         {task.problem_reported}
@@ -1338,18 +1340,22 @@ export default function TaskManagementSection({
                     )}
                     
                     <div className="flex flex-col sm:flex-row gap-2 pt-2 text-xs text-slate-600 font-sans">
-                      <a href={`tel:${selectedTask.contact_details.split("|")[0].trim()}`} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
-                        <Phone className="h-3.5 w-3.5 text-slate-400" />
-                        <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-all">{selectedTask.contact_details.split("|")[0].trim()}</span>
-                      </a>
-                      {selectedTask.contact_details.includes("|") && (
-                        <span className="hidden sm:inline text-slate-300">|</span>
+                      {extractCleanPhoneNumber(selectedTask.contact_details) && (
+                        <a href={getCleanTelUri(selectedTask.contact_details)} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
+                          <Phone className="h-3.5 w-3.5 text-slate-400" />
+                          <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-all">
+                            {extractCleanPhoneNumber(selectedTask.contact_details)}
+                          </span>
+                        </a>
                       )}
-                      {selectedTask.contact_details.includes("|") && (
-                        <span className="flex items-center gap-1.5 text-slate-500 select-all">
-                          <Mail className="h-3.5 w-3.5 text-slate-400" />
-                          <span>{selectedTask.contact_details.split("|")[1].trim()}</span>
-                        </span>
+                      {extractSecondaryContact(selectedTask.contact_details) && (
+                        <>
+                          <span className="hidden sm:inline text-slate-300">|</span>
+                          <span className="flex items-center gap-1.5 text-slate-500 select-all">
+                            <Mail className="h-3.5 w-3.5 text-slate-400" />
+                            <span>{extractSecondaryContact(selectedTask.contact_details)}</span>
+                          </span>
+                        </>
                       )}
                     </div>
                   </div>
