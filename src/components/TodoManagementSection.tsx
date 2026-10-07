@@ -480,6 +480,13 @@ export default function TodoManagementSection({
   // Delete State
   const [isDeletingSubmitting, setIsDeletingSubmitting] = useState(false);
 
+  // Non-intrusive in-app toast notification
+  const [todoToast, setTodoToast] = useState<{ message: string; isError?: boolean } | null>(null);
+  const showTodoToast = (message: string, isError = false) => {
+    setTodoToast({ message, isError });
+    setTimeout(() => setTodoToast(null), 3500);
+  };
+
   const handleDownloadExcel = () => {
     try {
       // 1. Prepare Active & Finished Tasks sheet
@@ -681,9 +688,10 @@ export default function TodoManagementSection({
       XLSX.utils.book_append_sheet(wb, wsHistory, "Audit Change History");
 
       XLSX.writeFile(wb, `PATS_To-Do_Tasks_Report_${new Date().toISOString().slice(0, 10)}.xlsx`);
-    } catch (error) {
+      showTodoToast("To-Do report downloaded successfully!");
+    } catch (error: any) {
       console.error("Failed to download Excel sheet:", error);
-      alert("An error occurred while generating the Excel report.");
+      showTodoToast("An error occurred while generating the Excel report.", true);
     }
   };
 
@@ -716,7 +724,7 @@ export default function TodoManagementSection({
   const handleCreateTodo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim()) {
-      alert("Please enter both title and description.");
+      showTodoToast("Please enter both title and description.", true);
       return;
     }
 
@@ -745,8 +753,9 @@ export default function TodoManagementSection({
       setIsAddModalOpen(false);
       fetchTodos();
       refreshLogs();
+      showTodoToast("To-Do task created successfully!");
     } catch (err: any) {
-      alert(err.message || "Failed to create To-Do task.");
+      showTodoToast(err.message || "Failed to create To-Do task.", true);
     } finally {
       setIsSubmitting(false);
     }
@@ -765,7 +774,7 @@ export default function TodoManagementSection({
     if (!editingTodo) return;
 
     if (!editTitle.trim() || !editDescription.trim()) {
-      alert("Title and description are required.");
+      showTodoToast("Title and description are required.", true);
       return;
     }
 
@@ -791,8 +800,9 @@ export default function TodoManagementSection({
       setEditingTodo(null);
       fetchTodos();
       refreshLogs();
+      showTodoToast("To-Do task updated successfully!");
     } catch (err: any) {
-      alert(err.message || "Failed to update task.");
+      showTodoToast(err.message || "Failed to update task.", true);
     } finally {
       setIsUpdating(false);
     }
@@ -836,8 +846,9 @@ export default function TodoManagementSection({
       setFinishRemarks("");
       fetchTodos();
       refreshLogs();
+      showTodoToast("Task marked as finished!");
     } catch (err: any) {
-      alert(err.message || "Failed to finish task.");
+      showTodoToast(err.message || "Failed to finish task.", true);
     } finally {
       setIsFinishingSubmitting(false);
     }
@@ -861,8 +872,9 @@ export default function TodoManagementSection({
       setDeletingTodo(null);
       fetchTodos();
       refreshLogs();
+      showTodoToast("Task moved to deleted history.");
     } catch (err: any) {
-      alert(err.message || "Failed to delete task.");
+      showTodoToast(err.message || "Failed to delete task.", true);
     } finally {
       setIsDeletingSubmitting(false);
     }
@@ -933,8 +945,9 @@ export default function TodoManagementSection({
       setIsAddingViewer(false);
       fetchTodos();
       refreshLogs();
+      showTodoToast(`Task transferred to ${selectedNewViewer.trim()} successfully!`);
     } catch (err: any) {
-      alert(err.message || "Failed to transfer task.");
+      showTodoToast(err.message || "Failed to transfer task.", true);
     } finally {
       setIsSubmittingViewer(false);
     }
@@ -2088,6 +2101,25 @@ export default function TodoManagementSection({
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 🔔 Floating In-App Toast Notification */}
+      {todoToast && (
+        <div className={`fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold border transition-all animate-bounce-subtle ${
+          todoToast.isError 
+            ? "bg-rose-900 text-white border-rose-700 shadow-rose-900/30" 
+            : "bg-emerald-900 text-white border-emerald-700 shadow-emerald-900/30"
+        }`}>
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{todoToast.message}</span>
+          <button 
+            type="button" 
+            onClick={() => setTodoToast(null)}
+            className="ml-2 hover:opacity-75 cursor-pointer text-white/80"
+          >
+            ✕
+          </button>
         </div>
       )}
 

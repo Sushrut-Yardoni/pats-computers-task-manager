@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
-  PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Calendar, ChevronRight, Eye, Receipt, Printer, Check
+  PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Calendar, ChevronRight, Eye, Receipt, Printer, Check,
+  AlertCircle
 } from "lucide-react";
 import { TodoTask, Employee, isTargetMatch } from "../types";
 import TodoHistoryModal from "./TodoHistoryModal";
@@ -71,6 +72,13 @@ export default function AccountsDashboard({
   const [finishRemarks, setFinishRemarks] = useState("");
   const [isFinishingSubmitting, setIsFinishingSubmitting] = useState(false);
 
+  // Non-intrusive toast notification
+  const [accountsToast, setAccountsToast] = useState<{ message: string; isError?: boolean } | null>(null);
+  const showAccountsToast = (message: string, isError = false) => {
+    setAccountsToast({ message, isError });
+    setTimeout(() => setAccountsToast(null), 3500);
+  };
+
   const [assignmentScope, setAssignmentScope] = useState<"all" | "toMe">("all");
 
   const [selectedManagerToAssign, setSelectedManagerToAssign] = useState("");
@@ -102,7 +110,7 @@ export default function AccountsDashboard({
   const handleCreateTodo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim()) {
-      alert("Please enter both title and description.");
+      showAccountsToast("Please enter both title and description.", true);
       return;
     }
 
@@ -133,8 +141,9 @@ export default function AccountsDashboard({
       setIsAddModalOpen(false);
       fetchTodos();
       refreshLogs();
+      showAccountsToast("To-Do task created successfully!");
     } catch (err: any) {
-      alert(err.message || "Failed to create To-Do task.");
+      showAccountsToast(err.message || "Failed to create To-Do task.", true);
     } finally {
       setIsSubmitting(false);
     }
@@ -153,7 +162,7 @@ export default function AccountsDashboard({
     if (!editingTodo) return;
 
     if (!editTitle.trim() || !editDescription.trim()) {
-      alert("Title and description are required.");
+      showAccountsToast("Title and description are required.", true);
       return;
     }
 
@@ -179,8 +188,9 @@ export default function AccountsDashboard({
       setEditingTodo(null);
       fetchTodos();
       refreshLogs();
+      showAccountsToast("To-Do task updated successfully!");
     } catch (err: any) {
-      alert(err.message || "Failed to update task.");
+      showAccountsToast(err.message || "Failed to update task.", true);
     } finally {
       setIsUpdating(false);
     }
@@ -211,8 +221,9 @@ export default function AccountsDashboard({
       setFinishRemarks("");
       fetchTodos();
       refreshLogs();
+      showAccountsToast("Task marked as completed!");
     } catch (err: any) {
-      alert(err.message || "Failed to finish task.");
+      showAccountsToast(err.message || "Failed to finish task.", true);
     } finally {
       setIsFinishingSubmitting(false);
     }
@@ -245,8 +256,9 @@ export default function AccountsDashboard({
       setViewingTodo(null);
       fetchTodos();
       refreshLogs();
+      showAccountsToast("Manager assigned successfully!");
     } catch (err: any) {
-      alert(err.message || "Failed to assign manager.");
+      showAccountsToast(err.message || "Failed to assign manager.", true);
     } finally {
       setIsAssigningManager(false);
     }
@@ -1255,6 +1267,25 @@ export default function AccountsDashboard({
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 🔔 Floating In-App Toast Notification */}
+      {accountsToast && (
+        <div className={`fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold border transition-all animate-bounce-subtle ${
+          accountsToast.isError 
+            ? "bg-rose-900 text-white border-rose-700 shadow-rose-900/30" 
+            : "bg-emerald-900 text-white border-emerald-700 shadow-emerald-900/30"
+        }`}>
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{accountsToast.message}</span>
+          <button 
+            type="button" 
+            onClick={() => setAccountsToast(null)}
+            className="ml-2 hover:opacity-75 cursor-pointer text-white/80"
+          >
+            ✕
+          </button>
         </div>
       )}
 

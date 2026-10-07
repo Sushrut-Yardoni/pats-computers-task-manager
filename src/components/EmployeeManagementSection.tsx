@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Users, UserCheck, AlertTriangle, ShieldCheck, Trash2, X } from "lucide-react";
+import { Users, UserCheck, AlertTriangle, ShieldCheck, Trash2, X, AlertCircle } from "lucide-react";
 import { Employee, Task } from "../types";
 
 interface EmployeeManagementSectionProps {
@@ -49,6 +49,13 @@ export default function EmployeeManagementSection({
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedMonth, setSelectedMonth] = useState<string>("All");
+
+  // In-App Toast Notification
+  const [empToast, setEmpToast] = useState<{ message: string; isError?: boolean } | null>(null);
+  const showEmpToast = (message: string, isError = false) => {
+    setEmpToast({ message, isError });
+    setTimeout(() => setEmpToast(null), 3500);
+  };
 
   const uniqueMonths = React.useMemo(() => {
     const monthsSet = new Set<string>();
@@ -105,11 +112,11 @@ export default function EmployeeManagementSection({
       await onUpdatePassword(changePasswordTarget.id, newPasswordValue.trim());
       setChangePasswordTarget(null);
       setNewPasswordValue("");
-      alert(`Password for ${changePasswordTarget.name} has been updated successfully!`);
+      showEmpToast(`Password for ${changePasswordTarget.name} has been updated successfully!`);
       refreshLogs();
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to update engineer password.");
+      showEmpToast(err.message || "Failed to update engineer password.", true);
     } finally {
       setIsChangingPassword(false);
     }
@@ -134,7 +141,7 @@ export default function EmployeeManagementSection({
     let finalRole = selectedRoleType;
     if (selectedRoleType === "Custom") {
       if (!customRoleValue.trim()) {
-        alert("Please specify a custom role title.");
+        showEmpToast("Please specify a custom role title.", true);
         return;
       }
       finalRole = customRoleValue.trim();
@@ -156,11 +163,11 @@ export default function EmployeeManagementSection({
       setChangeRoleTarget(null);
       setSelectedRoleType("Admin");
       setCustomRoleValue("");
-      alert(`Role for ${changeRoleTarget.name} has been updated to "${finalRole}" successfully!`);
+      showEmpToast(`Role for ${changeRoleTarget.name} has been updated to "${finalRole}" successfully!`);
       refreshLogs();
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to update employee role.");
+      showEmpToast(err.message || "Failed to update employee role.", true);
     } finally {
       setIsChangingRole(false);
     }
@@ -169,7 +176,7 @@ export default function EmployeeManagementSection({
   const handleRegisterEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmpName.trim() || !newEmpRole.trim() || !newEmpJoinedAt.trim()) {
-      alert("Please fill in all engineer details.");
+      showEmpToast("Please fill in all engineer details.", true);
       return;
     }
 
@@ -196,15 +203,16 @@ export default function EmployeeManagementSection({
       setNewEmpRole("");
       setNewEmpJoinedAt(new Date().toISOString().split("T")[0]);
       setEmpSuccess(true);
+      showEmpToast("Engineer registered successfully!");
       setTimeout(() => {
         setEmpSuccess(false);
         setIsRegisterModalOpen(false);
-      }, 2000);
+      }, 1500);
       
       refreshLogs();
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to initialize new technical staff.");
+      showEmpToast(err.message || "Failed to initialize new technical staff.", true);
     } finally {
       setIsRegisteringEmp(false);
     }
@@ -229,11 +237,12 @@ export default function EmployeeManagementSection({
         throw new Error(data.error || "Failed to remove engineer");
       }
 
+      showEmpToast(`Engineer ${decommissionTarget.name} has been decommissioned.`);
       setDecommissionTarget(null);
       refreshLogs();
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Error decommissioning engineer");
+      showEmpToast(err.message || "Error decommissioning engineer", true);
     } finally {
       setIsDecommissioning(false);
     }
@@ -254,11 +263,12 @@ export default function EmployeeManagementSection({
         throw new Error(data.error || "Failed to promote engineer");
       }
 
+      showEmpToast(`Engineer ${promoteTarget.name} has been promoted.`);
       setPromoteTarget(null);
       refreshLogs();
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Error promoting engineer");
+      showEmpToast(err.message || "Error promoting engineer", true);
     } finally {
       setIsPromoting(false);
     }
@@ -905,6 +915,25 @@ export default function EmployeeManagementSection({
         </div>
       </div>
       
+      {/* 🔔 Floating In-App Toast Notification */}
+      {empToast && (
+        <div className={`fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold border transition-all animate-bounce-subtle ${
+          empToast.isError 
+            ? "bg-rose-900 text-white border-rose-700 shadow-rose-900/30" 
+            : "bg-emerald-900 text-white border-emerald-700 shadow-emerald-900/30"
+        }`}>
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{empToast.message}</span>
+          <button 
+            type="button" 
+            onClick={() => setEmpToast(null)}
+            className="ml-2 hover:opacity-75 cursor-pointer text-white/80"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }

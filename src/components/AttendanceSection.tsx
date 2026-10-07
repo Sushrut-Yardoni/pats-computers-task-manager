@@ -28,6 +28,13 @@ export default function AttendanceSection({ currentUser, employees }: Attendance
   const [punching, setPunching] = useState(false);
   const [errorMsg, setErrorError] = useState<string | null>(null);
 
+  // In-App Toast
+  const [attendanceToast, setAttendanceToast] = useState<{ message: string; isError?: boolean } | null>(null);
+  const showAttendanceToast = (message: string, isError = false) => {
+    setAttendanceToast({ message, isError });
+    setTimeout(() => setAttendanceToast(null), 3500);
+  };
+
   // Filter States
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -72,20 +79,18 @@ export default function AttendanceSection({ currentUser, employees }: Attendance
   const latestRecord = todayRecord || (myRecords.length > 0 ? myRecords[0] : null);
 
   const handleResetAttendance = async () => {
-    if (confirm("Are you sure you want to reset and clear all attendance records? This action cannot be undone.")) {
-      try {
-        const res = await fetch("/api/attendance", { method: "DELETE" });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok) {
-          setRecords([]);
-          alert("All attendance records have been reset successfully.");
-          fetchRecords();
-        } else {
-          throw new Error(data.error || "Failed to reset attendance records.");
-        }
-      } catch (err: any) {
-        alert(err.message || "Error resetting attendance records.");
+    try {
+      const res = await fetch("/api/attendance", { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setRecords([]);
+        showAttendanceToast("All attendance records have been reset successfully.");
+        fetchRecords();
+      } else {
+        throw new Error(data.error || "Failed to reset attendance records.");
       }
+    } catch (err: any) {
+      showAttendanceToast(err.message || "Error resetting attendance records.", true);
     }
   };
 
@@ -128,11 +133,12 @@ export default function AttendanceSection({ currentUser, employees }: Attendance
       })
       .then(() => {
         fetchRecords();
-        alert(`Successfully registered punch ${type === "In" ? "IN" : "OUT"} with Google Maps location verification!`);
+        showAttendanceToast(`Successfully registered punch ${type === "In" ? "IN" : "OUT"} with location verification!`);
       })
       .catch((err: any) => {
         console.error(err);
         setErrorError(err.message || "Attendance logging error.");
+        showAttendanceToast(err.message || "Attendance logging error.", true);
       })
       .finally(() => {
         setPunching(false);
@@ -608,6 +614,26 @@ export default function AttendanceSection({ currentUser, employees }: Attendance
           </div>
         )}
       </div>
+
+      {/* 🔔 Floating In-App Toast Notification */}
+      {attendanceToast && (
+        <div className={`fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold border transition-all animate-bounce-subtle ${
+          attendanceToast.isError 
+            ? "bg-rose-900 text-white border-rose-700 shadow-rose-900/30" 
+            : "bg-emerald-900 text-white border-emerald-700 shadow-emerald-900/30"
+        }`}>
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{attendanceToast.message}</span>
+          <button 
+            type="button" 
+            onClick={() => setAttendanceToast(null)}
+            className="ml-2 hover:opacity-75 cursor-pointer text-white/80"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }

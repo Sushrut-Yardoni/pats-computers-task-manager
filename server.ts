@@ -1246,21 +1246,48 @@ app.get("/api/sync", async (req, res) => {
         mappedLogs = sqlLogs;
       }
 
-      let companiesList: Company[] = [];
-      let assetsList: CompanyAsset[] = [];
+      let companiesList: Company[] = [...(db.companies || [])];
+      let assetsList: CompanyAsset[] = [...(db.assets || [])];
       try {
         if (isSupabaseConfigured && supabase) {
-          const { data: cos } = await supabase.from("companies").select("*").order("id", { ascending: true });
-          companiesList = cos || [];
-          const { data: ast } = await supabase.from("company_assets").select("*").order("id", { ascending: true });
-          assetsList = ast || [];
-        } else {
-          companiesList = db.companies || [];
-          assetsList = db.assets || [];
+          const { data: cos, error: cosErr } = await supabase.from("companies").select("*").order("id", { ascending: true });
+          if (!cosErr && cos && cos.length > 0) {
+            // Merge Supabase companies with local db.companies without dropping newly added ones
+            const existingIds = new Set(cos.map(c => Number(c.id)));
+            const mergedCos = [...cos];
+            (db.companies || []).forEach(localCo => {
+              if (!existingIds.has(Number(localCo.id))) {
+                mergedCos.push(localCo);
+                // Background backfill into Supabase
+                if (supabase) {
+                  Promise.resolve(supabase.from("companies").insert([localCo])).catch(() => {});
+                }
+              }
+            });
+            companiesList = mergedCos;
+            db.companies = mergedCos;
+            saveDb();
+          }
+
+          const { data: ast, error: astErr } = await supabase.from("company_assets").select("*").order("id", { ascending: true });
+          if (!astErr && ast && ast.length > 0) {
+            const existingAstIds = new Set(ast.map(a => Number(a.id)));
+            const mergedAst = [...ast];
+            (db.assets || []).forEach(localAst => {
+              if (!existingAstIds.has(Number(localAst.id))) {
+                mergedAst.push(localAst);
+                if (supabase) {
+                  Promise.resolve(supabase.from("company_assets").insert([localAst])).catch(() => {});
+                }
+              }
+            });
+            assetsList = mergedAst;
+            db.assets = mergedAst;
+            saveDb();
+          }
         }
       } catch (err) {
-        companiesList = db.companies || [];
-        assetsList = db.assets || [];
+        console.warn("Supabase companies sync error:", err);
       }
 
       logSQL("SELECT * FROM employees; SELECT * FROM tasks; SELECT * FROM sql_logs; -- (Unified Live Connection Sync)", employeesList.length + tasksList.length + mappedLogs.length);
@@ -1301,6 +1328,11 @@ app.get("/api/sync", async (req, res) => {
     companies: db.companies || [],
     assets: db.assets || []
   });
+});
+
+// Fetch all companies
+app.get("/api/companies", (req, res) => {
+  res.json(db.companies || []);
 });
 
 // Create a new company

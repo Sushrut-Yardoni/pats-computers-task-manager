@@ -343,7 +343,7 @@ export default function TaskManagementSection({
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerName.trim() || !problemReported.trim() || !assignedTo) {
-      alert("Please fill in all details and select an active service engineer.");
+      showTaskToast("Please fill in all details and select an active service engineer.", true);
       return;
     }
 
@@ -352,7 +352,7 @@ export default function TaskManagementSection({
     if (selectedAssetId && selectedAssetId !== "none") {
       const existsInSheet = companyAssets.some(a => a.asset_id.toLowerCase() === selectedAssetId.toLowerCase());
       if (!existsInSheet) {
-        alert("The selected Asset ID does not exist in the company's asset sheet. Asset ID can only be selected if it exists in the sheet.");
+        showTaskToast("The selected Asset ID does not exist in the company's asset sheet.", true);
         return;
       }
       finalAssetId = selectedAssetId;
@@ -384,14 +384,15 @@ export default function TaskManagementSection({
       setSelectedCompanyId("");
       setSelectedAssetId("");
       setFormSuccess(true);
+      showTaskToast("Task assigned and logged successfully!");
       setTimeout(() => {
         setFormSuccess(false);
         setIsAssignRepairModalOpen(false);
-      }, 1500);
+      }, 1200);
       refreshLogs();
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to record task in relational DB index.");
+      showTaskToast(err.message || "Failed to record task in relational DB index.", true);
     } finally {
       setIsAssigning(false);
     }
@@ -453,7 +454,7 @@ export default function TaskManagementSection({
   const handleSaveDetails = async () => {
     if (!selectedTask || !onUpdateTaskDetails) return;
     if (!editCustomerName.trim() || !editContactDetails.trim() || !editProblemReported.trim()) {
-      alert("Fields (Customer Name, Contact details, Problem description) are required.");
+      showTaskToast("Customer Name, Contact details, and Problem description are required.", true);
       return;
     }
 
@@ -464,7 +465,7 @@ export default function TaskManagementSection({
         (selectedTask.company_id ? a.company_id === selectedTask.company_id : true)
       );
       if (!existsInSheet) {
-        alert("The selected Asset ID does not exist in the company's asset sheet. Asset ID can only be selected if it exists in the sheet.");
+        showTaskToast("The selected Asset ID does not exist in the company's asset sheet.", true);
         return;
       }
     }
@@ -489,11 +490,11 @@ export default function TaskManagementSection({
         asset_id: editAssetId.trim() || null
       } : null);
       setIsEditingDetails(false);
-      alert("Task details updated successfully!");
+      showTaskToast("Task details updated successfully!");
       refreshLogs();
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to update details.");
+      showTaskToast(err.message || "Failed to update details.", true);
     } finally {
       setSavingDetails(false);
     }

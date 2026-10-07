@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from "react";
+import * as XLSX from "xlsx";
 import { 
   Building, Plus, Search, User, CalendarRange, Edit3, Eye, FileSpreadsheet, 
   Download, X, Check, Laptop, Shield, Network, RefreshCw, Cpu, Layers, 
   HardDrive, Key, AlertCircle, Tag, ArrowRight, UserCheck, Users, Printer, Monitor,
-  Trash2
+  Trash2, FileText
 } from "lucide-react";
 import { Company, CompanyAsset, Employee } from "../types";
 
@@ -29,17 +30,37 @@ export default function CompanySection({
   const isAdminOrManager = isAdmin || isManager;
   const currentEmployeeId = currentUser?.id;
 
+  // Local optimistic state for instant UI response
+  const [localExtraCompanies, setLocalExtraCompanies] = useState<Company[]>([]);
+
+  // Combined all companies
+  const allCompanies = useMemo(() => {
+    const existingIds = new Set(companies.map(c => Number(c.id)));
+    const combined = [...companies];
+    localExtraCompanies.forEach(lc => {
+      if (!existingIds.has(Number(lc.id))) {
+        combined.push(lc);
+      }
+    });
+    return combined;
+  }, [companies, localExtraCompanies]);
+
   // Filter companies visible to this user
   // Engineers see:
   // 1. All Non AMC companies (open to all engineers)
-  // 2. AMC companies allocated specifically to them
+  // 2. AMC companies allocated specifically to them or created by them
   // Admin & Manager see all companies
   const visibleCompanies = useMemo(() => {
     if (isAdminOrManager) {
-      return companies;
+      return allCompanies;
     }
-    return companies.filter(c => c.type === "Non AMC" || Number(c.allocated_engineer_id) === Number(currentEmployeeId) || (currentUser?.name && c.created_by === currentUser.name));
-  }, [companies, isAdminOrManager, currentEmployeeId, currentUser]);
+    return allCompanies.filter(c => 
+      c.type === "Non AMC" || 
+      Number(c.allocated_engineer_id) === Number(currentEmployeeId) || 
+      (currentUser?.name && c.created_by?.toLowerCase() === currentUser.name.toLowerCase()) ||
+      (currentUser?.email_id && c.created_by?.toLowerCase() === currentUser.email_id.toLowerCase())
+    );
+  }, [allCompanies, isAdminOrManager, currentEmployeeId, currentUser]);
 
   // Search & Filtering
   const [searchQuery, setSearchQuery] = useState("");
@@ -156,12 +177,14 @@ export default function CompanySection({
         throw new Error(err.error || "Failed to create company");
       }
 
+      const newComp: Company = await resp.json();
+      setLocalExtraCompanies(prev => [newComp, ...prev]);
       await onRefresh();
       setCompanyName("");
       setCompanyType("AMC");
       setCompanyAllocatedEngineerId(!isAdminOrManager && currentEmployeeId ? currentEmployeeId : "");
       setShowCompanyModal(false);
-      showToast("Company successfully registered!");
+      showToast(`Company "${newComp.name}" successfully registered!`);
     } catch (err: any) {
       showToast("Error: " + err.message, true);
     } finally {
@@ -507,15 +530,157 @@ export default function CompanySection({
     });
   }, [currentSheetAssets, excelSearchQuery]);
 
-  // CSV Exporter for active sheet
-  const handleExportCsv = () => {
-    if (!viewingCompanyForExcel || currentSheetAssets.length === 0) {
-      showToast(`No ${activeExcelTab === "printers" ? "printer" : "system"} records available to export.`, true);
-      return;
+  // Excel (.xlsx) Exporter with rich formatting and multiple sheets
+  const handleExportExcel = () => {
+    if (!viewingCompanyForExcel) return;
+    try {
+      const wb = XLSX.utils.book_new();
+
+      // Systems data rows
+      const sysRows = systemAssets.map((a, idx) => ({
+        "#": idx + 1,
+        "LOCATION": a.location || "",
+        "ASSET ID": a.asset_id || "",
+        "ASSET TYPE": a.asset || "Desktop",
+        "AMC STATUS": a.amc_status || "In AMC",
+        "EMPLOYEE NAME": a.employee_name || "",
+        "COMP NAME": a.comp_name || "",
+        "MAKE/MODEL": a.model_no || "",
+        "SERIAL NO.": a.serial_no || "",
+        "CONFIG PROCESSOR": a.config_processor || "",
+        "CONFIG RAM": a.config_ram || "",
+        "CONFIG STORAGE": a.config_storage || "",
+        "MONITOR": a.monitor || "",
+        "MONITOR SERIAL NO.": a.monitor_serial_no || "",
+        "OS": a.os || "",
+        "OS KEY": a.os_key || "",
+        "OS TYPE": a.os_type || "",
+        "OFFICE": a.office || "",
+        "OFFICE KEY": a.office_key || "",
+        "OFFICE TYPE": a.office_type || "",
+        "LAN MAC": a.lan_mac || "",
+        "WAN MAC": a.wan_mac || "",
+        "IP ADDRESS": a.ip_address || "",
+        "ANTIVIRUS": a.antivirus || "",
+        "ANTIVIRUS KEY": a.antivirus_key || "",
+        "VALIDITY": a.validity || "",
+        "STATUS": a.status || "In Use"
+      }));
+
+      // Printers data rows
+      const prnRows = printerAssets.map((a, idx) => ({
+        "#": idx + 1,
+        "LOCATION": a.location || "",
+        "ASSET ID": a.asset_id || "",
+        "ASSET TYPE": a.asset || "Printer",
+        "AMC STATUS": a.amc_status || "In AMC",
+        "MAKE/MODEL": a.model_no || "",
+        "SERIAL NO.": a.serial_no || "",
+        "IP ADDRESS": a.ip_address || "",
+        "ASSIGNED TO / USER": a.employee_name || "",
+        "DEVICE NAME": a.comp_name || "",
+        "LAN MAC": a.lan_mac || "",
+        "WAN MAC": a.wan_mac || "",
+        "STATUS": a.status || "In Use",
+        "CONFIG": [a.config_processor, a.config_ram, a.config_storage].filter(Boolean).join(" / "),
+        "MONITOR": a.monitor || "",
+        "MONITOR SERIAL NO.": a.monitor_serial_no || "",
+        "OS / DRIVER": a.os || "",
+        "OFFICE": a.office || "",
+        "ANTIVIRUS": a.antivirus || ""
+      }));
+
+      // Default blank templates if 0 records so the exported sheet is structured
+      const fallbackSys = [{
+        "#": 1,
+        "LOCATION": "",
+        "ASSET ID": "",
+        "ASSET TYPE": "Desktop",
+        "AMC STATUS": "In AMC",
+        "EMPLOYEE NAME": "",
+        "COMP NAME": "",
+        "MAKE/MODEL": "",
+        "SERIAL NO.": "",
+        "CONFIG PROCESSOR": "",
+        "CONFIG RAM": "",
+        "CONFIG STORAGE": "",
+        "MONITOR": "",
+        "MONITOR SERIAL NO.": "",
+        "OS": "",
+        "OS KEY": "",
+        "OS TYPE": "",
+        "OFFICE": "",
+        "OFFICE KEY": "",
+        "OFFICE TYPE": "",
+        "LAN MAC": "",
+        "WAN MAC": "",
+        "IP ADDRESS": "",
+        "ANTIVIRUS": "",
+        "ANTIVIRUS KEY": "",
+        "VALIDITY": "",
+        "STATUS": "In Use"
+      }];
+
+      const fallbackPrn = [{
+        "#": 1,
+        "LOCATION": "",
+        "ASSET ID": "",
+        "ASSET TYPE": "Printer",
+        "AMC STATUS": "In AMC",
+        "MAKE/MODEL": "",
+        "SERIAL NO.": "",
+        "IP ADDRESS": "",
+        "ASSIGNED TO / USER": "",
+        "DEVICE NAME": "",
+        "LAN MAC": "",
+        "WAN MAC": "",
+        "STATUS": "In Use",
+        "CONFIG": "",
+        "MONITOR": "",
+        "MONITOR SERIAL NO.": "",
+        "OS / DRIVER": "",
+        "OFFICE": "",
+        "ANTIVIRUS": ""
+      }];
+
+      const wsSys = XLSX.utils.json_to_sheet(sysRows.length > 0 ? sysRows : fallbackSys);
+      const wsPrn = XLSX.utils.json_to_sheet(prnRows.length > 0 ? prnRows : fallbackPrn);
+
+      wsSys['!cols'] = [
+        { wch: 6 }, { wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 14 },
+        { wch: 20 }, { wch: 16 }, { wch: 22 }, { wch: 18 }, { wch: 18 },
+        { wch: 14 }, { wch: 14 }, { wch: 18 }, { wch: 18 }, { wch: 16 },
+        { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 14 },
+        { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 16 },
+        { wch: 14 }, { wch: 12 }
+      ];
+
+      wsPrn['!cols'] = [
+        { wch: 6 }, { wch: 18 }, { wch: 16 }, { wch: 14 }, { wch: 14 },
+        { wch: 22 }, { wch: 18 }, { wch: 16 }, { wch: 20 }, { wch: 16 },
+        { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 20 }, { wch: 14 },
+        { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }
+      ];
+
+      XLSX.utils.book_append_sheet(wb, wsSys, "IT Systems");
+      XLSX.utils.book_append_sheet(wb, wsPrn, "Printers");
+
+      const cleanName = viewingCompanyForExcel.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const fileName = `${cleanName}_Assets_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      showToast("Excel spreadsheet downloaded successfully!");
+    } catch (err: any) {
+      console.error("Excel generation error:", err);
+      showToast("Failed to download Excel file: " + (err.message || err), true);
     }
+  };
+
+  // CSV Exporter for active sheet using UTF-8 BOM and Blob
+  const handleExportCsv = () => {
+    if (!viewingCompanyForExcel) return;
 
     const escapeCsv = (val: any) => {
-      if (val === null || val === undefined) return "";
+      if (val === null || val === undefined) return '""';
       const str = String(val).replace(/"/g, '""');
       return `"${str}"`;
     };
@@ -629,15 +794,24 @@ export default function CompanySection({
       ].join(","));
     }
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    const suffix = activeExcelTab === "printers" ? "Printers" : "Systems";
-    link.setAttribute("download", `${viewingCompanyForExcel.name.replace(/[^a-z0-9]/gi, "_")}_${suffix}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const csvString = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
+      const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      const cleanName = viewingCompanyForExcel.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+      const suffix = activeExcelTab === "printers" ? "Printers" : "Systems";
+      link.setAttribute("download", `${cleanName}_${suffix}_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast("CSV file exported successfully!");
+    } catch (err: any) {
+      console.error("CSV download error:", err);
+      showToast("Failed to download CSV: " + (err.message || err), true);
+    }
   };
 
   return (
@@ -1530,9 +1704,19 @@ export default function CompanySection({
 
                 <button
                   type="button"
+                  onClick={handleExportExcel}
+                  className="bg-white text-[#107c41] hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border border-emerald-200"
+                  title="Download complete company inventory as formatted Excel workbook (.xlsx)"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 text-[#107c41]" />
+                  <span>Download Excel</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleExportCsv}
-                  className="bg-emerald-800 hover:bg-emerald-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer shadow-sm border border-emerald-700"
-                  title="Export this company's assets to CSV/Excel file"
+                  className="bg-emerald-800 hover:bg-emerald-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border border-emerald-700"
+                  title="Export active sheet as clean CSV file"
                 >
                   <Download className="h-3.5 w-3.5" />
                   <span>Export CSV</span>

@@ -66,6 +66,13 @@ export default function BillingSection({ tasks, refreshLogs }: BillingSectionPro
     }
   });
 
+  // In-App Toast
+  const [billingToast, setBillingToast] = useState<{ message: string; isError?: boolean } | null>(null);
+  const showBillingToast = (message: string, isError = false) => {
+    setBillingToast({ message, isError });
+    setTimeout(() => setBillingToast(null), 3500);
+  };
+
   const [noBillTaskIds, setNoBillTaskIds] = useState<number[]>(() => {
     try {
       const saved = localStorage.getItem("pats_nobill_tasks");
@@ -201,7 +208,7 @@ export default function BillingSection({ tasks, refreshLogs }: BillingSectionPro
     e.preventDefault();
     if (!selectedTask) return;
     if (!customerName.trim()) {
-      alert("Please enter customer name.");
+      showBillingToast("Please enter customer name.", true);
       return;
     }
 
@@ -974,6 +981,26 @@ export default function BillingSection({ tasks, refreshLogs }: BillingSectionPro
           </div>
         </div>
       )}
+
+      {/* 🔔 Floating In-App Toast Notification */}
+      {billingToast && (
+        <div className={`fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold border transition-all animate-bounce-subtle ${
+          billingToast.isError 
+            ? "bg-rose-900 text-white border-rose-700 shadow-rose-900/30" 
+            : "bg-emerald-900 text-white border-emerald-700 shadow-emerald-900/30"
+        }`}>
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{billingToast.message}</span>
+          <button 
+            type="button" 
+            onClick={() => setBillingToast(null)}
+            className="ml-2 hover:opacity-75 cursor-pointer text-white/80"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -51,6 +51,13 @@ export default function EmployeeDashboard({
   const [showRemarksInput, setShowRemarksInput] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // In-App Toast
+  const [empDashToast, setEmpDashToast] = useState<{ message: string; isError?: boolean } | null>(null);
+  const showEmpDashToast = (message: string, isError = false) => {
+    setEmpDashToast({ message, isError });
+    setTimeout(() => setEmpDashToast(null), 3500);
+  };
+
   const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "attendance" | "companies">("active");
   const activeTab = propsActiveTab !== undefined ? propsActiveTab : internalActiveTab;
   const setActiveTab = onTabChange !== undefined ? onTabChange : setInternalActiveTab;
@@ -116,10 +123,10 @@ export default function EmployeeDashboard({
         blood_group: profBloodGroup.trim() || null,
         emergency_contact: profEmergencyContact.trim() || null
       });
-      alert("Your profile details have been updated successfully!");
+      showEmpDashToast("Your profile details have been updated successfully!");
     } catch (err: any) {
       console.error(err);
-      alert("Failed to update profile details: " + (err.message || err));
+      showEmpDashToast("Failed to update profile details: " + (err.message || err), true);
     } finally {
       setProfileSaving(false);
     }
@@ -133,10 +140,10 @@ export default function EmployeeDashboard({
     try {
       await onUpdatePassword(currentEmployee.id, empNewPassword.trim());
       setEmpNewPassword("");
-      alert("Your password has been updated successfully!");
+      showEmpDashToast("Your password has been updated successfully!");
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to update password");
+      showEmpDashToast(err.message || "Failed to update password", true);
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -259,10 +266,10 @@ export default function EmployeeDashboard({
     try {
       await onUpdateRemarks(selectedTask.id, editingRemarks.trim());
       setSelectedTask(prev => prev ? { ...prev, remarks: editingRemarks.trim() || null } : null);
-      alert("Relational task remarks updated successfully!");
+      showEmpDashToast("Relational task remarks updated successfully!");
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to update remarks.");
+      showEmpDashToast(err.message || "Failed to update remarks.", true);
     } finally {
       setSavingRemarks(false);
     }
@@ -275,9 +282,10 @@ export default function EmployeeDashboard({
       await onUpdateMaterials(selectedTask.id, newMaterials.trim() || null);
       setSelectedTask(prev => prev ? { ...prev, materials_carried: newMaterials.trim() || null } : null);
       setMaterialInput("");
+      showEmpDashToast("Materials updated successfully!");
     } catch (err: any) {
       console.error(err);
-      alert(err.message || "Failed to update carrying materials.");
+      showEmpDashToast(err.message || "Failed to update carrying materials.", true);
     } finally {
       setSavingMaterials(false);
     }
@@ -293,16 +301,17 @@ export default function EmployeeDashboard({
       } else {
         handleCloseModal();
       }
+      showEmpDashToast("Task accepted and started!");
     } catch (err) {
       console.error(err);
-      alert("Error accepting task");
+      showEmpDashToast("Error accepting task", true);
     }
   };
 
   const handleFinishCompletion = async (e: React.FormEvent, taskId: number) => {
     e.preventDefault();
     if (!remarksText || remarksText.trim() === "") {
-      alert("Please enter a resolution remark explaining the fix.");
+      showEmpDashToast("Please enter a resolution remark explaining the fix.", true);
       return;
     }
 
@@ -310,9 +319,10 @@ export default function EmployeeDashboard({
     try {
       await onFinishTask(taskId, remarksText, kmTravelled === "" ? undefined : kmTravelled);
       handleCloseModal();
+      showEmpDashToast("Task completed and logged successfully!");
     } catch (err) {
       console.error(err);
-      alert("Failed to submit remarks and close ticket.");
+      showEmpDashToast("Failed to submit remarks and close ticket.", true);
     } finally {
       setIsSubmitting(false);
     }
@@ -1259,6 +1269,25 @@ export default function EmployeeDashboard({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* 🔔 Floating In-App Toast Notification */}
+      {empDashToast && (
+        <div className={`fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold border transition-all animate-bounce-subtle ${
+          empDashToast.isError 
+            ? "bg-rose-900 text-white border-rose-700 shadow-rose-900/30" 
+            : "bg-emerald-900 text-white border-emerald-700 shadow-emerald-900/30"
+        }`}>
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{empDashToast.message}</span>
+          <button 
+            type="button" 
+            onClick={() => setEmpDashToast(null)}
+            className="ml-2 hover:opacity-75 cursor-pointer text-white/80"
+          >
+            ✕
+          </button>
         </div>
       )}
 

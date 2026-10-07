@@ -485,6 +485,13 @@ export default function ManagerDashboard({
   // Delete State
   const [isDeletingSubmitting, setIsDeletingSubmitting] = useState(false);
 
+  // In-App Toast Notification
+  const [managerToast, setManagerToast] = useState<{ message: string; isError?: boolean } | null>(null);
+  const showManagerToast = (message: string, isError = false) => {
+    setManagerToast({ message, isError });
+    setTimeout(() => setManagerToast(null), 3500);
+  };
+
   const fetchTodos = async () => {
     setIsLoading(true);
     try {
@@ -514,7 +521,7 @@ export default function ManagerDashboard({
   const handleCreateTodo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !description.trim()) {
-      alert("Please enter both title and description.");
+      showManagerToast("Please enter both title and description.", true);
       return;
     }
 
@@ -543,8 +550,9 @@ export default function ManagerDashboard({
       setIsAddModalOpen(false);
       fetchTodos();
       refreshLogs();
+      showManagerToast("To-Do task created successfully!");
     } catch (err: any) {
-      alert(err.message || "Failed to create To-Do task.");
+      showManagerToast(err.message || "Failed to create To-Do task.", true);
     } finally {
       setIsSubmitting(false);
     }
@@ -563,7 +571,7 @@ export default function ManagerDashboard({
     if (!editingTodo) return;
 
     if (!editTitle.trim() || !editDescription.trim()) {
-      alert("Title and description are required.");
+      showManagerToast("Title and description are required.", true);
       return;
     }
 
@@ -589,8 +597,9 @@ export default function ManagerDashboard({
       setEditingTodo(null);
       fetchTodos();
       refreshLogs();
+      showManagerToast("To-Do task updated successfully!");
     } catch (err: any) {
-      alert(err.message || "Failed to update task.");
+      showManagerToast(err.message || "Failed to update task.", true);
     } finally {
       setIsUpdating(false);
     }
@@ -634,8 +643,9 @@ export default function ManagerDashboard({
       setFinishRemarks("");
       fetchTodos();
       refreshLogs();
+      showManagerToast("Task marked as finished!");
     } catch (err: any) {
-      alert(err.message || "Failed to finish task.");
+      showManagerToast(err.message || "Failed to finish task.", true);
     } finally {
       setIsFinishingSubmitting(false);
     }
@@ -659,8 +669,9 @@ export default function ManagerDashboard({
       setDeletingTodo(null);
       fetchTodos();
       refreshLogs();
+      showManagerToast("Task moved to deleted history.");
     } catch (err: any) {
-      alert(err.message || "Failed to delete task.");
+      showManagerToast(err.message || "Failed to delete task.", true);
     } finally {
       setIsDeletingSubmitting(false);
     }
@@ -731,8 +742,9 @@ export default function ManagerDashboard({
       setIsAddingViewer(false);
       fetchTodos();
       refreshLogs();
+      showManagerToast(`Task transferred to ${selectedNewViewer.trim()} successfully!`);
     } catch (err: any) {
-      alert(err.message || "Failed to transfer task.");
+      showManagerToast(err.message || "Failed to transfer task.", true);
     } finally {
       setIsSubmittingViewer(false);
     }
@@ -1963,6 +1975,25 @@ export default function ManagerDashboard({
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 🔔 Floating In-App Toast Notification */}
+      {managerToast && (
+        <div className={`fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold border transition-all animate-bounce-subtle ${
+          managerToast.isError 
+            ? "bg-rose-900 text-white border-rose-700 shadow-rose-900/30" 
+            : "bg-emerald-900 text-white border-emerald-700 shadow-emerald-900/30"
+        }`}>
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{managerToast.message}</span>
+          <button 
+            type="button" 
+            onClick={() => setManagerToast(null)}
+            className="ml-2 hover:opacity-75 cursor-pointer text-white/80"
+          >
+            ✕
+          </button>
         </div>
       )}
 
