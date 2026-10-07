@@ -3,12 +3,13 @@ import {
   CheckCircle, Clock, AlertTriangle, Phone, Mail, 
   X, Cpu, Calendar, CheckSquare, MessageSquare, ArrowRight, Play, Check, Navigation, Package,
   User, ShieldAlert, ChevronLeft, ChevronRight, Menu, AlertCircle, Settings, Building,
-  Shield, Laptop, Search
+  Shield, Laptop, Search, Bell, BellRing, Smartphone, Volume2
 } from "lucide-react";
 import EmployeeTravelSection from "./EmployeeTravelSection";
 import { Task, Employee, Company, CompanyAsset } from "../types";
 import CompanySection from "./CompanySection";
 import AttendanceSection from "./AttendanceSection";
+import { notificationManager } from "../utils/notificationManager";
 
 interface EmployeeDashboardProps {
   currentEmployee: { id: number; name: string; role: string };
@@ -25,6 +26,7 @@ interface EmployeeDashboardProps {
   onUpdateProfile?: (employeeId: number, profileData: Partial<Employee>) => Promise<void>;
   activeTab?: "active" | "completed" | "travel" | "profile" | "attendance" | "companies";
   onTabChange?: (tab: "active" | "completed" | "travel" | "profile" | "attendance" | "companies") => void;
+  onTriggerTestNotification?: () => void;
 }
 
 export default function EmployeeDashboard({
@@ -41,7 +43,8 @@ export default function EmployeeDashboard({
   onUpdateMaterials,
   onUpdateProfile,
   activeTab: propsActiveTab,
-  onTabChange
+  onTabChange,
+  onTriggerTestNotification
 }: EmployeeDashboardProps) {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [remarksText, setRemarksText] = useState("");
@@ -56,6 +59,52 @@ export default function EmployeeDashboard({
   const showEmpDashToast = (message: string, isError = false) => {
     setEmpDashToast({ message, isError });
     setTimeout(() => setEmpDashToast(null), 3500);
+  };
+
+  // Android Mobile Floating Notification Permission State
+  const [notifPermission, setNotifPermission] = useState<string>("default");
+  const [dismissedNotifBanner, setDismissedNotifBanner] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setNotifPermission(Notification.permission);
+    }
+  }, []);
+
+  const handleRequestNotif = async () => {
+    const granted = await notificationManager.requestPermission();
+    setNotifPermission(granted ? "granted" : "denied");
+    if (granted) {
+      // Auto subscribe device for background push
+      await notificationManager.subscribeToPushNotifications(currentEmployee.id);
+      showEmpDashToast("Floating Mobile Notifications enabled successfully!");
+      if (onTriggerTestNotification) {
+        onTriggerTestNotification();
+      }
+    } else {
+      showEmpDashToast("Notification permission was denied in your browser settings.", true);
+    }
+  };
+
+  // Background Push Test & Older Android Guide States
+  const [isTestingServerPush, setIsTestingServerPush] = useState(false);
+  const [showOlderAndroidGuide, setShowOlderAndroidGuide] = useState(false);
+
+  const handleServerPushTest = async () => {
+    setIsTestingServerPush(true);
+    try {
+      await notificationManager.subscribeToPushNotifications(currentEmployee.id);
+      const res = await notificationManager.triggerServerPushTest(currentEmployee.id);
+      if (res.success) {
+        showEmpDashToast("Push notification dispatched! Lock your screen or switch apps to verify.", false);
+      } else {
+        showEmpDashToast("Push test warning: " + res.message, true);
+      }
+    } catch (err: any) {
+      showEmpDashToast("Push test failed: " + err.message, true);
+    } finally {
+      setIsTestingServerPush(false);
+    }
   };
 
   const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "attendance" | "companies">("active");
@@ -73,14 +122,18 @@ export default function EmployeeDashboard({
   useEffect(() => {
     fetch("/api/settings")
       .then(async r => {
-        if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
-        return r.json();
+        if (!r.ok) return { petrol_price: 100 };
+        const contentType = r.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          return r.json();
+        }
+        return { petrol_price: 100 };
       })
       .then(d => {
         setPetrolPrice(d?.petrol_price || 100);
       })
       .catch(err => {
-        console.error("Failed to query settings:", err);
+        console.warn("Using default settings value:", err);
         setPetrolPrice(100);
       });
   }, []);
@@ -593,7 +646,7 @@ export default function EmployeeDashboard({
               <div className="border-b border-slate-200 pb-3 flex items-center justify-between">
                 <div>
                   <h4 className="text-sm font-extrabold uppercase text-slate-800 tracking-wide flex items-center gap-1.5 font-sans">
-                    <ShieldAlert className="h-4 w-4 text-emerald-600 animate-pulse" />
+                    <ShieldAlert className="h-4 w-4 text-emerald-600" />
                     Workstation Security & Login Details
                   </h4>
                 </div>
@@ -621,6 +674,92 @@ export default function EmployeeDashboard({
               </form>
             </div>
           )}
+
+          {/* Card 3: Mobile & Desktop Notifications Preferences */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xs">
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <Smartphone className="h-4 w-4 text-blue-600" />
+                <h4 className="text-sm font-bold text-slate-800">
+                  Mobile & Browser Notifications
+                </h4>
+              </div>
+              {notifPermission === "granted" ? (
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Notifications Active
+                </span>
+              ) : (
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                  Permission Required
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              When enabled, your device will receive floating heads-up alerts with an audio chime and haptic vibration whenever a new task is assigned to you. Background push ensures alerts arrive even when your browser or app is closed.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              {notifPermission !== "granted" ? (
+                <button
+                  type="button"
+                  onClick={handleRequestNotif}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-2 shadow-xs"
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                  <span>Enable Notifications</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleServerPushTest}
+                  disabled={isTestingServerPush}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs px-3.5 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  title="Sends a test notification to verify background delivery"
+                >
+                  <BellRing className="h-3.5 w-3.5 text-blue-600" />
+                  <span>{isTestingServerPush ? "Sending Test..." : "Send Test Alert"}</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setShowOlderAndroidGuide(!showOlderAndroidGuide)}
+                className="text-blue-600 hover:text-blue-700 text-xs font-medium cursor-pointer py-2 hover:underline"
+              >
+                {showOlderAndroidGuide ? "Hide device setup guide" : "Android battery & background optimization guide →"}
+              </button>
+            </div>
+
+            {/* Expandable Device Setup Guide */}
+            {showOlderAndroidGuide && (
+              <div className="mt-4 pt-4 border-t border-slate-100 space-y-3 text-xs text-slate-600 animate-in fade-in">
+                <h5 className="font-semibold text-slate-800">
+                  Android Background Alert Optimization Guide (Android 8–14, MIUI, ColorOS, Vivo, Samsung)
+                </h5>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <p className="font-semibold text-slate-800 mb-1">1. Battery Optimization</p>
+                    <p className="text-[11px] leading-relaxed">
+                      Go to phone <strong>Settings → Apps → PATS Tasks (or Chrome) → Battery</strong> and select <strong>Unrestricted</strong> or <strong>Don't optimize</strong> so Android delivers alerts promptly when phone is locked.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <p className="font-semibold text-slate-800 mb-1">2. Floating / Pop on Screen</p>
+                    <p className="text-[11px] leading-relaxed">
+                      In <strong>App Info → Notifications</strong>, verify that <strong>Allow notifications</strong> and <strong>Pop on screen / Heads-up</strong> are enabled.
+                    </p>
+                  </div>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    <p className="font-semibold text-slate-800 mb-1">3. Autostart Permission</p>
+                    <p className="text-[11px] leading-relaxed">
+                      On Xiaomi MIUI, Vivo, or Oppo: enable <strong>Autostart</strong> in Manage Apps to guarantee background push reception when the app is swiped away.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       ) : activeTab === "travel" ? (
         <EmployeeTravelSection myTasks={myTasks} employeeId={currentEmployee.id} petrolPrice={petrolPrice} />
@@ -643,6 +782,33 @@ export default function EmployeeDashboard({
         />
       ) : (
         <div className="space-y-4">
+          {/* Polite, non-intrusive notification prompt if permission is pending */}
+          {!dismissedNotifBanner && notifPermission !== "granted" && (
+            <div className="bg-blue-50/80 border border-blue-200/80 rounded-xl p-3 flex items-center justify-between gap-3 text-slate-800 text-xs shadow-2xs">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <Bell className="h-4 w-4 text-blue-600 shrink-0" />
+                <span className="truncate">Enable device notifications to receive floating alerts whenever tasks are assigned to you.</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handleRequestNotif}
+                  className="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-semibold text-xs px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                >
+                  Enable
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDismissedNotifBanner(true)}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-lg transition-colors cursor-pointer"
+                  title="Dismiss banner"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Search, Contract Type Filter, Month Filter and Record Limit row */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white border border-slate-200 p-3 rounded-2xl text-xs animate-fade-in shadow-2xs">
             <div className="flex flex-wrap items-center gap-2 flex-1">

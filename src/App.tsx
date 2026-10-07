@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Laptop, Cpu, Terminal, Users, Shield, RefreshCw, AlertCircle, Database } from "lucide-react";
 import { Employee, Task, SqlLog, Company, CompanyAsset } from "./types";
 import Header from "./components/Header";
@@ -7,6 +7,8 @@ import AdminDashboard from "./components/AdminDashboard";
 import EmployeeDashboard from "./components/EmployeeDashboard";
 import AccountsDashboard from "./components/AccountsDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
+import FloatingTaskNotification from "./components/FloatingTaskNotification";
+import { notificationManager } from "./utils/notificationManager";
 
 export default function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -28,6 +30,11 @@ export default function App() {
   // Employee active view partition (synchronized to allow Header Settings to open Profile)
   const [employeeActiveTab, setEmployeeActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "attendance" | "companies">("active");
 
+  // Floating assigned task notification state for service engineers
+  const [floatingTask, setFloatingTask] = useState<Task | null>(null);
+  const seenTaskIdsRef = useRef<Set<number>>(new Set());
+  const initialTaskSyncDoneRef = useRef(false);
+
   const [appNotice, setAppNotice] = useState<{ message: string; isError?: boolean } | null>(null);
   const showAppNotice = (message: string, isError = false) => {
     setAppNotice({ message, isError });
@@ -45,6 +52,11 @@ export default function App() {
         throw new Error("Relational server connection error. Make sure the backend dev server has booted up.");
       }
 
+      const contentType = resp.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("Server returned non-JSON response during boot.");
+      }
+
       const data = await resp.json();
 
       setEmployees(data.employees || []);
@@ -53,7 +65,7 @@ export default function App() {
       setCompanies(data.companies || []);
       setAssets(data.assets || []);
     } catch (err: any) {
-      console.error(err);
+      console.warn("Connection sync note:", err?.message || err);
       setDbError(err.message || "Failed to load database. Attempting reconnect...");
     } finally {
       if (!silent) setIsLoading(false);
@@ -81,6 +93,92 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Real-Time Task Assignment Detector: triggers floating notification & chime for engineers on Android mobile & desktop
+  useEffect(() => {
+    if (!currentUser || currentUser.type !== "employee") {
+      setFloatingTask(null);
+      return;
+    }
+
+    const currentEmpId = currentUser.id;
+    const myTasks = tasks.filter(t => t.assigned_to === currentEmpId);
+
+    // Initial load: populate seen IDs without triggering alarm spam
+    if (!initialTaskSyncDoneRef.current) {
+      if (tasks.length > 0) {
+        tasks.forEach(t => seenTaskIdsRef.current.add(t.id));
+        initialTaskSyncDoneRef.current = true;
+      }
+      return;
+    }
+
+    // Identify newly assigned task to this engineer (Pending or In Progress) that hasn't been shown
+    const newlyAssigned = myTasks.find(t => 
+      !seenTaskIdsRef.current.has(t.id) && 
+      (t.status === "Pending" || t.status === "In Progress")
+    );
+
+    if (newlyAssigned) {
+      // Mark all current tasks as seen
+      tasks.forEach(t => seenTaskIdsRef.current.add(t.id));
+
+      // Display floating in-app notification banner
+      setFloatingTask(newlyAssigned);
+
+      // Trigger system / Android native mobile push notification + chime + vibration
+      notificationManager.sendSystemNotification(`New Task Assigned: ${newlyAssigned.customer_name}`, {
+        body: `${newlyAssigned.problem_reported}${newlyAssigned.company_name ? ` • ${newlyAssigned.company_name}` : ""}${newlyAssigned.asset_id ? ` (Asset: ${newlyAssigned.asset_id})` : ""}`,
+        taskId: newlyAssigned.id
+      });
+    } else {
+      // Keep seen set up to date
+      tasks.forEach(t => seenTaskIdsRef.current.add(t.id));
+    }
+  }, [tasks, currentUser]);
+
+  // Background Web Push auto-subscription for service engineers (enables alerts even when app is closed)
+  useEffect(() => {
+    if (currentUser && currentUser.type === "employee") {
+      notificationManager.subscribeToPushNotifications(currentUser.id).catch((err) => {
+        console.warn("Auto push subscription warning:", err);
+      });
+    }
+  }, [currentUser]);
+
+  // Handle Android notification click / deep link navigation when opened from closed state or notification tray
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Check if launched from a notification URL (?taskId=123)
+    const params = new URLSearchParams(window.location.search);
+    const urlTaskId = params.get("taskId");
+    if (urlTaskId) {
+      const tId = Number(urlTaskId);
+      const found = tasks.find(t => t.id === tId);
+      if (found) {
+        setFloatingTask(found);
+        setEmployeeActiveTab("active");
+      }
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // Listen for direct messages from Service Worker when clicked
+    if ("serviceWorker" in navigator) {
+      const messageHandler = (event: MessageEvent) => {
+        if (event.data?.type === "PATS_OPEN_TASK" && event.data?.taskId) {
+          const tId = Number(event.data.taskId);
+          const found = tasks.find(t => t.id === tId);
+          if (found) {
+            setFloatingTask(found);
+            setEmployeeActiveTab("active");
+          }
+        }
+      };
+      navigator.serviceWorker.addEventListener("message", messageHandler);
+      return () => navigator.serviceWorker.removeEventListener("message", messageHandler);
+    }
+  }, [tasks]);
 
   const handleLogin = (user: typeof currentUser) => {
     setCurrentUser(user);
@@ -388,9 +486,49 @@ export default function App() {
               onUpdateProfile={handleUpdateProfile}
               activeTab={employeeActiveTab}
               onTabChange={setEmployeeActiveTab}
+              onTriggerTestNotification={() => {
+                const sampleTask: Task = {
+                  id: 999999,
+                  customer_name: "Live Test Ticket • Sample Customer",
+                  contact_details: "+91 98765 43210",
+                  problem_reported: "Floating alert test: Desktop hardware inspection and network port diagnosis.",
+                  assigned_to: currentUser.id,
+                  status: "Pending",
+                  assigned_at: new Date().toISOString(),
+                  accepted_at: null,
+                  finished_at: null,
+                  remarks: null,
+                  address: "Building B, Cyber City, Floor 3",
+                  is_priority: true,
+                  company_name: "Global Tech Hub",
+                  asset_id: "AST-SAMPLE-101"
+                };
+                setFloatingTask(sampleTask);
+                notificationManager.sendSystemNotification("New Task Assigned: Live Test Ticket", {
+                  body: "Desktop hardware inspection and network port diagnosis.",
+                  taskId: sampleTask.id
+                });
+              }}
             />
           )}
         </main>
+
+        {/* 🔔 Real-Time Floating Notification Banner for Android Mobile & Web */}
+        <FloatingTaskNotification
+          task={floatingTask}
+          onViewTask={async (task) => {
+            try {
+              if (task.status === "Pending") {
+                await handleAcceptTask(task.id);
+              }
+            } catch (e) {
+              console.warn("Auto accept task error:", e);
+            }
+            setEmployeeActiveTab("active");
+            setFloatingTask(null);
+          }}
+          onDismiss={() => setFloatingTask(null)}
+        />
 
         {appNotice && (
           <div className={`fixed bottom-6 right-6 z-[100] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-bold border transition-all ${

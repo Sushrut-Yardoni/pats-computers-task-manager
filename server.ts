@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
+import webpush from "web-push";
 
 // Load Environment Variables (.env)
 dotenv.config();
@@ -289,6 +290,18 @@ interface AttendanceRecord {
   out_location_coords: string | null;
 }
 
+interface PushSubscriptionRecord {
+  id: string;
+  employee_id: number;
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  device_info?: string;
+  created_at: string;
+}
+
 interface DatabaseSchema {
   employees: Employee[];
   tasks: Task[];
@@ -298,6 +311,11 @@ interface DatabaseSchema {
   companies?: Company[];
   assets?: CompanyAsset[];
   attendance?: AttendanceRecord[];
+  push_subscriptions?: PushSubscriptionRecord[];
+  vapid_keys?: {
+    publicKey: string;
+    privateKey: string;
+  };
   nextTaskId: number;
   nextTodoId?: number;
   nextOfflineTravelId?: number;
@@ -437,6 +455,10 @@ function initDb(): DatabaseSchema {
       }
       if (typeof data.nextAttendanceId !== "number") {
         data.nextAttendanceId = data.attendance.length > 0 ? Math.max(...data.attendance.map(a => a.id)) + 1 : 1;
+        migrated = true;
+      }
+      if (!data.push_subscriptions) {
+        data.push_subscriptions = [];
         migrated = true;
       }
       if (migrated) {
@@ -714,6 +736,91 @@ function saveDb() {
   }
 }
 
+// ==========================================
+// Web Push VAPID Setup for Background Android Mobile Notifications
+// Works even when the app is closed, device is locked, or browser minimized
+// ==========================================
+let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || "";
+let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || "";
+
+if (!vapidPublicKey || !vapidPrivateKey) {
+  if (db.vapid_keys && db.vapid_keys.publicKey && db.vapid_keys.privateKey) {
+    vapidPublicKey = db.vapid_keys.publicKey;
+    vapidPrivateKey = db.vapid_keys.privateKey;
+  } else {
+    try {
+      const keys = webpush.generateVAPIDKeys();
+      vapidPublicKey = keys.publicKey;
+      vapidPrivateKey = keys.privateKey;
+      db.vapid_keys = { publicKey: vapidPublicKey, privateKey: vapidPrivateKey };
+      saveDb();
+      console.log("🔑 Generated persistent VAPID keys for Android Push Notifications.");
+    } catch (e: any) {
+      console.error("Failed to generate VAPID keys:", e?.message || e);
+    }
+  }
+}
+
+try {
+  if (vapidPublicKey && vapidPrivateKey) {
+    webpush.setVapidDetails(
+      "mailto:support@pats.co.in",
+      vapidPublicKey,
+      vapidPrivateKey
+    );
+    console.log("🔔 Web Push configured successfully for Android devices.");
+  }
+} catch (e: any) {
+  console.error("Error setting up VAPID details:", e?.message || e);
+}
+
+// Helper to deliver high-priority push notification waking up Android devices
+async function sendPushNotificationToEmployee(employeeId: number, task: Partial<Task>) {
+  if (!db.push_subscriptions || db.push_subscriptions.length === 0) return;
+  if (!vapidPublicKey || !vapidPrivateKey) return;
+
+  const targetEmpId = Number(employeeId);
+  const subs = db.push_subscriptions.filter(s => s.employee_id === targetEmpId);
+  if (subs.length === 0) return;
+
+  const title = `New Task Assigned: ${task.customer_name || "Customer Ticket"}`;
+  const body = `${task.problem_reported || "A new repair ticket has been assigned to you."}${task.company_name ? ` • ${task.company_name}` : ""}${task.asset_id ? ` (Asset: ${task.asset_id})` : ""}`;
+
+  const payload = JSON.stringify({
+    title,
+    body,
+    taskId: task.id,
+    is_priority: !!task.is_priority
+  });
+
+  const deadEndpoints: string[] = [];
+
+  for (const sub of subs) {
+    try {
+      await webpush.sendNotification({
+        endpoint: sub.endpoint,
+        keys: sub.keys
+      }, payload, {
+        TTL: 86400, // 24-hour delivery window
+        urgency: "high" // Urgent priority wakes up older/modern Android devices from Doze / sleep
+      });
+      console.log(`[Push Notification] Delivered to engineer ${targetEmpId} (${sub.endpoint.slice(0, 30)}...)`);
+    } catch (err: any) {
+      console.warn(`[Push Notification] Delivery warning to engineer ${targetEmpId}:`, err?.statusCode || err?.message || err);
+      // HTTP 404 or 410 indicates expired subscription or user re-installed app
+      if (err?.statusCode === 410 || err?.statusCode === 404) {
+        deadEndpoints.push(sub.endpoint);
+      }
+    }
+  }
+
+  // Clean up obsolete subscriptions
+  if (deadEndpoints.length > 0) {
+    db.push_subscriptions = db.push_subscriptions.filter(s => !deadEndpoints.includes(s.endpoint));
+    saveDb();
+  }
+}
+
 // REST Backend Endpoints 
 
 // Unified login validation endpoint with credential checking
@@ -806,6 +913,94 @@ app.post("/api/login", async (req, res) => {
   
   return res.status(401).json({
     error: "Invalid email ID or password. Check credentials registry."
+  });
+});
+
+// ==========================================
+// Web Push Subscription & Notification Endpoints
+// ==========================================
+
+// 1. Get VAPID Public Key for client-side subscription
+app.get("/api/push/vapid-public-key", (req, res) => {
+  res.json({ publicKey: vapidPublicKey });
+});
+
+// 2. Subscribe an engineer's device to background notifications
+app.post("/api/push/subscribe", (req, res) => {
+  const { employee_id, subscription, device_info } = req.body;
+  if (!subscription || !subscription.endpoint || !subscription.keys) {
+    return res.status(400).json({ error: "Invalid subscription payload." });
+  }
+
+  if (!db.push_subscriptions) {
+    db.push_subscriptions = [];
+  }
+
+  const empId = Number(employee_id);
+  // Remove duplicate endpoint if already registered
+  db.push_subscriptions = db.push_subscriptions.filter(s => s.endpoint !== subscription.endpoint);
+
+  const newSub: PushSubscriptionRecord = {
+    id: `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    employee_id: empId,
+    endpoint: subscription.endpoint,
+    keys: {
+      p256dh: subscription.keys.p256dh,
+      auth: subscription.keys.auth
+    },
+    device_info: device_info || "Android Device",
+    created_at: new Date().toISOString()
+  };
+
+  db.push_subscriptions.push(newSub);
+  saveDb();
+
+  console.log(`[Push Subscription] Successfully registered Android device for engineer ID: ${empId}. Active device count: ${db.push_subscriptions.length}`);
+  res.json({ success: true, count: db.push_subscriptions.length });
+});
+
+// 3. Unsubscribe device
+app.post("/api/push/unsubscribe", (req, res) => {
+  const { endpoint } = req.body;
+  if (!endpoint) return res.status(400).json({ error: "Endpoint parameter required." });
+
+  if (db.push_subscriptions) {
+    db.push_subscriptions = db.push_subscriptions.filter(s => s.endpoint !== endpoint);
+    saveDb();
+  }
+  res.json({ success: true });
+});
+
+// 4. Test background push alert (allows engineer to lock screen / close app to verify)
+app.post("/api/push/test", async (req, res) => {
+  const { employee_id } = req.body;
+  const empId = Number(employee_id);
+  if (!empId) {
+    return res.status(400).json({ error: "employee_id parameter required." });
+  }
+
+  const emp = db.employees.find(e => e.id === empId);
+  const sampleTask: Task = {
+    id: 99999,
+    customer_name: "Live Background Alert Test • PATS Service Desk",
+    contact_details: "+91 98765 00000",
+    problem_reported: "Test notification: Background push delivery verified! You receive floating heads-up alerts even with the app closed.",
+    assigned_to: empId,
+    status: "Pending",
+    assigned_at: new Date().toISOString(),
+    accepted_at: null,
+    finished_at: null,
+    remarks: null,
+    address: "PATS Computers HQ",
+    is_priority: true,
+    company_name: "PATS Service Test",
+    asset_id: "TEST-01"
+  };
+
+  await sendPushNotificationToEmployee(empId, sampleTask);
+  res.json({ 
+    success: true, 
+    message: `Test push sent to registered devices for ${emp ? emp.name : `Engineer #${empId}`}. Check your notification tray!` 
   });
 });
 
@@ -1251,16 +1446,25 @@ app.get("/api/sync", async (req, res) => {
       try {
         if (isSupabaseConfigured && supabase) {
           const { data: cos, error: cosErr } = await supabase.from("companies").select("*").order("id", { ascending: true });
-          if (!cosErr && cos && cos.length > 0) {
-            // Merge Supabase companies with local db.companies without dropping newly added ones
-            const existingIds = new Set(cos.map(c => Number(c.id)));
-            const mergedCos = [...cos];
+          if (!cosErr && cos) {
+            const existingRemoteIds = new Set(cos.map(c => Number(c.id)));
+            const enrichedRemoteCos = cos.map(c => {
+              const emp = (db.employees || []).find(e => e.id === c.allocated_engineer_id);
+              return {
+                ...c,
+                allocated_engineer_name: c.allocated_engineer_name || emp?.name || null
+              };
+            });
+
+            const mergedCos = [...enrichedRemoteCos];
             (db.companies || []).forEach(localCo => {
-              if (!existingIds.has(Number(localCo.id))) {
+              if (!existingRemoteIds.has(Number(localCo.id))) {
                 mergedCos.push(localCo);
-                // Background backfill into Supabase
                 if (supabase) {
-                  Promise.resolve(supabase.from("companies").insert([localCo])).catch(() => {});
+                  const { allocated_engineer_name, ...sbCo } = localCo;
+                  Promise.resolve(supabase.from("companies").insert([sbCo])).catch((e) => {
+                    console.warn("Backfill company to Supabase failed:", e?.message || e);
+                  });
                 }
               }
             });
@@ -1270,14 +1474,16 @@ app.get("/api/sync", async (req, res) => {
           }
 
           const { data: ast, error: astErr } = await supabase.from("company_assets").select("*").order("id", { ascending: true });
-          if (!astErr && ast && ast.length > 0) {
+          if (!astErr && ast) {
             const existingAstIds = new Set(ast.map(a => Number(a.id)));
             const mergedAst = [...ast];
             (db.assets || []).forEach(localAst => {
               if (!existingAstIds.has(Number(localAst.id))) {
                 mergedAst.push(localAst);
                 if (supabase) {
-                  Promise.resolve(supabase.from("company_assets").insert([localAst])).catch(() => {});
+                  Promise.resolve(supabase.from("company_assets").insert([localAst])).catch((e) => {
+                    console.warn("Backfill asset to Supabase failed:", e?.message || e);
+                  });
                 }
               }
             });
@@ -1319,20 +1525,35 @@ app.get("/api/sync", async (req, res) => {
     };
   });
 
+  const enrichedCompanies = (db.companies || []).map(c => {
+    const emp = cleanEmployees.find(e => e.id === c.allocated_engineer_id);
+    return {
+      ...c,
+      allocated_engineer_name: c.allocated_engineer_name || emp?.name || null
+    };
+  });
+
   logSQL("SELECT * FROM employees; SELECT * FROM tasks; -- (Unified Local Cache Sync)", cleanEmployees.length + tasksWithEmployees.length);
 
   return res.json({
     employees: cleanEmployees,
     tasks: tasksWithEmployees,
     sqlLogs: sqlLogs,
-    companies: db.companies || [],
+    companies: enrichedCompanies,
     assets: db.assets || []
   });
 });
 
 // Fetch all companies
 app.get("/api/companies", (req, res) => {
-  res.json(db.companies || []);
+  const enriched = (db.companies || []).map(c => {
+    const emp = (db.employees || []).find(e => e.id === c.allocated_engineer_id);
+    return {
+      ...c,
+      allocated_engineer_name: c.allocated_engineer_name || emp?.name || null
+    };
+  });
+  res.json(enriched);
 });
 
 // Create a new company
@@ -1356,7 +1577,7 @@ app.post("/api/companies", async (req, res) => {
 
   const newCompany = {
     id: nextId,
-    name,
+    name: String(name).trim(),
     type: type === "AMC" ? ("AMC" as const) : ("Non AMC" as const),
     created_by: created_by || "System",
     created_at: new Date().toISOString(),
@@ -1369,13 +1590,17 @@ app.post("/api/companies", async (req, res) => {
   saveDb();
 
   // Log SQL
-  logSQL(`INSERT INTO companies (id, name, type, created_by, allocated_engineer_id, created_at) VALUES (${nextId}, '${name.replace(/'/g, "''")}', '${type}', '${(created_by || "System").replace(/'/g, "''")}', ${engId || "NULL"}, NOW());`, 1);
+  logSQL(`INSERT INTO companies (id, name, type, created_by, allocated_engineer_id, created_at) VALUES (${nextId}, '${newCompany.name.replace(/'/g, "''")}', '${newCompany.type}', '${(newCompany.created_by).replace(/'/g, "''")}', ${engId || "NULL"}, NOW());`, 1);
 
   if (isSupabaseConfigured && supabase) {
     try {
-      await supabase.from("companies").insert([newCompany]);
-    } catch (e) {
-      console.warn("Could not insert company to Supabase:", e);
+      const { allocated_engineer_name, ...supabaseCompanyPayload } = newCompany;
+      const { error: sbErr } = await supabase.from("companies").insert([supabaseCompanyPayload]);
+      if (sbErr) {
+        console.warn("Could not insert company to Supabase:", sbErr.message);
+      }
+    } catch (e: any) {
+      console.warn("Could not insert company to Supabase:", e?.message || e);
     }
   }
 
@@ -1409,8 +1634,7 @@ app.post("/api/companies/:id/allocate", async (req, res) => {
   if (isSupabaseConfigured && supabase) {
     try {
       await supabase.from("companies").update({
-        allocated_engineer_id: engId,
-        allocated_engineer_name: engName
+        allocated_engineer_id: engId
       }).eq("id", companyId);
     } catch (e) {
       console.warn("Could not update company allocation in Supabase:", e);
@@ -1863,6 +2087,11 @@ app.post("/api/tasks", async (req, res) => {
 
       const { data: employee } = await supabase.from("employees").select("name").eq("id", assigned_to).single();
 
+      // Dispatch high-priority background push notification to assigned engineer's Android devices
+      sendPushNotificationToEmployee(Number(assigned_to), newTask).catch((err) => {
+        console.warn("[Push] Error sending push on Supabase task creation:", err);
+      });
+
       return res.json({
         ...newTask,
         employee_name: employee ? employee.name : "Unassigned"
@@ -1895,6 +2124,11 @@ app.post("/api/tasks", async (req, res) => {
 
     const query = `INSERT INTO tasks (id, customer_name, contact_details, problem_reported, assigned_to, status, assigned_at, address, contract_type, company_id, company_name, asset_id)\nVALUES (${newId}, '${customer_name.replace(/'/g, "''")}', '${safeContact.replace(/'/g, "''")}', '${problem_reported.replace(/'/g, "''")}', ${assigned_to}, 'Pending', '${newTask.assigned_at}', '${(address || "").replace(/'/g, "''")}', '${safeContractType}', ${numCompanyId || "NULL"}, '${(company_name || "").replace(/'/g, "''")}', '${(validatedAssetId || "").replace(/'/g, "''")}');`;
     logSQL(query, 1);
+
+    // Dispatch high-priority background push notification to assigned engineer's Android devices
+    sendPushNotificationToEmployee(Number(assigned_to), newTask).catch((err) => {
+      console.warn("[Push] Error sending push on local task creation:", err);
+    });
 
     const emp = db.employees.find(e => e.id === newTask.assigned_to);
     res.json({
@@ -2218,6 +2452,7 @@ app.post("/api/tasks/:id/transfer", async (req, res) => {
       logSQL(query, 1);
 
       task.assigned_to = targetId;
+      sendPushNotificationToEmployee(targetId, task).catch(() => {});
       res.json({
         message: `Task #${taskId} successfully transferred from Engineer ID #${previousEmpId} to ID #${targetId} (${targetEmployee.name}).`,
         task: {
@@ -2246,6 +2481,8 @@ app.post("/api/tasks/:id/transfer", async (req, res) => {
 
     const query = `UPDATE tasks \nSET assigned_to = ${targetId} \nWHERE id = ${taskId};`;
     logSQL(query, 1);
+
+    sendPushNotificationToEmployee(targetId, task).catch(() => {});
 
     const emp = db.employees.find(e => e.id === task.assigned_to);
     res.json({
@@ -3984,36 +4221,57 @@ app.post("/api/sql/clear", async (req, res) => {
   }
 });
 
+// Proxy IP lookup endpoint for Geolocation fallback without browser CORS/CSP errors
+app.get("/api/ip-lookup", async (req, res) => {
+  try {
+    const response = await fetch("https://ipapi.co/json/", { signal: AbortSignal.timeout(3000) });
+    if (response.ok) {
+      const data = await response.json();
+      return res.json(data);
+    }
+  } catch (e) {
+    // Fallback to secondary service
+    try {
+      const secResp = await fetch("https://ipinfo.io/json", { signal: AbortSignal.timeout(3000) });
+      if (secResp.ok) {
+        const data = await secResp.json();
+        if (data.loc) {
+          const [lat, lng] = data.loc.split(",");
+          return res.json({ latitude: Number(lat), longitude: Number(lng), city: data.city });
+        }
+      }
+    } catch (e2) {}
+  }
+  // Default Pune PATS HQ coordinates
+  res.json({
+    latitude: 18.5204,
+    longitude: 73.8567,
+    city: "Pune",
+    region: "Maharashtra",
+    country_name: "India"
+  });
+});
+
+// Explicit 404 handler for all /api routes so they NEVER return HTML
+app.all("/api/*", (req, res) => {
+  res.status(404).json({ error: `API route not found: ${req.method} ${req.originalUrl}` });
+});
+
 // Vite server integrations
 async function startServer() {
-  // Vite developer middleware vs Production static serving
   const isProduction = 
     process.env.NODE_ENV === "production" || 
-    process.env.RENDER === "true" || 
-    process.env.DISABLE_HMR === "true" ||
     (Boolean(process.argv[1]) && process.argv[1].includes("dist"));
 
-  if (isProduction) {
+  if (isProduction && fs.existsSync(path.join(process.cwd(), "dist"))) {
     // Serves static production files
     const distPath = path.join(process.cwd(), "dist");
-    
-    // Fallback if compilation has not completed yet
-    if (fs.existsSync(distPath)) {
-      app.use(express.static(distPath));
-      app.get("*", (req, res) => {
-        res.sendFile(path.join(distPath, "index.html"));
-      });
-    } else {
-      // Dev mode fallback if dist folder is absent
-      const { createServer: createViteServer } = await import("vite");
-      const vite = await createViteServer({
-        server: { middlewareMode: true },
-        appType: "spa",
-      });
-      app.use(vite.middlewares);
-    }
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
   } else {
-    // Normal dev server mode
+    // Dev server mode with Vite middleware
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
