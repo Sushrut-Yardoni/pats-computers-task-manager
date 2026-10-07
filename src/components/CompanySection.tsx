@@ -46,12 +46,11 @@ export default function CompanySection({
   }, [companies, localExtraCompanies]);
 
   // Filter companies visible to this user
-  // Engineers see:
-  // 1. All Non AMC companies (open to all engineers)
-  // 2. AMC companies allocated specifically to them or created by them
-  // Admin & Manager see all companies
+  // Default to "all" so newly created companies are never hidden
+  const [scopeFilter, setScopeFilter] = useState<"all" | "my">("all");
+
   const visibleCompanies = useMemo(() => {
-    if (isAdminOrManager) {
+    if (isAdminOrManager || scopeFilter === "all") {
       return allCompanies;
     }
     return allCompanies.filter(c => 
@@ -60,7 +59,7 @@ export default function CompanySection({
       (currentUser?.name && c.created_by?.toLowerCase() === currentUser.name.toLowerCase()) ||
       (currentUser?.email_id && c.created_by?.toLowerCase() === currentUser.email_id.toLowerCase())
     );
-  }, [allCompanies, isAdminOrManager, currentEmployeeId, currentUser]);
+  }, [allCompanies, isAdminOrManager, scopeFilter, currentEmployeeId, currentUser]);
 
   // Search & Filtering
   const [searchQuery, setSearchQuery] = useState("");

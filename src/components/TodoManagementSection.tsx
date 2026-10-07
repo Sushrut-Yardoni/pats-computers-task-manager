@@ -703,15 +703,21 @@ export default function TodoManagementSection({
         fetch("/api/todos/deleted")
       ]);
       if (todosRes.ok) {
-        const data = await todosRes.ok ? await todosRes.json() : [];
-        setTodos(data);
+        const ct = todosRes.headers.get("content-type");
+        if (ct && ct.includes("application/json")) {
+          const data = await todosRes.json();
+          setTodos(data);
+        }
       }
       if (deletedRes.ok) {
-        const deletedData = await deletedRes.json();
-        setDeletedTodos(deletedData);
+        const ct = deletedRes.headers.get("content-type");
+        if (ct && ct.includes("application/json")) {
+          const deletedData = await deletedRes.json();
+          setDeletedTodos(deletedData);
+        }
       }
     } catch (err) {
-      console.error("Failed to fetch to-do tasks:", err);
+      console.warn("Failed to fetch to-do tasks:", err);
     } finally {
       setIsLoading(false);
     }

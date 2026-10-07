@@ -19,8 +19,12 @@ export default function EmployeeTravelSection({ myTasks, employeeId, petrolPrice
   useEffect(() => {
     fetch("/api/offline-travels")
       .then(async r => {
-        if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
-        return r.json();
+        if (!r.ok) return [];
+        const contentType = r.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          return r.json();
+        }
+        return [];
       })
       .then(data => {
         if (Array.isArray(data)) {
@@ -30,7 +34,7 @@ export default function EmployeeTravelSection({ myTasks, employeeId, petrolPrice
         }
       })
       .catch(err => {
-        console.error("Failed to query travel logs:", err);
+        console.warn("Travel logs notice:", err);
         setTravels([]);
       });
   }, [employeeId]);

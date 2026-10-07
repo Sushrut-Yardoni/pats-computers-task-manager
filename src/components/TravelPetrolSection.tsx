@@ -24,10 +24,13 @@ export default function TravelPetrolSection() {
       try {
         const r = await fetch(url);
         if (!r.ok) {
-          const errBody = await r.json().catch(() => ({}));
-          throw new Error(errBody.error || `HTTP ${r.status}`);
+          return fallback;
         }
-        return await r.json();
+        const contentType = r.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          return await r.json();
+        }
+        return fallback;
       } catch (e) {
         console.warn(`Failed to fetch ${url}:`, e);
         return fallback;

@@ -145,53 +145,27 @@ export default function AttendanceSection({ currentUser, employees }: Attendance
       });
     };
 
-    const trySecondaryIPLookup = () => {
-      fetch("https://ipinfo.io/json")
-        .then(res => {
-          if (!res.ok) throw new Error("Secondary IP Lookup failed");
-          return res.json();
-        })
-        .then(data => {
-          if (data.loc) {
-            const [latStr, lngStr] = data.loc.split(",");
-            const lat = Number(latStr);
-            const lng = Number(lngStr);
-            if (lat >= 5.0 && lat <= 40.0 && lng >= 65.0 && lng <= 100.0) {
-              submitWithGoogleMapsGeocode(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)} (Network IP)`);
-              return;
+    const fallbackToNetworkIP = async () => {
+      try {
+        const res = await fetch("/api/ip-lookup");
+        if (res.ok) {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const data = await res.json();
+            if (data.latitude && data.longitude) {
+              const lat = Number(data.latitude);
+              const lng = Number(data.longitude);
+              if (lat >= 5.0 && lat <= 40.0 && lng >= 65.0 && lng <= 100.0) {
+                submitWithGoogleMapsGeocode(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)} (Network IP)`);
+                return;
+              }
             }
           }
-          throw new Error("Invalid ipinfo response");
-        })
-        .catch(err => {
-          console.warn("Secondary Geolocation lookup failed:", err);
-          submitWithGoogleMapsGeocode(18.520400, 73.856700, "Pune PATS HQ (Automatic Fallback)");
-        });
-    };
-
-    const fallbackToPrimaryIP = () => {
-      fetch("https://ipapi.co/json/")
-        .then(res => {
-          if (!res.ok) throw new Error("Primary IP Geolocation service error");
-          return res.json();
-        })
-        .then(data => {
-          if (data.latitude && data.longitude) {
-            const lat = Number(data.latitude);
-            const lng = Number(data.longitude);
-            if (lat >= 5.0 && lat <= 40.0 && lng >= 65.0 && lng <= 100.0) {
-              submitWithGoogleMapsGeocode(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)} (Network IP)`);
-            } else {
-              throw new Error(`Coordinates out of range`);
-            }
-          } else {
-            throw new Error("No lat/lng returned");
-          }
-        })
-        .catch(err => {
-          console.warn("Primary IP Geolocation failed, trying secondary:", err);
-          trySecondaryIPLookup();
-        });
+        }
+      } catch (err) {
+        console.warn("Network IP lookup error, using fallback HQ location:", err);
+      }
+      submitWithGoogleMapsGeocode(18.520400, 73.856700, "Pune PATS HQ (Automatic Fallback)");
     };
 
     // Add a 1.5-second short delay to wait for a more stable GPS hardware lock
@@ -207,17 +181,17 @@ export default function AttendanceSection({ currentUser, employees }: Attendance
             submitWithGoogleMapsGeocode(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)} (GPS Verified)`);
           } else {
             console.warn(`GPS coordinates (${lat}, ${lng}) out of reasonable range. Switching to Network Lookup.`);
-            fallbackToPrimaryIP();
+            fallbackToNetworkIP();
           }
         },
         (error) => {
           console.warn("GPS failed, trying Network IP detection:", error.message);
-          fallbackToPrimaryIP();
+          fallbackToNetworkIP();
         },
         { enableHighAccuracy: true, timeout: 5000 }
       );
     } else {
-      fallbackToPrimaryIP();
+      fallbackToNetworkIP();
     }
   };
 

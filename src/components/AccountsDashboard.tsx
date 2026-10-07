@@ -93,11 +93,14 @@ export default function AccountsDashboard({
     try {
       const res = await fetch("/api/todos");
       if (res.ok) {
-        const data = await res.json();
-        setTodos(data);
+        const ct = res.headers.get("content-type");
+        if (ct && ct.includes("application/json")) {
+          const data = await res.json();
+          setTodos(data);
+        }
       }
     } catch (err) {
-      console.error("Failed to fetch to-do tasks:", err);
+      console.warn("Failed to fetch to-do tasks:", err);
     } finally {
       setIsLoading(false);
     }
