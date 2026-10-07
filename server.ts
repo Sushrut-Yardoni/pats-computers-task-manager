@@ -436,6 +436,12 @@ function initDb(): DatabaseSchema {
       if (!data.companies) {
         data.companies = [];
         migrated = true;
+      } else {
+        const filteredCos = data.companies.filter((c: any) => c.name !== "Global Logistics Ltd");
+        if (filteredCos.length !== data.companies.length) {
+          data.companies = filteredCos;
+          migrated = true;
+        }
       }
       if (typeof data.nextCompanyId !== "number") {
         data.nextCompanyId = data.companies.length > 0 ? Math.max(...data.companies.map(c => c.id)) + 1 : 1;
@@ -1447,8 +1453,17 @@ app.get("/api/sync", async (req, res) => {
         if (isSupabaseConfigured && supabase) {
           const { data: cos, error: cosErr } = await supabase.from("companies").select("*").order("id", { ascending: true });
           if (!cosErr && cos) {
-            const existingRemoteIds = new Set(cos.map(c => Number(c.id)));
-            const enrichedRemoteCos = cos.map(c => {
+            // Delete Global Logistics Ltd from remote Supabase table if it exists
+            const globalLogisticsRows = cos.filter(c => c.name === "Global Logistics Ltd");
+            if (globalLogisticsRows.length > 0) {
+              for (const row of globalLogisticsRows) {
+                await supabase.from("companies").delete().eq("id", row.id);
+              }
+            }
+
+            const cleanCos = cos.filter(c => c.name !== "Global Logistics Ltd");
+            const existingRemoteIds = new Set(cleanCos.map(c => Number(c.id)));
+            const enrichedRemoteCos = cleanCos.map(c => {
               const emp = (db.employees || []).find(e => e.id === c.allocated_engineer_id);
               return {
                 ...c,
@@ -1458,7 +1473,7 @@ app.get("/api/sync", async (req, res) => {
 
             const mergedCos = [...enrichedRemoteCos];
             (db.companies || []).forEach(localCo => {
-              if (!existingRemoteIds.has(Number(localCo.id))) {
+              if (localCo.name !== "Global Logistics Ltd" && !existingRemoteIds.has(Number(localCo.id))) {
                 mergedCos.push(localCo);
                 if (supabase) {
                   const { allocated_engineer_name, ...sbCo } = localCo;
@@ -1468,8 +1483,8 @@ app.get("/api/sync", async (req, res) => {
                 }
               }
             });
-            companiesList = mergedCos;
-            db.companies = mergedCos;
+            companiesList = mergedCos.filter(c => c.name !== "Global Logistics Ltd");
+            db.companies = companiesList;
             saveDb();
           }
 
