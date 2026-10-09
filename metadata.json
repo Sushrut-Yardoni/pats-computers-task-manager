@@ -1,6 +1,7 @@
 {
   "name": "PATS Computers Task Manager",
-  "description": "Employee and Admin task management dashboard with customer details and issue tracking for PATS Computers Pvt Ltd",
-  "requestFramePermissions": ["geolocation"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "description": "Employee and Admin task management dashboard with customer details and issue tracking for PATS Computers Pvt Ltd.",
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
