@@ -9,6 +9,7 @@ import AccountsDashboard from "./components/AccountsDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
 import FloatingTaskNotification from "./components/FloatingTaskNotification";
 import { notificationManager } from "./utils/notificationManager";
+import { geolocationTracker } from "./utils/geolocationTracker";
 
 export default function App() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -93,6 +94,25 @@ export default function App() {
 
     return () => clearInterval(interval);
   }, []);
+
+  // Automatic silent GPS location tracking for logged-in engineers (zero manual action required)
+  useEffect(() => {
+    if (currentUser && currentUser.type === "employee") {
+      const activeTask = tasks.find(t => t.assigned_to === currentUser.id && (t.status === "Pending" || t.status === "In Progress"));
+      geolocationTracker.startTracking(
+        currentUser.id,
+        currentUser.name,
+        currentUser.role,
+        activeTask ? activeTask.id : null
+      );
+    } else {
+      geolocationTracker.stopTracking();
+    }
+
+    return () => {
+      geolocationTracker.stopTracking();
+    };
+  }, [currentUser, tasks]);
 
   // Real-Time Task Assignment Detector: triggers floating notification & chime for engineers on Android mobile & desktop
   useEffect(() => {

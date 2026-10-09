@@ -1,10 +1,10 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { 
   Building, Plus, Search, User, CalendarRange, Edit3, Eye, FileSpreadsheet, 
-  Download, X, Check, Laptop, Shield, Network, RefreshCw, Cpu, Layers, 
+  X, Check, Laptop, Shield, Network, RefreshCw, Cpu, Layers, 
   HardDrive, Key, AlertCircle, Tag, ArrowRight, UserCheck, Users, Printer, Monitor,
-  Trash2, FileText, Lock
+  Trash2, FileText, Lock, Upload, FileUp, CheckCircle, CheckCircle2, Sparkles
 } from "lucide-react";
 import { Company, CompanyAsset, Employee } from "../types";
 
@@ -30,12 +30,18 @@ export default function CompanySection({
   const isAdminOrManager = isAdmin || isManager;
   const currentEmployeeId = currentUser?.id;
 
-  // Helper to verify if current user can view/manage assets for a given company
-  const canAccessCompanyAssets = (company?: Company | null) => {
+  // Helper to verify if current user can MANAGE (create, edit, delete) assets for a company:
+  // Admins & Managers can manage all. Engineers can ONLY manage assets for companies allocated to them.
+  const canManageCompanyAssets = (company?: Company | null) => {
     if (isAdminOrManager) return true;
     if (!company) return false;
     return Number(company.allocated_engineer_id) === Number(currentEmployeeId);
   };
+
+  // Helper to verify if current user can VIEW assets for a given company:
+  // ALL engineers and admins can view any company's assets (including other engineers' assets)!
+  const canAccessCompanyAssets = (_company?: Company | null) => true;
+  const canViewCompanyAssets = (_company?: Company | null) => true;
 
   // Local optimistic state for instant UI response
   const [localExtraCompanies, setLocalExtraCompanies] = useState<Company[]>([]);
@@ -53,10 +59,15 @@ export default function CompanySection({
   }, [companies, localExtraCompanies]);
 
   // Filter companies visible to this user
-  // Engineers default to "my" allocated companies, Admins default to "all"
-  const [scopeFilter, setScopeFilter] = useState<"all" | "my">(() => {
-    return isAdminOrManager ? "all" : "my";
-  });
+  // Default to "my" (My Allocated Companies) for engineers, and "all" for administrators/managers
+  const [scopeFilter, setScopeFilter] = useState<"all" | "my">(!isAdminOrManager ? "my" : "all");
+
+  // Keep "My Allocated Companies" as default when engineer opens or interacts with company assets
+  useEffect(() => {
+    if (!isAdminOrManager) {
+      setScopeFilter("my");
+    }
+  }, [isAdminOrManager, currentEmployeeId]);
 
   const visibleCompanies = useMemo(() => {
     if (isAdminOrManager || scopeFilter === "all") {
@@ -89,6 +100,16 @@ export default function CompanySection({
     !isAdminOrManager && currentEmployeeId ? currentEmployeeId : ""
   );
   const [isSubmittingCompany, setIsSubmittingCompany] = useState(false);
+
+  // Excel Bulk Upload State
+  const [uploadModal, setUploadModal] = useState<{
+    company: Company;
+    fileName: string;
+    parsedAssets: Partial<CompanyAsset>[];
+    updateCount: number;
+    createCount: number;
+  } | null>(null);
+  const [isProcessingUpload, setIsProcessingUpload] = useState(false);
 
   // Asset Form Modal State
   const [assetModal, setAssetModal] = useState<{
@@ -199,8 +220,8 @@ export default function CompanySection({
 
   // Open Add Asset Modal
   const openAddAssetModal = (company: Company) => {
-    if (!canAccessCompanyAssets(company)) {
-      showToast(`Access restricted: Only the allocated engineer (${company.allocated_engineer_name || "Assigned Engineer"}) and Admin can manage this company's assets.`, true);
+    if (!canManageCompanyAssets(company)) {
+      showToast(`Read-only access: You can only view other engineers' assets and cannot add records to this company.`, true);
       return;
     }
     const isPrinterTab = activeExcelTab === "printers";
@@ -219,8 +240,8 @@ export default function CompanySection({
 
   // Open Edit Asset Modal
   const openEditAssetModal = (company: Company, asset: CompanyAsset) => {
-    if (!canAccessCompanyAssets(company)) {
-      showToast(`Access restricted: Only the allocated engineer and Admin can modify assets.`, true);
+    if (!canManageCompanyAssets(company)) {
+      showToast(`Read-only access: You can only view other engineers' assets and cannot edit them.`, true);
       return;
     }
     setAssetForm({
@@ -264,8 +285,8 @@ export default function CompanySection({
   const handleSubmitAsset = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!assetModal) return;
-    if (!canAccessCompanyAssets(assetModal.company)) {
-      showToast("Access restricted: You do not have permission to manage assets for this company.", true);
+    if (!canManageCompanyAssets(assetModal.company)) {
+      showToast("Read-only access: You can only view other engineers' assets and cannot edit or add records.", true);
       return;
     }
 
@@ -285,7 +306,9 @@ export default function CompanySection({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...assetForm,
-            company_id: assetModal.company.id
+            company_id: assetModal.company.id,
+            current_employee_id: currentEmployeeId,
+            is_admin: isAdminOrManager
           })
         });
 
@@ -300,7 +323,9 @@ export default function CompanySection({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             ...assetForm,
-            company_id: assetModal.company.id
+            company_id: assetModal.company.id,
+            current_employee_id: currentEmployeeId,
+            is_admin: isAdminOrManager
           })
         });
 
@@ -362,19 +387,40 @@ export default function CompanySection({
   };
 
   const handleDeleteAsset = (asset: CompanyAsset) => {
+    const targetComp = viewingCompanyForExcel || companies.find(c => c.id === asset.company_id);
+    if (!canManageCompanyAssets(targetComp)) {
+      showToast("Read-only access: You can only view other engineers' assets and cannot remove them.", true);
+      return;
+    }
     setAssetToDelete(asset);
   };
 
   const confirmDeleteSingleAsset = async () => {
     if (!assetToDelete) return;
+    const targetComp = viewingCompanyForExcel || companies.find(c => c.id === assetToDelete.company_id);
+    if (!canManageCompanyAssets(targetComp)) {
+      showToast("Read-only access: You cannot remove another engineer's asset.", true);
+      setAssetToDelete(null);
+      return;
+    }
     setIsDeletingAsset(true);
     try {
       let resp = await fetch(`/api/assets/${assetToDelete.id}`, {
-        method: "DELETE"
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          current_employee_id: currentEmployeeId,
+          is_admin: isAdminOrManager
+        })
       });
       if (!resp.ok) {
         resp = await fetch(`/api/assets/${assetToDelete.id}/delete`, {
-          method: "POST"
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            current_employee_id: currentEmployeeId,
+            is_admin: isAdminOrManager
+          })
         });
       }
       if (!resp.ok) {
@@ -692,142 +738,187 @@ export default function CompanySection({
     }
   };
 
-  // CSV Exporter for active sheet using UTF-8 BOM and Blob
-  const handleExportCsv = () => {
-    if (!viewingCompanyForExcel || !canAccessCompanyAssets(viewingCompanyForExcel)) return;
+  // 📥 Excel Bulk File Upload & Automatic Asset Sync Handler
+  const handleExcelFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetCompany: Company) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    const escapeCsv = (val: any) => {
-      if (val === null || val === undefined) return '""';
-      const str = String(val).replace(/"/g, '""');
-      return `"${str}"`;
-    };
-
-    let headers: string[] = [];
-    let rows: string[] = [];
-
-    if (activeExcelTab === "printers") {
-      // Dynamic printer headers based on entered data
-      headers = [
-        "#",
-        "LOCATION",
-        "ASSET ID",
-        "ASSET TYPE",
-        "AMC STATUS",
-        "MAKE/MODEL"
-      ];
-      if (printerDynamicColumns.hasSerial) headers.push("SERIAL NO.");
-      if (printerDynamicColumns.hasIp) headers.push("IP ADDRESS");
-      if (printerDynamicColumns.hasEmployee) headers.push("ASSIGNED TO / USER");
-      if (printerDynamicColumns.hasCompName) headers.push("DEVICE NAME");
-      if (printerDynamicColumns.hasLanMac) headers.push("LAN MAC");
-      if (printerDynamicColumns.hasWanMac) headers.push("WIFI MAC");
-      if (printerDynamicColumns.hasStatus) headers.push("STATUS");
-      if (printerDynamicColumns.hasConfig) headers.push("CONFIG");
-      if (printerDynamicColumns.hasMonitor) headers.push("MONITOR");
-      if (printerDynamicColumns.hasMonitorSerial) headers.push("MONITOR SERIAL NO.");
-      if (printerDynamicColumns.hasOs) headers.push("OS / DRIVER");
-      if (printerDynamicColumns.hasOffice) headers.push("OFFICE");
-      if (printerDynamicColumns.hasAntivirus) headers.push("ANTIVIRUS");
-
-      rows = printerAssets.map((a, index) => {
-        const row = [
-          index + 1,
-          escapeCsv(a.location),
-          escapeCsv(a.asset_id),
-          escapeCsv(a.asset),
-          escapeCsv(a.amc_status || "In AMC"),
-          escapeCsv(a.model_no)
-        ];
-        if (printerDynamicColumns.hasSerial) row.push(escapeCsv(a.serial_no || ""));
-        if (printerDynamicColumns.hasIp) row.push(escapeCsv(a.ip_address || ""));
-        if (printerDynamicColumns.hasEmployee) row.push(escapeCsv(a.employee_name || ""));
-        if (printerDynamicColumns.hasCompName) row.push(escapeCsv(a.comp_name || ""));
-        if (printerDynamicColumns.hasLanMac) row.push(escapeCsv(a.lan_mac || ""));
-        if (printerDynamicColumns.hasWanMac) row.push(escapeCsv(a.wan_mac || ""));
-        if (printerDynamicColumns.hasStatus) row.push(escapeCsv(a.status || ""));
-        if (printerDynamicColumns.hasConfig) row.push(escapeCsv([a.config_processor, a.config_ram, a.config_storage].filter(Boolean).join(" / ")));
-        if (printerDynamicColumns.hasMonitor) row.push(escapeCsv(a.monitor || ""));
-        if (printerDynamicColumns.hasMonitorSerial) row.push(escapeCsv(a.monitor_serial_no || ""));
-        if (printerDynamicColumns.hasOs) row.push(escapeCsv(a.os || ""));
-        if (printerDynamicColumns.hasOffice) row.push(escapeCsv(a.office || ""));
-        if (printerDynamicColumns.hasAntivirus) row.push(escapeCsv(a.antivirus || ""));
-        return row.join(",");
-      });
-    } else {
-      headers = [
-        "#",
-        "LOCATION",
-        "ASSET ID",
-        "ASSET TYPE",
-        "AMC STATUS",
-        "EMPLOYEE NAME",
-        "COMP NAME",
-        "MAKE/MODEL",
-        "SERIAL NO.",
-        "CONFIG (CPU / RAM / STORAGE)",
-        "MONITOR",
-        "MONITOR SERIAL NO.",
-        "OS",
-        "OS KEY",
-        "OS TYPE",
-        "OFFICE",
-        "OFFICE KEY",
-        "OFFICE TYPE",
-        "LAN MAC",
-        "WAN MAC",
-        "IP ADDRESS",
-        "ANTIVIRUS",
-        "KEY",
-        "VALIDITY",
-        "STATUS"
-      ];
-
-      rows = systemAssets.map((a, index) => [
-        index + 1,
-        escapeCsv(a.location),
-        escapeCsv(a.asset_id),
-        escapeCsv(a.asset),
-        escapeCsv(a.amc_status || "In AMC"),
-        escapeCsv(a.employee_name),
-        escapeCsv(a.comp_name),
-        escapeCsv(a.model_no),
-        escapeCsv(a.serial_no || ""),
-        escapeCsv([a.config_processor, a.config_ram, a.config_storage].filter(Boolean).join(" / ")),
-        escapeCsv(a.monitor || ""),
-        escapeCsv(a.monitor_serial_no || ""),
-        escapeCsv(a.os),
-        escapeCsv(a.os_key || ""),
-        escapeCsv(a.os_type || ""),
-        escapeCsv(a.office),
-        escapeCsv(a.office_key || ""),
-        escapeCsv(a.office_type || ""),
-        escapeCsv(a.lan_mac || ""),
-        escapeCsv(a.wan_mac || ""),
-        escapeCsv(a.ip_address || ""),
-        escapeCsv(a.antivirus || ""),
-        escapeCsv(a.antivirus_key || ""),
-        escapeCsv(a.validity || ""),
-        escapeCsv(a.status || "In Use")
-      ].join(","));
+    if (!canManageCompanyAssets(targetCompany)) {
+      showToast("Read-only access: You can only view other engineers' assets and cannot update them.", true);
+      e.target.value = "";
+      return;
     }
 
     try {
-      const csvString = "\uFEFF" + [headers.join(","), ...rows].join("\r\n");
-      const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      const cleanName = viewingCompanyForExcel.name.replace(/[^a-zA-Z0-9_-]/g, "_");
-      const suffix = activeExcelTab === "printers" ? "Printers" : "Systems";
-      link.setAttribute("download", `${cleanName}_${suffix}_${new Date().toISOString().slice(0, 10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      showToast("CSV file exported successfully!");
+      showToast("Parsing Excel file...");
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: "array" });
+
+      const parsedList: Partial<CompanyAsset>[] = [];
+
+      for (const sheetName of workbook.SheetNames) {
+        const worksheet = workbook.Sheets[sheetName];
+        if (!worksheet) continue;
+        const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+        for (const row of rows) {
+          const normalized: Record<string, any> = {};
+          for (const key of Object.keys(row)) {
+            const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+            normalized[cleanKey] = String(row[key] ?? "").trim();
+          }
+
+          // Identify asset identifier
+          const asset_id = normalized["assetid"] || normalized["id"] || normalized["tag"] || normalized["assettag"] || normalized["astid"] || normalized["tagno"] || normalized["assetno"] || "";
+          const model_no = normalized["makemodel"] || normalized["printermakemodel"] || normalized["model"] || normalized["modelno"] || normalized["make"] || normalized["brand"] || "";
+          const serial_no = normalized["serialnumber"] || normalized["serialno"] || normalized["serial"] || normalized["sn"] || "";
+          const comp_name = normalized["devicecompname"] || normalized["devicename"] || normalized["networkname"] || normalized["compname"] || normalized["computername"] || normalized["hostname"] || "";
+
+          // Skip completely empty rows
+          if (!asset_id && !model_no && !serial_no && !comp_name) continue;
+
+          // Determine asset type
+          const explicitType = normalized["assettype"] || normalized["asset"] || normalized["devicetype"] || normalized["type"] || normalized["category"] || "";
+          let assetType = "Desktop";
+          if (explicitType) {
+            assetType = explicitType;
+          } else if (sheetName.toLowerCase().includes("printer") || model_no.toLowerCase().includes("printer") || model_no.toLowerCase().includes("hp laser") || model_no.toLowerCase().includes("epson") || model_no.toLowerCase().includes("canon")) {
+            assetType = "Printer";
+          } else if (model_no.toLowerCase().includes("laptop") || comp_name.toLowerCase().includes("laptop")) {
+            assetType = "Laptop";
+          } else if (model_no.toLowerCase().includes("server") || comp_name.toLowerCase().includes("server")) {
+            assetType = "Server";
+          } else if (model_no.toLowerCase().includes("mac") || model_no.toLowerCase().includes("imac")) {
+            assetType = "All-in-One";
+          }
+
+          // Handle Configuration
+          let proc = normalized["processor"] || normalized["cpu"] || "";
+          let ram = normalized["ram"] || normalized["memory"] || "";
+          let storage = normalized["storage"] || normalized["hdd"] || normalized["ssd"] || "";
+          const combinedConfig = normalized["configcpuramstorage"] || normalized["config"] || normalized["configdriver"] || "";
+          if (combinedConfig && (!proc || !ram || !storage)) {
+            const parts = combinedConfig.split(/[/,]/).map((s: string) => s.trim());
+            if (parts.length >= 3) {
+              if (!proc) proc = parts[0];
+              if (!ram) ram = parts[1];
+              if (!storage) storage = parts.slice(2).join(" ");
+            } else if (!proc) {
+              proc = combinedConfig;
+            }
+          }
+
+          // Contract / AMC status
+          const amcRaw = normalized["amcstatus"] || normalized["contractstatus"] || normalized["contract"] || "";
+          let amc_status: "In AMC" | "Not in AMC" = "In AMC";
+          if (amcRaw.toLowerCase().includes("not") || amcRaw.toLowerCase().includes("non")) {
+            amc_status = "Not in AMC";
+          }
+
+          parsedList.push({
+            location: normalized["location"] || normalized["site"] || normalized["branch"] || normalized["floor"] || "",
+            asset_id: asset_id,
+            asset: assetType,
+            employee_name: normalized["employeeuser"] || normalized["employeename"] || normalized["assignedtouser"] || normalized["assigneduser"] || normalized["user"] || normalized["employee"] || "",
+            comp_name: comp_name,
+            model_no: model_no,
+            serial_no: serial_no,
+            config_processor: proc,
+            config_ram: ram,
+            config_storage: storage,
+            monitor: normalized["monitormake"] || normalized["monitor"] || "",
+            monitor_serial_no: normalized["monitorserial"] || normalized["monitorserialno"] || "",
+            os: normalized["operatingsystem"] || normalized["osdriver"] || normalized["os"] || normalized["supportedos"] || "",
+            os_key: normalized["oslicensekey"] || normalized["oskey"] || "",
+            os_type: normalized["ostypebit"] || normalized["ostype"] || "",
+            office: normalized["msoffice"] || normalized["office"] || "",
+            office_key: normalized["officekey"] || "",
+            office_type: normalized["officetype"] || "",
+            lan_mac: normalized["lanmacaddress"] || normalized["lanmac"] || "",
+            wan_mac: normalized["wifimacaddress"] || normalized["wanmac"] || normalized["wifimac"] || "",
+            ip_address: normalized["ipaddress"] || normalized["ip"] || "",
+            antivirus: normalized["antivirus"] || normalized["av"] || "",
+            antivirus_key: normalized["avlicensekey"] || normalized["key"] || normalized["antiviruskey"] || "",
+            validity: normalized["avvalidity"] || normalized["validity"] || "",
+            status: normalized["status"] || normalized["assetstatus"] || "In Use",
+            amc_status: amc_status
+          });
+        }
+      }
+
+      if (parsedList.length === 0) {
+        showToast("No valid asset records found in this Excel sheet. Please verify column headers.", true);
+        e.target.value = "";
+        return;
+      }
+
+      // Calculate updates vs new adds
+      const currentCompanyAssets = assets.filter(a => Number(a.company_id) === Number(targetCompany.id));
+      let updates = 0;
+      let creates = 0;
+
+      for (const item of parsedList) {
+        const itemAssetId = (item.asset_id || "").trim().toLowerCase();
+        const itemSerial = (item.serial_no || "").trim().toLowerCase();
+        const exists = currentCompanyAssets.some(a => 
+          (itemAssetId && a.asset_id && a.asset_id.trim().toLowerCase() === itemAssetId) ||
+          (itemSerial && a.serial_no && a.serial_no.trim().toLowerCase() === itemSerial)
+        );
+        if (exists) {
+          updates++;
+        } else {
+          creates++;
+        }
+      }
+
+      setUploadModal({
+        company: targetCompany,
+        fileName: file.name,
+        parsedAssets: parsedList,
+        updateCount: updates,
+        createCount: creates
+      });
+
     } catch (err: any) {
-      console.error("CSV download error:", err);
-      showToast("Failed to download CSV: " + (err.message || err), true);
+      console.error("Excel parse error:", err);
+      showToast("Failed to parse Excel file: " + (err.message || err), true);
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  // Submit bulk update to backend
+  const handleConfirmUpload = async () => {
+    if (!uploadModal) return;
+    setIsProcessingUpload(true);
+    try {
+      const resp = await fetch(`/api/companies/${uploadModal.company.id}/assets/bulk-update`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assets: uploadModal.parsedAssets,
+          current_employee_id: currentEmployeeId,
+          is_admin: isAdminOrManager
+        })
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to update assets from Excel");
+      }
+
+      const result = await resp.json();
+      await onRefresh();
+
+      showToast(`Success! ${result.updatedCount} asset(s) updated and ${result.createdCount} new asset(s) created for ${uploadModal.company.name}.`);
+
+      // Auto-open this company in the spreadsheet viewer so the engineer immediately sees their updated assets!
+      setViewingCompanyForExcel(uploadModal.company);
+      setUploadModal(null);
+    } catch (err: any) {
+      showToast(err.message || "Failed to update assets from Excel", true);
+    } finally {
+      setIsProcessingUpload(false);
     }
   };
 
@@ -951,7 +1042,7 @@ export default function CompanySection({
                   <th className="px-4 py-3">ID</th>
                   <th className="px-4 py-3">Company Name</th>
                   <th className="px-4 py-3">Contract Type</th>
-                  {isAdminOrManager && <th className="px-4 py-3">Allocated Engineer</th>}
+                  <th className="px-4 py-3">Allocated Engineer</th>
                   <th className="px-4 py-3 text-center">Total Assets</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
@@ -982,66 +1073,57 @@ export default function CompanySection({
                           {company.type}
                         </span>
                       </td>
-                      {isAdminOrManager && (
-                        <td className="px-4 py-3.5 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            {company.type === "Non AMC" ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-                                <Users className="h-3 w-3 text-amber-600" />
-                                <span>All Engineers</span>
-                                {company.allocated_engineer_name && (
-                                  <span className="text-[10px] text-amber-700 font-normal">({company.allocated_engineer_name})</span>
-                                )}
-                              </span>
-                            ) : company.allocated_engineer_name ? (
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
-                                isAllocatedToMe
-                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                  : "bg-slate-100 text-slate-700 border border-slate-200"
-                              }`}>
-                                <User className="h-3 w-3" />
-                                <span>{company.allocated_engineer_name}</span>
-                                {isAllocatedToMe && <span className="text-[9px] bg-blue-200/80 text-blue-800 px-1 rounded font-bold">You</span>}
-                              </span>
-                            ) : (
-                              <span className="text-slate-400 italic text-[11px]">Unassigned</span>
-                            )}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          {company.type === "Non AMC" ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                              <Users className="h-3 w-3 text-amber-600" />
+                              <span>All Engineers</span>
+                              {company.allocated_engineer_name && (
+                                <span className="text-[10px] text-amber-700 font-normal">({company.allocated_engineer_name})</span>
+                              )}
+                            </span>
+                          ) : company.allocated_engineer_name ? (
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                              isAllocatedToMe
+                                ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                : "bg-slate-100 text-slate-700 border border-slate-200"
+                            }`}>
+                              <User className="h-3 w-3" />
+                              <span>{company.allocated_engineer_name}</span>
+                              {isAllocatedToMe && <span className="text-[9px] bg-blue-200/80 text-blue-800 px-1 rounded font-bold">You</span>}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 italic text-[11px]">Unassigned</span>
+                          )}
 
-                            {isAdminOrManager && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setReallocatingCompany(company);
-                                  setNewEngineerId(company.allocated_engineer_id || "");
-                                }}
-                                className="text-indigo-600 hover:text-indigo-800 text-[10px] font-bold underline cursor-pointer ml-1"
-                                title="Reallocate to different engineer"
-                              >
-                                Change
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      )}
+                          {isAdminOrManager && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReallocatingCompany(company);
+                                setNewEngineerId(company.allocated_engineer_id || "");
+                              }}
+                              className="text-indigo-600 hover:text-indigo-800 text-[10px] font-bold underline cursor-pointer ml-1"
+                              title="Reallocate to different engineer"
+                            >
+                              Change
+                            </button>
+                          )}
+                        </div>
+                      </td>
 
                       <td className="px-4 py-3.5 whitespace-nowrap text-center">
-                        {canAccessAssets ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
-                            <Laptop className="h-3 w-3 text-slate-500" />
-                            <span>{companyAssetCount}</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100/70 text-slate-400 border border-slate-200" title="Assets restricted to allocated engineer">
-                            <Lock className="h-3 w-3 text-slate-400" />
-                            <span>Restricted</span>
-                          </span>
-                        )}
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                          <Laptop className="h-3 w-3 text-slate-500" />
+                          <span>{companyAssetCount}</span>
+                        </span>
                       </td>
                       <td className="px-4 py-3.5 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-2">
-                          {canAccessAssets ? (
+                          {/* Add Asset Option: Only if user can manage this company */}
+                          {canManageCompanyAssets(company) && (
                             <>
-                              {/* Add Asset Option */}
                               <button
                                 type="button"
                                 onClick={() => openAddAssetModal(company)}
@@ -1051,26 +1133,35 @@ export default function CompanySection({
                                 <span>Add Asset</span>
                               </button>
 
-                              {/* View Asset Table Option */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setViewingCompanyForExcel(company);
-                                  setExcelSearchQuery("");
-                                  setActiveExcelTab("systems");
-                                }}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                              <label
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold transition-all cursor-pointer border border-emerald-200/80 shadow-2xs active:scale-95"
+                                title="Upload Excel file to automatically update or add company assets"
                               >
-                                <FileSpreadsheet className="h-3.5 w-3.5" />
-                                <span>View Asset Table</span>
-                              </button>
+                                <Upload className="h-3.5 w-3.5 text-emerald-700" />
+                                <span className="hidden sm:inline">Upload Excel</span>
+                                <input
+                                  type="file"
+                                  accept=".xlsx, .xls"
+                                  onChange={(e) => handleExcelFileUpload(e, company)}
+                                  className="hidden"
+                                />
+                              </label>
                             </>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-500 rounded-xl text-xs font-semibold border border-slate-200" title={`Only ${company.allocated_engineer_name || "the allocated engineer"} and Admin can view assets for this company`}>
-                              <Lock className="h-3.5 w-3.5 text-slate-400" />
-                              <span>Allocated to {company.allocated_engineer_name ? company.allocated_engineer_name.split(" ")[0] : "Other Engineer"}</span>
-                            </span>
                           )}
+
+                          {/* View Asset Table Option: AVAILABLE FOR ALL COMPANIES */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setViewingCompanyForExcel(company);
+                              setExcelSearchQuery("");
+                              setActiveExcelTab("systems");
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                          >
+                            <FileSpreadsheet className="h-3.5 w-3.5" />
+                            <span>View Asset Table</span>
+                          </button>
 
                           {/* Admin Only: Delete Full Company From Records */}
                           {isAdminOrManager && (
@@ -1672,7 +1763,7 @@ export default function CompanySection({
               {/* Action buttons */}
               <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-100">
                 <div>
-                  {assetModal.mode === "edit" && assetModal.assetToEdit && (
+                  {assetModal.mode === "edit" && assetModal.assetToEdit && canManageCompanyAssets(assetModal.company) && (
                     <button
                       type="button"
                       onClick={() => handleDeleteAsset(assetModal.assetToEdit!)}
@@ -1760,14 +1851,22 @@ export default function CompanySection({
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => openAddAssetModal(viewingCompanyForExcel)}
-                  className="bg-white text-[#107c41] hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
-                >
-                  <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
-                  <span>Add Asset</span>
-                </button>
+                {/* Add Asset button: Only if user can manage this company */}
+                {canManageCompanyAssets(viewingCompanyForExcel) ? (
+                  <button
+                    type="button"
+                    onClick={() => openAddAssetModal(viewingCompanyForExcel)}
+                    className="bg-white text-[#107c41] hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                  >
+                    <Plus className="h-3.5 w-3.5 stroke-[2.5]" />
+                    <span>Add Asset</span>
+                  </button>
+                ) : (
+                  <span className="bg-white/20 text-white px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 border border-white/30" title={`Allocated to ${viewingCompanyForExcel.allocated_engineer_name || 'another engineer'} (Read-Only)`}>
+                    <Eye className="h-3.5 w-3.5" />
+                    <span>Read-Only View</span>
+                  </span>
+                )}
 
                 <button
                   type="button"
@@ -1779,15 +1878,22 @@ export default function CompanySection({
                   <span>Download Excel</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleExportCsv}
-                  className="bg-emerald-800 hover:bg-emerald-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border border-emerald-700"
-                  title="Export active sheet as clean CSV file"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  <span>Export CSV</span>
-                </button>
+                {/* Upload Excel Button: Only if user can manage this company */}
+                {canManageCompanyAssets(viewingCompanyForExcel) && (
+                  <label
+                    className="bg-white text-[#107c41] hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border border-emerald-200 active:scale-95"
+                    title="Upload an updated Excel spreadsheet to automatically update current assets"
+                  >
+                    <Upload className="h-3.5 w-3.5 text-[#107c41]" />
+                    <span>Upload Excel</span>
+                    <input
+                      type="file"
+                      accept=".xlsx, .xls"
+                      onChange={(e) => handleExcelFileUpload(e, viewingCompanyForExcel)}
+                      className="hidden"
+                    />
+                  </label>
+                )}
 
                 {/* Admin Only: Permanently Delete Company */}
                 {isAdminOrManager && (
@@ -1962,29 +2068,36 @@ export default function CompanySection({
                             {index + 1}
                           </td>
 
-                          {/* Action - Edit / Delete Asset buttons */}
+                          {/* Action - Edit / Delete Asset buttons: Only if canManageCompanyAssets */}
                           <td className="border-r border-slate-300 px-2 py-2 text-center bg-white sticky left-10 z-10 whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => openEditAssetModal(viewingCompanyForExcel, asset)}
-                                className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[10px] font-sans font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
-                                title="Edit this printer row"
-                              >
-                                <Edit3 className="h-3 w-3" />
-                                <span>Edit</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteAsset(asset)}
-                                disabled={isDeletingAsset}
-                                className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded text-[10px] font-sans font-bold inline-flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
-                                title="Delete this printer"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                                <span>Delete</span>
-                              </button>
-                            </div>
+                            {canManageCompanyAssets(viewingCompanyForExcel) ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditAssetModal(viewingCompanyForExcel, asset)}
+                                  className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[10px] font-sans font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="Edit this printer row"
+                                >
+                                  <Edit3 className="h-3 w-3" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAsset(asset)}
+                                  disabled={isDeletingAsset}
+                                  className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded text-[10px] font-sans font-bold inline-flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                                  title="Delete this printer"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-sans font-semibold inline-flex items-center gap-1" title="Read-only: Asset allocated to another engineer">
+                                <Eye className="h-3 w-3 text-slate-400" />
+                                <span>View Only</span>
+                              </span>
+                            )}
                           </td>
 
                           {/* Core mandatory fields */}
@@ -2097,29 +2210,36 @@ export default function CompanySection({
                             {index + 1}
                           </td>
 
-                          {/* Action - Edit / Delete Asset buttons */}
+                          {/* Action - Edit / Delete Asset buttons: Only if canManageCompanyAssets */}
                           <td className="border-r border-slate-300 px-2 py-2 text-center bg-white sticky left-10 z-10 whitespace-nowrap">
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => openEditAssetModal(viewingCompanyForExcel, asset)}
-                                className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[10px] font-sans font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
-                                title="Edit this asset row"
-                              >
-                                <Edit3 className="h-3 w-3" />
-                                <span>Edit</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteAsset(asset)}
-                                disabled={isDeletingAsset}
-                                className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded text-[10px] font-sans font-bold inline-flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
-                                title="Delete this asset"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                                <span>Delete</span>
-                              </button>
-                            </div>
+                            {canManageCompanyAssets(viewingCompanyForExcel) ? (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => openEditAssetModal(viewingCompanyForExcel, asset)}
+                                  className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[10px] font-sans font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="Edit this asset row"
+                                >
+                                  <Edit3 className="h-3 w-3" />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteAsset(asset)}
+                                  disabled={isDeletingAsset}
+                                  className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded text-[10px] font-sans font-bold inline-flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                                  title="Delete this asset"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-sans font-semibold inline-flex items-center gap-1" title="Read-only: Asset allocated to another engineer">
+                                <Eye className="h-3 w-3 text-slate-400" />
+                                <span>View Only</span>
+                              </span>
+                            )}
                           </td>
 
                           {/* Data cells */}
@@ -2457,6 +2577,148 @@ export default function CompanySection({
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 <span>{isDeletingCompany ? "Deleting Company..." : "Permanently Delete"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📊 MODAL: Excel Bulk Upload & Automatic Update Preview */}
+      {uploadModal && (
+        <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4 z-[98] animate-fade-in text-slate-800">
+          <div className="bg-white border border-slate-200 w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl p-6 space-y-4 relative max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-700 shrink-0">
+                  <FileUp className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                    <span>Auto-Update Assets from Excel</span>
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-mono uppercase tracking-wider font-bold">
+                      Ready to Sync
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Target Company: <strong className="text-slate-800">{uploadModal.company.name}</strong> • File: <code className="bg-slate-100 px-1.5 py-0.5 rounded text-[11px] text-slate-700">{uploadModal.fileName}</code>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUploadModal(null)}
+                disabled={isProcessingUpload}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Impact Summary Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="bg-emerald-50/80 border border-emerald-200 rounded-2xl p-3 flex items-start gap-3">
+                <div className="h-8 w-8 rounded-xl bg-emerald-500/20 text-emerald-800 flex items-center justify-center shrink-0 mt-0.5">
+                  <RefreshCw className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-black font-mono text-emerald-900">{uploadModal.updateCount}</span>
+                    <span className="text-xs font-bold text-emerald-800 uppercase tracking-wide">Current Assets Updated</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-700 mt-0.5 leading-relaxed">
+                    Existing assets matched by Asset ID or Serial No will automatically update with new configurations, OS, IP, user assignment, etc.
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-3 flex items-start gap-3">
+                <div className="h-8 w-8 rounded-xl bg-blue-500/20 text-blue-800 flex items-center justify-center shrink-0 mt-0.5">
+                  <Plus className="h-4 w-4 stroke-[3]" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-black font-mono text-blue-900">{uploadModal.createCount}</span>
+                    <span className="text-xs font-bold text-blue-800 uppercase tracking-wide">New Assets Added</span>
+                  </div>
+                  <p className="text-[11px] text-blue-700 mt-0.5 leading-relaxed">
+                    New devices listed in the spreadsheet will be automatically registered under this company inventory.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Preview of Parsed Assets */}
+            <div className="flex-1 min-h-0 flex flex-col">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
+                  Data Preview ({uploadModal.parsedAssets.length} Total Records Found)
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium">
+                  Showing first {Math.min(5, uploadModal.parsedAssets.length)} rows
+                </span>
+              </div>
+              <div className="border border-slate-200 rounded-2xl overflow-x-auto max-h-44 bg-slate-50/50">
+                <table className="min-w-full divide-y divide-slate-200 text-left text-xs">
+                  <thead className="bg-slate-100/80 text-[10px] font-bold uppercase text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">Asset ID</th>
+                      <th className="px-3 py-2">Type</th>
+                      <th className="px-3 py-2">Make / Model</th>
+                      <th className="px-3 py-2">Assigned User</th>
+                      <th className="px-3 py-2">IP Address</th>
+                      <th className="px-3 py-2">Contract</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white font-mono text-[11px]">
+                    {uploadModal.parsedAssets.slice(0, 5).map((row, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50">
+                        <td className="px-3 py-2 font-bold text-indigo-700">{row.asset_id || "-"}</td>
+                        <td className="px-3 py-2 text-slate-700">{row.asset || "Desktop"}</td>
+                        <td className="px-3 py-2 text-slate-700">{row.model_no || "-"}</td>
+                        <td className="px-3 py-2 text-slate-800 font-sans font-medium">{row.employee_name || "-"}</td>
+                        <td className="px-3 py-2 text-blue-700">{row.ip_address || "-"}</td>
+                        <td className="px-3 py-2">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                            row.amc_status === "Not in AMC" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"
+                          }`}>
+                            {row.amc_status || "In AMC"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setUploadModal(null)}
+                disabled={isProcessingUpload}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-700 uppercase cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUpload}
+                disabled={isProcessingUpload}
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider cursor-pointer shadow-md disabled:opacity-50 flex items-center gap-2 transition-all"
+              >
+                {isProcessingUpload ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Updating Assets...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-4 w-4" />
+                    <span>Apply & Update Assets ({uploadModal.parsedAssets.length})</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

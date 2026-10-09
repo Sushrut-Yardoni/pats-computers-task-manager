@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { 
-  PlusCircle, Database, Cpu, Terminal, Layers, Users, BarChart4, Sparkles, Fuel, ChevronLeft, ChevronRight, LayoutDashboard, Building, Clock, Receipt
+  PlusCircle, Database, Cpu, Terminal, Layers, Users, BarChart4, Sparkles, Fuel, ChevronLeft, ChevronRight, LayoutDashboard, Building, Clock, Receipt, Navigation
 } from "lucide-react";
 import { Task, Employee, SqlLog, Company, CompanyAsset } from "../types";
 import TaskManagementSection from "./TaskManagementSection";
 import TodoManagementSection from "./TodoManagementSection";
 import EmployeeManagementSection from "./EmployeeManagementSection";
 import AttendanceSection from "./AttendanceSection";
+import AdminTrackingSection from "./AdminTrackingSection";
 import TravelPetrolSection from "./TravelPetrolSection";
 import DatabaseExplorerSection from "./DatabaseExplorerSection";
 import AnalyticsSection from "./AnalyticsSection";
@@ -67,8 +68,8 @@ export default function AdminDashboard({
   onTogglePriority,
   onUpdatePassword
 }: AdminDashboardProps) {
-  // Master navigation state: "tasks" | "todos" | "employees" | "attendance" | "travel" | "companies" | "database" | "analytics" | "billing"
-  const [activeTab, setActiveTab] = useState<"tasks" | "todos" | "employees" | "attendance" | "travel" | "companies" | "database" | "analytics" | "billing">("tasks");
+  // Master navigation state: "tasks" | "todos" | "employees" | "attendance" | "tracking" | "travel" | "companies" | "database" | "analytics" | "billing"
+  const [activeTab, setActiveTab] = useState<"tasks" | "todos" | "employees" | "attendance" | "tracking" | "travel" | "companies" | "database" | "analytics" | "billing">("tasks");
 
   // Synchronize active tab with the main header SQL trigger
   useEffect(() => {
@@ -174,6 +175,27 @@ export default function AdminDashboard({
 
           <button
             type="button"
+            onClick={() => setActiveTab("tracking")}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
+              activeTab === "tracking"
+                ? "bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-805 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <div className="relative flex items-center justify-center shrink-0">
+              <Navigation className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+            </div>
+            <span className="font-sans flex items-center justify-between w-full font-bold">
+              <span>Live GPS Tracker</span>
+              <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                Live
+              </span>
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("analytics")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
               activeTab === "analytics"
@@ -256,6 +278,7 @@ export default function AdminDashboard({
                 {activeTab === "todos" && "To-Do Checklist"}
                 {activeTab === "employees" && "Engineers Hub"}
                 {activeTab === "attendance" && "Attendance Registry"}
+                {activeTab === "tracking" && "Live Engineer GPS Tracker"}
                 {activeTab === "analytics" && "Performance Metrics"}
                 {activeTab === "travel" && "Travel & Fuel Cost"}
                 {activeTab === "companies" && "Companies & Assets Hub"}
@@ -302,6 +325,12 @@ export default function AdminDashboard({
           <AttendanceSection 
             currentUser={{ name: "Admin", role: "Admin", type: "admin" }}
             employees={employees}
+          />
+        )}
+        {activeTab === "tracking" && (
+          <AdminTrackingSection 
+            employees={employees}
+            tasks={tasks}
           />
         )}
         {activeTab === "travel" && (

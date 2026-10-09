@@ -302,6 +302,42 @@ interface PushSubscriptionRecord {
   created_at: string;
 }
 
+export interface EngineerLiveLocationRecord {
+  employee_id: number;
+  employee_name: string;
+  employee_role: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number; // in meters (high precision)
+  altitude?: number | null;
+  altitude_accuracy?: number | null;
+  heading?: number | null;
+  speed?: number | null;
+  battery_level?: number | null;
+  is_charging?: boolean;
+  status: "on-duty" | "in-transit" | "stationary" | "idle" | "off-duty";
+  device_type: "installed_pwa" | "mobile_browser" | "desktop";
+  is_pwa_installed?: boolean;
+  address?: string;
+  current_task_id?: number | null;
+  current_task_title?: string | null;
+  updated_at: string;
+  phone?: string | null;
+}
+
+export interface EngineerLocationBreadcrumbRecord {
+  id: number;
+  employee_id: number;
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  speed?: number | null;
+  heading?: number | null;
+  timestamp: string;
+  address?: string;
+  battery_level?: number | null;
+}
+
 interface DatabaseSchema {
   employees: Employee[];
   tasks: Task[];
@@ -312,6 +348,9 @@ interface DatabaseSchema {
   assets?: CompanyAsset[];
   attendance?: AttendanceRecord[];
   push_subscriptions?: PushSubscriptionRecord[];
+  engineer_live_locations?: EngineerLiveLocationRecord[];
+  engineer_location_history?: EngineerLocationBreadcrumbRecord[];
+  nextLocationBreadcrumbId?: number;
   vapid_keys?: {
     publicKey: string;
     privateKey: string;
@@ -459,6 +498,20 @@ function initDb(): DatabaseSchema {
       }
       if (!data.push_subscriptions) {
         data.push_subscriptions = [];
+        migrated = true;
+      }
+      if (!data.engineer_live_locations) {
+        data.engineer_live_locations = [];
+        migrated = true;
+      }
+      if (!data.engineer_location_history) {
+        data.engineer_location_history = [];
+        migrated = true;
+      }
+      if (typeof data.nextLocationBreadcrumbId !== "number") {
+        data.nextLocationBreadcrumbId = data.engineer_location_history.length > 0 
+          ? Math.max(...data.engineer_location_history.map(b => b.id)) + 1 
+          : 1;
         migrated = true;
       }
       if (migrated) {
@@ -1705,6 +1758,15 @@ app.post("/api/companies/:id/delete", handleCompanyDelete);
 app.post("/api/companies/:id/assets", async (req, res) => {
   const companyId = Number(req.params.id);
   const assetData = req.body;
+  const { current_employee_id, is_admin } = assetData;
+
+  // Verify access: engineers cannot add assets to another engineer's company
+  if (current_employee_id && !is_admin) {
+    const comp = db.companies?.find(c => c.id === companyId);
+    if (comp && comp.allocated_engineer_id && Number(comp.allocated_engineer_id) !== Number(current_employee_id)) {
+      return res.status(403).json({ error: "Read-only access: You cannot add assets to another engineer's company." });
+    }
+  }
 
   if (!db.assets) db.assets = [];
   const maxExistingAssetId = db.assets.reduce((max, a) => Math.max(max, Number(a.id) || 0), 0);
@@ -1760,13 +1822,167 @@ app.post("/api/companies/:id/assets", async (req, res) => {
   res.status(201).json(newAsset);
 });
 
+// Bulk upload / update company assets from Excel
+app.post("/api/companies/:id/assets/bulk-update", async (req, res) => {
+  const companyId = Number(req.params.id);
+  const { assets: incomingAssets, current_employee_id, is_admin } = req.body;
+
+  if (isNaN(companyId)) {
+    return res.status(400).json({ error: "Invalid company ID" });
+  }
+
+  if (!Array.isArray(incomingAssets) || incomingAssets.length === 0) {
+    return res.status(400).json({ error: "No asset records found in uploaded file" });
+  }
+
+  const company = db.companies?.find(c => c.id === companyId);
+  if (!company) {
+    return res.status(404).json({ error: "Company not found" });
+  }
+
+  // Authorization: engineer can only update assets for their allocated company
+  if (current_employee_id && !is_admin) {
+    if (company.allocated_engineer_id && Number(company.allocated_engineer_id) !== Number(current_employee_id)) {
+      return res.status(403).json({ error: "Read-only access: You cannot update assets for another engineer's company." });
+    }
+  }
+
+  if (!db.assets) db.assets = [];
+  let updatedCount = 0;
+  let createdCount = 0;
+
+  const maxExistingAssetId = db.assets.reduce((max, a) => Math.max(max, Number(a.id) || 0), 0);
+  let nextId = Math.max(db.nextAssetId || 1, maxExistingAssetId + 1);
+
+  for (const item of incomingAssets) {
+    if (!item) continue;
+    const cleanAssetId = (item.asset_id || "").trim();
+    if (!cleanAssetId && !item.serial_no && !item.comp_name) continue;
+
+    // Check if an asset with this asset_id exists for this company (or matching serial_no)
+    let existingIndex = -1;
+    if (cleanAssetId) {
+      existingIndex = db.assets.findIndex(a => 
+        Number(a.company_id) === companyId && 
+        a.asset_id && 
+        a.asset_id.trim().toLowerCase() === cleanAssetId.toLowerCase()
+      );
+    }
+    if (existingIndex === -1 && item.serial_no && String(item.serial_no).trim()) {
+      existingIndex = db.assets.findIndex(a => 
+        Number(a.company_id) === companyId && 
+        a.serial_no && 
+        String(a.serial_no).trim().toLowerCase() === String(item.serial_no).trim().toLowerCase()
+      );
+    }
+
+    if (existingIndex !== -1) {
+      // Automatically UPDATE existing asset
+      const current = db.assets[existingIndex];
+      const merged: CompanyAsset = {
+        ...current,
+        location: item.location !== undefined && item.location !== "" ? item.location : current.location,
+        asset_id: cleanAssetId || current.asset_id,
+        asset: item.asset || current.asset,
+        employee_name: item.employee_name !== undefined && item.employee_name !== "" ? item.employee_name : current.employee_name,
+        comp_name: item.comp_name !== undefined && item.comp_name !== "" ? item.comp_name : current.comp_name,
+        model_no: item.model_no !== undefined && item.model_no !== "" ? item.model_no : current.model_no,
+        serial_no: item.serial_no !== undefined && item.serial_no !== "" ? item.serial_no : current.serial_no,
+        config_processor: item.config_processor !== undefined && item.config_processor !== "" ? item.config_processor : current.config_processor,
+        config_ram: item.config_ram !== undefined && item.config_ram !== "" ? item.config_ram : current.config_ram,
+        config_storage: item.config_storage !== undefined && item.config_storage !== "" ? item.config_storage : current.config_storage,
+        monitor: item.monitor !== undefined && item.monitor !== "" ? item.monitor : current.monitor,
+        monitor_serial_no: item.monitor_serial_no !== undefined && item.monitor_serial_no !== "" ? item.monitor_serial_no : current.monitor_serial_no,
+        os: item.os !== undefined && item.os !== "" ? item.os : current.os,
+        os_key: item.os_key !== undefined && item.os_key !== "" ? item.os_key : current.os_key,
+        os_type: item.os_type !== undefined && item.os_type !== "" ? item.os_type : current.os_type,
+        office: item.office !== undefined && item.office !== "" ? item.office : current.office,
+        office_key: item.office_key !== undefined && item.office_key !== "" ? item.office_key : current.office_key,
+        office_type: item.office_type !== undefined && item.office_type !== "" ? item.office_type : current.office_type,
+        lan_mac: item.lan_mac !== undefined && item.lan_mac !== "" ? item.lan_mac : current.lan_mac,
+        wan_mac: item.wan_mac !== undefined && item.wan_mac !== "" ? item.wan_mac : current.wan_mac,
+        ip_address: item.ip_address !== undefined && item.ip_address !== "" ? item.ip_address : current.ip_address,
+        antivirus: item.antivirus !== undefined && item.antivirus !== "" ? item.antivirus : current.antivirus,
+        antivirus_key: item.antivirus_key !== undefined && item.antivirus_key !== "" ? item.antivirus_key : current.antivirus_key,
+        validity: item.validity !== undefined && item.validity !== "" ? item.validity : current.validity,
+        status: item.status || current.status,
+        amc_status: item.amc_status || current.amc_status
+      };
+      db.assets[existingIndex] = merged;
+      updatedCount++;
+    } else {
+      // Create new asset
+      const newAsset: CompanyAsset = {
+        id: nextId++,
+        company_id: companyId,
+        location: item.location || "",
+        asset_id: cleanAssetId || `AST-${nextId}`,
+        asset: item.asset || "Desktop",
+        employee_name: item.employee_name || "",
+        comp_name: item.comp_name || "",
+        model_no: item.model_no || "",
+        serial_no: item.serial_no || "",
+        config_processor: item.config_processor || "",
+        config_ram: item.config_ram || "",
+        config_storage: item.config_storage || "",
+        monitor: item.monitor || "",
+        monitor_serial_no: item.monitor_serial_no || "",
+        os: item.os || "",
+        os_key: item.os_key || "",
+        os_type: item.os_type || "",
+        office: item.office || "",
+        office_key: item.office_key || "",
+        office_type: item.office_type || "",
+        lan_mac: item.lan_mac || "",
+        wan_mac: item.wan_mac || "",
+        ip_address: item.ip_address || "",
+        antivirus: item.antivirus || "",
+        antivirus_key: item.antivirus_key || "",
+        validity: item.validity || "",
+        status: item.status || "In Use",
+        amc_status: item.amc_status === "Not in AMC" ? "Not in AMC" : "In AMC",
+        created_at: new Date().toISOString()
+      };
+      db.assets.push(newAsset);
+      createdCount++;
+    }
+  }
+
+  db.nextAssetId = nextId;
+  saveDb();
+
+  logSQL(`-- BULK EXCEL UPLOAD FOR COMPANY ${companyId} (${company.name}): ${updatedCount} updated, ${createdCount} created\nSELECT bulk_sync_company_assets(${companyId}, ${updatedCount}, ${createdCount});`, updatedCount + createdCount);
+
+  console.log(`[EXCEL BULK UPLOAD] Company ${companyId} (${company.name}): Updated ${updatedCount} assets, Created ${createdCount} assets`);
+
+  res.json({
+    success: true,
+    message: `Excel processed: ${updatedCount} asset(s) updated, ${createdCount} asset(s) created.`,
+    updatedCount,
+    createdCount,
+    totalProcessed: updatedCount + createdCount,
+    companyName: company.name
+  });
+});
+
 // Update a company asset (supports both POST and PUT)
 const handleAssetUpdate = async (req: express.Request, res: express.Response) => {
   const assetId = Number(req.params.id);
   const assetData = req.body;
+  const { current_employee_id, is_admin } = assetData;
 
   if (isNaN(assetId)) {
     return res.status(400).json({ error: "Invalid asset ID" });
+  }
+
+  // Authorization: Engineers cannot edit assets belonging to another engineer's company
+  if (current_employee_id && !is_admin) {
+    const existing = db.assets?.find(a => a.id === assetId);
+    const targetCompId = existing?.company_id || Number(assetData.company_id);
+    const comp = db.companies?.find(c => c.id === targetCompId);
+    if (comp && comp.allocated_engineer_id && Number(comp.allocated_engineer_id) !== Number(current_employee_id)) {
+      return res.status(403).json({ error: "Read-only access: Engineers cannot edit other engineers' assets." });
+    }
   }
 
   if (!db.assets) db.assets = [];
@@ -1831,10 +2047,23 @@ app.put("/api/assets/:id", handleAssetUpdate);
 const handleAssetDelete = async (req: express.Request, res: express.Response) => {
   const assetIdRaw = req.params.id;
   const assetIdNum = Number(assetIdRaw);
+  const currentEmployeeId = req.body?.current_employee_id || req.headers["x-employee-id"];
+  const isAdmin = req.body?.is_admin || req.headers["x-is-admin"] === "true";
   console.log(`[DELETE ASSET] Requested delete for ID/asset_id: "${assetIdRaw}"`);
 
   if (!assetIdRaw) {
     return res.status(400).json({ error: "Invalid asset ID" });
+  }
+
+  // Authorization: Engineers cannot delete assets belonging to another engineer's company
+  if (currentEmployeeId && !isAdmin) {
+    const targetAsset = db.assets?.find(a => String(a.id) === String(assetIdRaw) || a.asset_id === assetIdRaw);
+    if (targetAsset) {
+      const comp = db.companies?.find(c => c.id === targetAsset.company_id);
+      if (comp && comp.allocated_engineer_id && Number(comp.allocated_engineer_id) !== Number(currentEmployeeId)) {
+        return res.status(403).json({ error: "Read-only access: Engineers cannot delete other engineers' assets." });
+      }
+    }
   }
 
   let deletedCount = 0;
@@ -4254,6 +4483,410 @@ app.get("/api/ip-lookup", async (req, res) => {
     region: "Maharashtra",
     country_name: "India"
   });
+});
+
+// ==========================================
+// 🛰️ REAL-TIME HIGH PRECISION ENGINEER GPS TRACKING APIS
+// Supports installed mobile PWA with high accuracy GPS sensor telemetry
+// ==========================================
+
+// 1. Ingest High-Precision Location Ping from Engineer Device
+app.post("/api/tracking/ping", (req, res) => {
+  try {
+    const {
+      employee_id,
+      latitude,
+      longitude,
+      accuracy,
+      altitude,
+      altitude_accuracy,
+      heading,
+      speed,
+      battery_level,
+      is_charging,
+      status,
+      device_type,
+      is_pwa_installed,
+      address,
+      current_task_id
+    } = req.body;
+
+    const empId = Number(employee_id);
+    if (!empId || typeof latitude !== "number" || typeof longitude !== "number") {
+      return res.status(400).json({ error: "Valid employee_id, latitude, and longitude are required." });
+    }
+
+    if (!db.engineer_live_locations) db.engineer_live_locations = [];
+    if (!db.engineer_location_history) db.engineer_location_history = [];
+    if (!db.nextLocationBreadcrumbId) db.nextLocationBreadcrumbId = 1;
+
+    const employee = (db.employees || []).find(e => e.id === empId);
+    const empName = employee ? employee.name : (req.body.employee_name || `Engineer #${empId}`);
+    const empRole = employee ? employee.role : (req.body.employee_role || "Service Engineer");
+    const empPhone = employee ? employee.phone : null;
+
+    // Find active task if not explicitly passed
+    let taskId = current_task_id ? Number(current_task_id) : null;
+    let taskTitle: string | null = null;
+    if (!taskId) {
+      const activeTask = (db.tasks || []).find(
+        t => t.assigned_to === empId && (t.status === "In Progress" || t.status === "Pending")
+      );
+      if (activeTask) {
+        taskId = activeTask.id;
+        taskTitle = `${activeTask.customer_name} • ${activeTask.problem_reported ? activeTask.problem_reported.slice(0, 35) : "Field Service"}`;
+      }
+    } else {
+      const foundTask = (db.tasks || []).find(t => t.id === taskId);
+      if (foundTask) {
+        taskTitle = `${foundTask.customer_name} • ${foundTask.problem_reported ? foundTask.problem_reported.slice(0, 35) : "Field Service"}`;
+      }
+    }
+
+    // Determine movement state based on speed and explicit state
+    const speedVal = typeof speed === "number" ? Math.max(0, speed) : null;
+    let calculatedStatus: "on-duty" | "in-transit" | "stationary" | "idle" | "off-duty" = status || "on-duty";
+    if (status !== "off-duty" && status !== "idle") {
+      if (speedVal !== null && speedVal > 4) {
+        calculatedStatus = "in-transit";
+      } else if (speedVal !== null && speedVal <= 2) {
+        calculatedStatus = "stationary";
+      } else {
+        calculatedStatus = "on-duty";
+      }
+    }
+
+    const now = new Date().toISOString();
+
+    const liveRecord: EngineerLiveLocationRecord = {
+      employee_id: empId,
+      employee_name: empName,
+      employee_role: empRole,
+      latitude: Number(latitude.toFixed(6)),
+      longitude: Number(longitude.toFixed(6)),
+      accuracy: typeof accuracy === "number" ? Number(accuracy.toFixed(1)) : 8.0,
+      altitude: typeof altitude === "number" ? Number(altitude.toFixed(1)) : null,
+      altitude_accuracy: typeof altitude_accuracy === "number" ? Number(altitude_accuracy.toFixed(1)) : null,
+      heading: typeof heading === "number" ? Number(heading.toFixed(1)) : null,
+      speed: speedVal !== null ? Number(speedVal.toFixed(1)) : null,
+      battery_level: typeof battery_level === "number" ? Math.round(battery_level) : null,
+      is_charging: Boolean(is_charging),
+      status: calculatedStatus,
+      device_type: device_type || (is_pwa_installed ? "installed_pwa" : "mobile_browser"),
+      is_pwa_installed: Boolean(is_pwa_installed),
+      address: address || undefined,
+      current_task_id: taskId,
+      current_task_title: taskTitle,
+      updated_at: now,
+      phone: empPhone
+    };
+
+    // Upsert into live locations array
+    const existingIndex = db.engineer_live_locations.findIndex(l => l.employee_id === empId);
+    if (existingIndex >= 0) {
+      db.engineer_live_locations[existingIndex] = liveRecord;
+    } else {
+      db.engineer_live_locations.push(liveRecord);
+    }
+
+    // Append to breadcrumb trail history
+    const breadcrumb: EngineerLocationBreadcrumbRecord = {
+      id: db.nextLocationBreadcrumbId++,
+      employee_id: empId,
+      latitude: liveRecord.latitude,
+      longitude: liveRecord.longitude,
+      accuracy: liveRecord.accuracy,
+      speed: liveRecord.speed,
+      heading: liveRecord.heading,
+      timestamp: now,
+      address: address || undefined,
+      battery_level: liveRecord.battery_level
+    };
+
+    db.engineer_location_history.push(breadcrumb);
+
+    // Keep history compact: retain maximum 350 most recent points per engineer
+    const empTrail = db.engineer_location_history.filter(b => b.employee_id === empId);
+    if (empTrail.length > 350) {
+      const dropCount = empTrail.length - 350;
+      const dropIds = new Set(empTrail.slice(0, dropCount).map(b => b.id));
+      db.engineer_location_history = db.engineer_location_history.filter(b => !dropIds.has(b.id));
+    }
+
+    saveDb();
+
+    res.json({
+      success: true,
+      server_timestamp: now,
+      record: liveRecord
+    });
+  } catch (err: any) {
+    console.error("GPS telemetry ping failure:", err);
+    res.status(500).json({ error: err.message || "Failed to process location ping" });
+  }
+});
+
+// 2. Fetch Live Fleet Coordinates (Admin Live Map)
+app.get("/api/tracking/live", (req, res) => {
+  try {
+    if (!db.engineer_live_locations) db.engineer_live_locations = [];
+
+    // Filter only active field engineers
+    const activeEngineers = (db.employees || []).filter(e => {
+      const ended = e.ended_at ? new Date(e.ended_at) : null;
+      const isPast = ended && !isNaN(ended.getTime()) && ended <= new Date();
+      return !isPast && e.role.toLowerCase() !== "admin";
+    });
+
+    const now = Date.now();
+    const results = activeEngineers.map(emp => {
+      const live = db.engineer_live_locations!.find(l => l.employee_id === emp.id);
+
+      // Current active task check
+      const activeTask = (db.tasks || []).find(
+        t => t.assigned_to === emp.id && (t.status === "In Progress" || t.status === "Pending")
+      );
+
+      if (live) {
+        const pingTime = new Date(live.updated_at).getTime();
+        const diffMinutes = Math.floor((now - pingTime) / 60000);
+
+        let dynamicStatus = live.status;
+        if (diffMinutes > 15 && live.status !== "off-duty") {
+          dynamicStatus = "idle";
+        }
+        if (diffMinutes > 120) {
+          dynamicStatus = "off-duty";
+        }
+
+        return {
+          ...live,
+          employee_name: emp.name,
+          employee_role: emp.role,
+          phone: emp.phone || live.phone || null,
+          status: dynamicStatus,
+          minutes_ago: diffMinutes,
+          current_task_id: activeTask ? activeTask.id : live.current_task_id,
+          current_task_title: activeTask 
+            ? `${activeTask.customer_name} • ${activeTask.problem_reported ? activeTask.problem_reported.slice(0, 35) : "Field Service"}`
+            : live.current_task_title,
+          current_task_address: activeTask?.address || null,
+          current_task_customer: activeTask?.customer_name || null,
+          current_task_status: activeTask?.status || null
+        };
+      }
+
+      // Default stationary point in Pune for engineers without active ping yet
+      // Seed slightly distributed around Pune central so pins don't stack 100% identically
+      const hashOffset = ((emp.id * 17) % 100) / 10000;
+      return {
+        employee_id: emp.id,
+        employee_name: emp.name,
+        employee_role: emp.role,
+        latitude: 18.5204 + hashOffset,
+        longitude: 73.8567 + hashOffset,
+        accuracy: 25.0,
+        altitude: null,
+        altitude_accuracy: null,
+        heading: null,
+        speed: 0,
+        battery_level: null,
+        is_charging: false,
+        status: "off-duty" as const,
+        device_type: "mobile_browser" as const,
+        is_pwa_installed: false,
+        address: "PATS Computer Services HQ, Pune",
+        current_task_id: activeTask ? activeTask.id : null,
+        current_task_title: activeTask ? `${activeTask.customer_name} • ${activeTask.problem_reported?.slice(0, 35)}` : null,
+        current_task_address: activeTask?.address || null,
+        current_task_customer: activeTask?.customer_name || null,
+        current_task_status: activeTask?.status || null,
+        updated_at: new Date(now - 86400000).toISOString(),
+        phone: emp.phone || null,
+        minutes_ago: 9999
+      };
+    });
+
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to load live tracking telemetry" });
+  }
+});
+
+// 3. Fetch Engineer Location History / Breadcrumb Trail
+app.get("/api/tracking/history", (req, res) => {
+  try {
+    const empId = req.query.employee_id ? Number(req.query.employee_id) : null;
+    const dateParam = req.query.date as string; // Optional YYYY-MM-DD
+
+    let trail = [...(db.engineer_location_history || [])];
+
+    if (empId) {
+      trail = trail.filter(b => b.employee_id === empId);
+    }
+
+    if (dateParam) {
+      trail = trail.filter(b => b.timestamp.startsWith(dateParam));
+    }
+
+    // Sort ascending by timestamp
+    trail.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    res.json(trail);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to retrieve location history" });
+  }
+});
+
+// 4. Update Engineer Shift / Tracking Status (On-Duty / Off-Duty / On-Break)
+app.post("/api/tracking/status", (req, res) => {
+  try {
+    const { employee_id, status } = req.body;
+    const empId = Number(employee_id);
+    if (!empId || !status) {
+      return res.status(400).json({ error: "employee_id and status are required." });
+    }
+
+    if (!db.engineer_live_locations) db.engineer_live_locations = [];
+    const item = db.engineer_live_locations.find(l => l.employee_id === empId);
+
+    const now = new Date().toISOString();
+    if (item) {
+      item.status = status;
+      item.updated_at = now;
+      saveDb();
+      return res.json({ success: true, record: item });
+    } else {
+      const employee = (db.employees || []).find(e => e.id === empId);
+      const newRec: EngineerLiveLocationRecord = {
+        employee_id: empId,
+        employee_name: employee ? employee.name : `Engineer #${empId}`,
+        employee_role: employee ? employee.role : "Service Engineer",
+        latitude: 18.5204,
+        longitude: 73.8567,
+        accuracy: 15.0,
+        status,
+        device_type: "installed_pwa",
+        updated_at: now,
+        phone: employee?.phone || null
+      };
+      db.engineer_live_locations.push(newRec);
+      saveDb();
+      return res.json({ success: true, record: newRec });
+    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to update tracking status" });
+  }
+});
+
+// 5. Simulate Field Movement for Testing & Demonstrations
+// Allows Admin to test live GPS updates & see accuracy circles on the map
+app.post("/api/tracking/simulate-engineer", (req, res) => {
+  try {
+    const { employee_id, step } = req.body;
+    const empId = Number(employee_id) || 102; // Nilesh Yadav or provided
+
+    // Realistic service route in Pune: Shivajinagar -> FC Road -> Deccan Gymkhana -> Senapati Bapat Road -> Aundh
+    const waypoints = [
+      { lat: 18.5314, lng: 73.8446, address: "Shivajinagar Bus Station, Pune", speed: 28.5, heading: 195 },
+      { lat: 18.5262, lng: 73.8415, address: "Fergusson College Road, Shivajinagar", speed: 34.0, heading: 205 },
+      { lat: 18.5173, lng: 73.8419, address: "Deccan Gymkhana Circle, Pune", speed: 18.2, heading: 270 },
+      { lat: 18.5198, lng: 73.8324, address: "Prabhat Road Lane 4, Erandwane", speed: 22.0, heading: 310 },
+      { lat: 18.5284, lng: 73.8291, address: "Law College Road Junction, Pune", speed: 30.5, heading: 350 },
+      { lat: 18.5367, lng: 73.8302, address: "Senapati Bapat Marg, Symbiosis Campus", speed: 38.0, heading: 10 },
+      { lat: 18.5471, lng: 73.8268, address: "Chaturshrungi Temple, SB Road", speed: 25.0, heading: 340 },
+      { lat: 18.5601, lng: 73.8087, address: "Bremen Chowk, Aundh, Pune", speed: 32.5, heading: 305 },
+      { lat: 18.5583, lng: 73.7925, address: "Baner Road, Balewadi High Street Exit", speed: 42.0, heading: 280 }
+    ];
+
+    const currentStep = typeof step === "number" ? Math.abs(step) % waypoints.length : Math.floor(Math.random() * waypoints.length);
+    const point = waypoints[currentStep];
+
+    // Jitter coordinates slightly to mimic continuous high-precision GPS hardware lock (±3 meters)
+    const jitterLat = (Math.random() - 0.5) * 0.00012;
+    const jitterLng = (Math.random() - 0.5) * 0.00012;
+    const finalLat = point.lat + jitterLat;
+    const finalLng = point.lng + jitterLng;
+    const highAccuracy = Number((2.8 + Math.random() * 2.5).toFixed(1)); // ±2.8m to ±5.3m
+
+    if (!db.engineer_live_locations) db.engineer_live_locations = [];
+    if (!db.engineer_location_history) db.engineer_location_history = [];
+    if (!db.nextLocationBreadcrumbId) db.nextLocationBreadcrumbId = 1;
+
+    const employee = (db.employees || []).find(e => e.id === empId);
+    const empName = employee ? employee.name : "Service Engineer";
+    const empRole = employee ? employee.role : "Field Engineer";
+
+    const now = new Date().toISOString();
+    const liveRecord: EngineerLiveLocationRecord = {
+      employee_id: empId,
+      employee_name: empName,
+      employee_role: empRole,
+      latitude: Number(finalLat.toFixed(6)),
+      longitude: Number(finalLng.toFixed(6)),
+      accuracy: highAccuracy,
+      altitude: 560 + Math.floor(Math.random() * 10),
+      altitude_accuracy: 3.5,
+      heading: point.heading,
+      speed: point.speed,
+      battery_level: 82 - (currentStep * 2),
+      is_charging: false,
+      status: point.speed > 5 ? "in-transit" : "on-duty",
+      device_type: "installed_pwa",
+      is_pwa_installed: true,
+      address: point.address,
+      updated_at: now,
+      phone: employee?.phone || "+91 98220 12345"
+    };
+
+    const idx = db.engineer_live_locations.findIndex(l => l.employee_id === empId);
+    if (idx >= 0) {
+      db.engineer_live_locations[idx] = liveRecord;
+    } else {
+      db.engineer_live_locations.push(liveRecord);
+    }
+
+    // Add to history
+    db.engineer_location_history.push({
+      id: db.nextLocationBreadcrumbId++,
+      employee_id: empId,
+      latitude: liveRecord.latitude,
+      longitude: liveRecord.longitude,
+      accuracy: highAccuracy,
+      speed: point.speed,
+      heading: point.heading,
+      timestamp: now,
+      address: point.address,
+      battery_level: liveRecord.battery_level
+    });
+
+    saveDb();
+
+    res.json({
+      success: true,
+      message: `Simulated realistic GPS ping for ${empName} (Step ${currentStep + 1}/${waypoints.length})`,
+      next_step: (currentStep + 1) % waypoints.length,
+      record: liveRecord
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Simulation failed" });
+  }
+});
+
+// 6. Clear Location History / Audit Reset
+app.delete("/api/tracking/history", (req, res) => {
+  try {
+    const empId = req.query.employee_id ? Number(req.query.employee_id) : null;
+    if (empId) {
+      db.engineer_location_history = (db.engineer_location_history || []).filter(b => b.employee_id !== empId);
+    } else {
+      db.engineer_location_history = [];
+    }
+    saveDb();
+    res.json({ success: true, message: "Location history cleared successfully" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to clear history" });
+  }
 });
 
 // Explicit 404 handler for all /api routes so they NEVER return HTML

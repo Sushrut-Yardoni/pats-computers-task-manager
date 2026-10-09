@@ -9,6 +9,7 @@ import EmployeeTravelSection from "./EmployeeTravelSection";
 import { Task, Employee, Company, CompanyAsset } from "../types";
 import CompanySection from "./CompanySection";
 import AttendanceSection from "./AttendanceSection";
+import { geolocationTracker } from "../utils/geolocationTracker";
 import { notificationManager } from "../utils/notificationManager";
 import { extractCleanPhoneNumber, getCleanTelUri, extractSecondaryContact } from "../utils/phoneUtils";
 
@@ -55,7 +56,6 @@ export default function EmployeeDashboard({
   const [showRemarksInput, setShowRemarksInput] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // In-App Toast
   const [empDashToast, setEmpDashToast] = useState<{ message: string; isError?: boolean } | null>(null);
   const showEmpDashToast = (message: string, isError = false) => {
     setEmpDashToast({ message, isError });
@@ -209,6 +209,28 @@ export default function EmployeeDashboard({
   // Filter by status tab
   const activeMyTasks = myTasks.filter(t => t.status === "Pending" || t.status === "In Progress");
   const completedMyTasks = myTasks.filter(t => t.status === "Finished");
+
+  // Silent background location transmission so admin can track precise location
+  useEffect(() => {
+    if (currentEmployee?.id) {
+      const activeTaskId = activeMyTasks.length > 0 ? activeMyTasks[0].id : null;
+      geolocationTracker.startTracking(
+        currentEmployee.id,
+        currentEmployee.name,
+        currentEmployee.role,
+        activeTaskId
+      );
+    }
+
+    return () => {
+      geolocationTracker.stopTracking();
+    };
+  }, [currentEmployee.id, currentEmployee.name, currentEmployee.role]);
+
+  useEffect(() => {
+    const activeTaskId = activeMyTasks.length > 0 ? activeMyTasks[0].id : null;
+    geolocationTracker.setTaskId(activeTaskId);
+  }, [activeMyTasks]);
 
   // Limits and Month filtering support for employee's own tasks
   const [empTaskLimit, setEmpTaskLimit] = useState<number | "All">(10);

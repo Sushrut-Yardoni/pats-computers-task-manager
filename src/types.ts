@@ -205,3 +205,39 @@ export function isTargetMatch(targetRaw: string, userNameRaw: string, userEmailR
   return false;
 }
 
+export interface EngineerLiveLocation {
+  employee_id: number;
+  employee_name: string;
+  employee_role: string;
+  latitude: number;
+  longitude: number;
+  accuracy: number; // In meters (GPS precision)
+  altitude?: number | null;
+  altitude_accuracy?: number | null;
+  heading?: number | null; // 0 - 360 degrees
+  speed?: number | null; // in km/h
+  battery_level?: number | null; // percentage 0 - 100
+  is_charging?: boolean;
+  status: "on-duty" | "in-transit" | "stationary" | "idle" | "off-duty";
+  device_type: "installed_pwa" | "mobile_browser" | "desktop";
+  is_pwa_installed?: boolean;
+  address?: string;
+  current_task_id?: number | null;
+  current_task_title?: string | null;
+  updated_at: string;
+  phone?: string | null;
+}
+
+export interface LocationBreadcrumb {
+  id: number;
+  employee_id: number;
+  latitude: number;
+  longitude: number;
+  accuracy: number;
+  speed?: number | null;
+  heading?: number | null;
+  timestamp: string;
+  address?: string;
+  battery_level?: number | null;
+}
+
