@@ -9,10 +9,12 @@ import {
 import { Company, CompanyAsset, Employee } from "../types";
 
 interface CompanySectionProps {
+  key?: React.Key;
   companies: Company[];
   assets?: CompanyAsset[];
   employees?: Employee[];
   currentUser: any;
+  defaultScopeFilter?: "all" | "my";
   onRefresh: () => Promise<void>;
 }
 
@@ -21,6 +23,7 @@ export default function CompanySection({
   assets = [],
   employees = [],
   currentUser,
+  defaultScopeFilter,
   onRefresh
 }: CompanySectionProps) {
   // Determine user permissions
@@ -45,6 +48,33 @@ export default function CompanySection({
 
   // Local optimistic state for instant UI response
   const [localExtraCompanies, setLocalExtraCompanies] = useState<Company[]>([]);
+  const [localAssetOverrides, setLocalAssetOverrides] = useState<Map<number, CompanyAsset>>(new Map());
+  const [localCreatedAssets, setLocalCreatedAssets] = useState<CompanyAsset[]>([]);
+  const [localDeletedAssetIds, setLocalDeletedAssetIds] = useState<Set<number>>(new Set());
+
+  // Effective assets combining prop assets + local optimistic edits
+  const effectiveAssets = useMemo(() => {
+    const list: CompanyAsset[] = [];
+    const seenIds = new Set<number>();
+
+    // 1. Process props assets with any local edits or deletions
+    assets.forEach(a => {
+      if (localDeletedAssetIds.has(a.id)) return;
+      const overridden = localAssetOverrides.get(a.id) || a;
+      list.push(overridden);
+      seenIds.add(a.id);
+    });
+
+    // 2. Add locally created assets that might not be in prop yet
+    localCreatedAssets.forEach(ca => {
+      if (!localDeletedAssetIds.has(ca.id) && !seenIds.has(ca.id)) {
+        list.push(localAssetOverrides.get(ca.id) || ca);
+        seenIds.add(ca.id);
+      }
+    });
+
+    return list;
+  }, [assets, localAssetOverrides, localCreatedAssets, localDeletedAssetIds]);
 
   // Combined all companies
   const allCompanies = useMemo(() => {
@@ -60,14 +90,14 @@ export default function CompanySection({
 
   // Filter companies visible to this user
   // Default to "my" (My Allocated Companies) for engineers, and "all" for administrators/managers
-  const [scopeFilter, setScopeFilter] = useState<"all" | "my">(!isAdminOrManager ? "my" : "all");
+  const [scopeFilter, setScopeFilter] = useState<"all" | "my">(defaultScopeFilter || (!isAdminOrManager ? "my" : "all"));
 
-  // Keep "My Allocated Companies" as default when engineer opens or interacts with company assets
+  // Keep "My Allocated Companies" as default whenever engineer opens or interacts with company assets
   useEffect(() => {
     if (!isAdminOrManager) {
       setScopeFilter("my");
     }
-  }, [isAdminOrManager, currentEmployeeId]);
+  }, [isAdminOrManager, currentEmployeeId, defaultScopeFilter]);
 
   const visibleCompanies = useMemo(() => {
     if (isAdminOrManager || scopeFilter === "all") {
@@ -316,6 +346,8 @@ export default function CompanySection({
           const err = await resp.json();
           throw new Error(err.error || "Failed to create asset");
         }
+        const createdAsset = await resp.json();
+        setLocalCreatedAssets(prev => [createdAsset, ...prev]);
         showToast("Asset added successfully!");
       } else if (assetModal.mode === "edit" && assetModal.assetToEdit) {
         const resp = await fetch(`/api/assets/${assetModal.assetToEdit.id}/update`, {
@@ -333,11 +365,17 @@ export default function CompanySection({
           const err = await resp.json();
           throw new Error(err.error || "Failed to update asset");
         }
+        const updatedAsset = await resp.json();
+        setLocalAssetOverrides(prev => {
+          const next = new Map(prev);
+          next.set(updatedAsset.id, updatedAsset);
+          return next;
+        });
         showToast("Asset updated successfully!");
       }
 
-      await onRefresh();
       setAssetModal(null);
+      await onRefresh();
     } catch (err: any) {
       showToast("Error: " + err.message, true);
     } finally {
@@ -428,6 +466,7 @@ export default function CompanySection({
         throw new Error(err.error || "Failed to delete asset");
       }
 
+      setLocalDeletedAssetIds(prev => new Set(prev).add(assetToDelete.id));
       if (assetModal?.assetToEdit?.id === assetToDelete.id) {
         setAssetModal(null);
       }
@@ -496,7 +535,7 @@ export default function CompanySection({
   // Assets belonging to viewing company (In AMC first, In Use assets arranged ascending as per asset id)
   const companyAssets = useMemo(() => {
     if (!viewingCompanyForExcel) return [];
-    const matched = assets.filter(a => Number(a.company_id) === Number(viewingCompanyForExcel.id));
+    const matched = effectiveAssets.filter(a => Number(a.company_id) === Number(viewingCompanyForExcel.id));
     return [...matched].sort((a, b) => {
       // 1. In AMC first, Not in AMC at the end of the sheet
       const aIsNonAmc = a.amc_status === "Not in AMC" ? 1 : 0;
@@ -519,7 +558,7 @@ export default function CompanySection({
       }
       return a.id - b.id;
     });
-  }, [assets, viewingCompanyForExcel]);
+  }, [effectiveAssets, viewingCompanyForExcel]);
 
   // Separate sheets for IT Systems vs Printers
   const systemAssets = useMemo(() => {
@@ -532,14 +571,14 @@ export default function CompanySection({
 
   const assetTypeCounts = useMemo(() => {
     if (!viewingCompanyForExcel) return {};
-    const matched = assets.filter(a => a.company_id === viewingCompanyForExcel.id);
+    const matched = effectiveAssets.filter(a => a.company_id === viewingCompanyForExcel.id);
     const counts: Record<string, number> = {};
     matched.forEach(a => {
       const typeName = a.asset || "Other";
       counts[typeName] = (counts[typeName] || 0) + 1;
     });
     return counts;
-  }, [assets, viewingCompanyForExcel]);
+  }, [effectiveAssets, viewingCompanyForExcel]);
 
   const currentSheetAssets = useMemo(() => {
     return activeExcelTab === "printers" ? printerAssets : systemAssets;
@@ -793,9 +832,9 @@ export default function CompanySection({
           }
 
           // Handle Configuration
-          let proc = normalized["processor"] || normalized["cpu"] || "";
-          let ram = normalized["ram"] || normalized["memory"] || "";
-          let storage = normalized["storage"] || normalized["hdd"] || normalized["ssd"] || "";
+          let proc = normalized["configprocessor"] || normalized["processor"] || normalized["cpu"] || "";
+          let ram = normalized["configram"] || normalized["ram"] || normalized["memory"] || "";
+          let storage = normalized["configstorage"] || normalized["storage"] || normalized["hdd"] || normalized["ssd"] || "";
           const combinedConfig = normalized["configcpuramstorage"] || normalized["config"] || normalized["configdriver"] || "";
           if (combinedConfig && (!proc || !ram || !storage)) {
             const parts = combinedConfig.split(/[/,]/).map((s: string) => s.trim());
@@ -816,13 +855,13 @@ export default function CompanySection({
           }
 
           parsedList.push({
-            location: normalized["location"] || normalized["site"] || normalized["branch"] || normalized["floor"] || "",
-            asset_id: asset_id,
+            location: normalized["location"] || normalized["site"] || normalized["branch"] || normalized["floor"] || targetCompany.name || "Main Location",
+            asset_id: (asset_id || "").trim(),
             asset: assetType,
             employee_name: normalized["employeeuser"] || normalized["employeename"] || normalized["assignedtouser"] || normalized["assigneduser"] || normalized["user"] || normalized["employee"] || "",
             comp_name: comp_name,
-            model_no: model_no,
-            serial_no: serial_no,
+            model_no: model_no || "Standard",
+            serial_no: (serial_no || "").trim(),
             config_processor: proc,
             config_ram: ram,
             config_storage: storage,
@@ -853,7 +892,7 @@ export default function CompanySection({
       }
 
       // Calculate updates vs new adds
-      const currentCompanyAssets = assets.filter(a => Number(a.company_id) === Number(targetCompany.id));
+      const currentCompanyAssets = effectiveAssets.filter(a => Number(a.company_id) === Number(targetCompany.id));
       let updates = 0;
       let creates = 0;
 
@@ -908,6 +947,20 @@ export default function CompanySection({
       }
 
       const result = await resp.json();
+
+      // Immediately sync local state overrides & created assets so the view updates instantly
+      if (result.assets && Array.isArray(result.assets)) {
+        setLocalAssetOverrides(prev => {
+          const next = new Map(prev);
+          result.assets.forEach((a: CompanyAsset) => next.set(a.id, a));
+          return next;
+        });
+        setLocalCreatedAssets(prev => {
+          const incomingIds = new Set(result.assets.map((a: CompanyAsset) => a.id));
+          return [...result.assets, ...prev.filter(a => !incomingIds.has(a.id))];
+        });
+      }
+
       await onRefresh();
 
       showToast(`Success! ${result.updatedCount} asset(s) updated and ${result.createdCount} new asset(s) created for ${uploadModal.company.name}.`);
@@ -1049,7 +1102,7 @@ export default function CompanySection({
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white font-medium text-slate-700">
                 {filteredCompanies.map((company, index) => {
-                  const companyAssetCount = assets.filter(a => a.company_id === company.id).length;
+                  const companyAssetCount = effectiveAssets.filter(a => Number(a.company_id) === Number(company.id)).length;
                   const isAllocatedToMe = Number(company.allocated_engineer_id) === Number(currentEmployeeId);
                   const canAccessAssets = canAccessCompanyAssets(company);
 
@@ -2534,7 +2587,7 @@ export default function CompanySection({
               <div className="flex justify-between items-center">
                 <span className="text-slate-600 font-medium">Associated Assets:</span>
                 <span className="font-mono font-bold text-rose-700">
-                  {assets.filter(a => a.company_id === companyToDeleteRecord.id).length} asset record(s) will be erased
+                  {effectiveAssets.filter(a => Number(a.company_id) === Number(companyToDeleteRecord.id)).length} asset record(s) will be erased
                 </span>
               </div>
             </div>

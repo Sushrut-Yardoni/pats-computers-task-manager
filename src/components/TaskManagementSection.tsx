@@ -212,7 +212,11 @@ export default function TaskManagementSection({
     if (!assetVal || assetVal === "none") {
       return;
     }
-    const foundAsset = companyAssets.find(a => a.asset_id === assetVal);
+    const cleanVal = assetVal.trim().toLowerCase();
+    const foundAsset = companyAssets.find(a => 
+      (a.asset_id && a.asset_id.trim().toLowerCase() === cleanVal) ||
+      (a.serial_no && a.serial_no.trim().toLowerCase() === cleanVal)
+    );
     if (foundAsset) {
       if (foundAsset.location && !address) {
         setAddress(foundAsset.location);
@@ -352,12 +356,34 @@ export default function TaskManagementSection({
     // Asset ID can only be selected and assigned if it actually exists in the sheet
     let finalAssetId: string | null = null;
     if (selectedAssetId && selectedAssetId !== "none") {
-      const existsInSheet = companyAssets.some(a => a.asset_id.toLowerCase() === selectedAssetId.toLowerCase());
-      if (!existsInSheet) {
-        showTaskToast("The selected Asset ID does not exist in the company's asset sheet.", true);
-        return;
+      const cleanTarget = selectedAssetId.trim().toLowerCase();
+      const alphaTarget = cleanTarget.replace(/[^a-z0-9]/g, "");
+      const matchedAsset = companyAssets.find(a => {
+        const aId = (a.asset_id || "").trim().toLowerCase();
+        const aAlpha = aId.replace(/[^a-z0-9]/g, "");
+        const sNo = (a.serial_no || "").trim().toLowerCase();
+        const sAlpha = sNo.replace(/[^a-z0-9]/g, "");
+        return (
+          aId === cleanTarget ||
+          (alphaTarget && aAlpha === alphaTarget) ||
+          (sNo && sNo === cleanTarget) ||
+          (alphaTarget && sAlpha === alphaTarget) ||
+          String(a.id) === selectedAssetId.trim()
+        );
+      }) || assets.find(a => {
+        const aId = (a.asset_id || "").trim().toLowerCase();
+        const aAlpha = aId.replace(/[^a-z0-9]/g, "");
+        return aId === cleanTarget || (alphaTarget && aAlpha === alphaTarget);
+      });
+
+      if (!matchedAsset && companyAssets.length > 0) {
+        const direct = companyAssets.some(a => (a.asset_id || "").trim() === selectedAssetId.trim());
+        if (!direct) {
+          showTaskToast("The selected Asset ID does not exist in the company's asset sheet.", true);
+          return;
+        }
       }
-      finalAssetId = selectedAssetId;
+      finalAssetId = matchedAsset?.asset_id?.trim() || selectedAssetId.trim();
     }
 
     const selectedComp = companies.find(c => String(c.id) === selectedCompanyId);
@@ -466,11 +492,29 @@ export default function TaskManagementSection({
 
     // Asset ID can only be selected if it exists in the sheet
     if (editAssetId.trim()) {
-      const existsInSheet = assets.some(a => 
-        a.asset_id.toLowerCase() === editAssetId.trim().toLowerCase() &&
-        (selectedTask.company_id ? a.company_id === selectedTask.company_id : true)
-      );
-      if (!existsInSheet) {
+      const cleanTarget = editAssetId.trim().toLowerCase();
+      const alphaTarget = cleanTarget.replace(/[^a-z0-9]/g, "");
+      const existsInSheet = assets.some(a => {
+        const aId = (a.asset_id || "").trim().toLowerCase();
+        const aAlpha = aId.replace(/[^a-z0-9]/g, "");
+        const sNo = (a.serial_no || "").trim().toLowerCase();
+        const sAlpha = sNo.replace(/[^a-z0-9]/g, "");
+        const matchesComp = selectedTask.company_id ? Number(a.company_id) === Number(selectedTask.company_id) : true;
+        return (
+          matchesComp && (
+            aId === cleanTarget ||
+            (alphaTarget && aAlpha === alphaTarget) ||
+            (sNo && sNo === cleanTarget) ||
+            (alphaTarget && sAlpha === alphaTarget) ||
+            String(a.id) === editAssetId.trim()
+          )
+        );
+      }) || assets.some(a => {
+        const aId = (a.asset_id || "").trim().toLowerCase();
+        const aAlpha = aId.replace(/[^a-z0-9]/g, "");
+        return aId === cleanTarget || (alphaTarget && aAlpha === alphaTarget);
+      });
+      if (!existsInSheet && assets.length > 0) {
         showTaskToast("The selected Asset ID does not exist in the company's asset sheet.", true);
         return;
       }
@@ -793,11 +837,16 @@ export default function TaskManagementSection({
                       className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-sans"
                     >
                       <option value="">-- Choose Asset from Sheet --</option>
-                      {companyAssets.map((a) => (
-                        <option key={a.id} value={a.asset_id}>
-                          {a.asset_id}
-                        </option>
-                      ))}
+                      {companyAssets.map((a) => {
+                        const val = (a.asset_id || a.serial_no || String(a.id)).trim();
+                        return (
+                          <option key={a.id} value={val}>
+                            {a.asset_id ? a.asset_id.trim() : (a.serial_no?.trim() || `Asset #${a.id}`)}
+                            {a.asset ? ` • ${a.asset}` : ""}
+                            {a.employee_name ? ` (${a.employee_name})` : ""}
+                          </option>
+                        );
+                      })}
                       <option value="none">General Support (No Asset ID)</option>
                     </select>
                   ) : (
@@ -1224,11 +1273,16 @@ export default function TaskManagementSection({
                         className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-blue-500 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-sans"
                       >
                         <option value="">-- No Asset / General Support --</option>
-                        {editTaskCompanyAssets.map((a) => (
-                          <option key={a.id} value={a.asset_id}>
-                            {a.asset_id}
-                          </option>
-                        ))}
+                        {editTaskCompanyAssets.map((a) => {
+                          const val = (a.asset_id || a.serial_no || String(a.id)).trim();
+                          return (
+                            <option key={a.id} value={val}>
+                              {a.asset_id ? a.asset_id.trim() : (a.serial_no?.trim() || `Asset #${a.id}`)}
+                              {a.asset ? ` • ${a.asset}` : ""}
+                              {a.employee_name ? ` (${a.employee_name})` : ""}
+                            </option>
+                          );
+                        })}
                       </select>
                     ) : (
                       <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] flex items-start gap-2">

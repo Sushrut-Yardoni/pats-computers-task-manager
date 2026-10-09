@@ -111,6 +111,7 @@ export default function EmployeeDashboard({
   const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "attendance" | "companies">("active");
   const activeTab = propsActiveTab !== undefined ? propsActiveTab : internalActiveTab;
   const setActiveTab = onTabChange !== undefined ? onTabChange : setInternalActiveTab;
+  const [companySectionKey, setCompanySectionKey] = useState(0);
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
@@ -514,7 +515,10 @@ export default function EmployeeDashboard({
 
           <button
             type="button"
-            onClick={() => setActiveTab("companies")}
+            onClick={() => {
+              setActiveTab("companies");
+              setCompanySectionKey(k => k + 1);
+            }}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
               activeTab === "companies"
                 ? "bg-indigo-50 text-indigo-800 border border-indigo-100 font-extrabold shadow-2xs"
@@ -793,10 +797,12 @@ export default function EmployeeDashboard({
         />
       ) : activeTab === "companies" ? (
         <CompanySection
+          key={`engineer-company-section-${companySectionKey}`}
           companies={companies}
           assets={assets}
           employees={employees}
           currentUser={{ id: currentEmployee.id, name: currentEmployee.name, role: currentEmployee.role, type: "employee" }}
+          defaultScopeFilter="my"
           onRefresh={async () => {
             if (onSyncCompany) {
               await onSyncCompany();

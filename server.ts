@@ -1512,9 +1512,12 @@ app.get("/api/sync", async (req, res) => {
           }
 
           const { data: ast, error: astErr } = await supabase.from("company_assets").select("*").order("id", { ascending: true });
-          if (!astErr && ast) {
-            assetsList = ast;
-            db.assets = ast;
+          if (!astErr && ast && ast.length > 0) {
+            // Merge Supabase assets with any unsynced local-only assets
+            const sbIdSet = new Set(ast.map(a => Number(a.id)));
+            const unsyncedLocal = (db.assets || []).filter(a => !sbIdSet.has(Number(a.id)));
+            assetsList = [...ast, ...unsyncedLocal];
+            db.assets = assetsList;
             saveDb();
           }
         }
@@ -1754,6 +1757,41 @@ const handleCompanyDelete = async (req: express.Request, res: express.Response) 
 app.delete("/api/companies/:id", handleCompanyDelete);
 app.post("/api/companies/:id/delete", handleCompanyDelete);
 
+// Helper to sanitize asset objects for Supabase company_assets table compliance
+function sanitizeSupabaseAsset(a: any): CompanyAsset {
+  return {
+    id: Number(a.id),
+    company_id: Number(a.company_id),
+    location: a.location && String(a.location).trim() ? String(a.location).trim() : "Main Office",
+    asset_id: a.asset_id && String(a.asset_id).trim() ? String(a.asset_id).trim() : `AST-${a.id}`,
+    asset: a.asset && String(a.asset).trim() ? String(a.asset).trim() : "Desktop",
+    employee_name: a.employee_name ? String(a.employee_name).trim() : "",
+    comp_name: a.comp_name ? String(a.comp_name).trim() : "",
+    model_no: a.model_no && String(a.model_no).trim() ? String(a.model_no).trim() : "Standard",
+    config_processor: a.config_processor ? String(a.config_processor).trim() : "",
+    config_ram: a.config_ram ? String(a.config_ram).trim() : "",
+    config_storage: a.config_storage ? String(a.config_storage).trim() : "",
+    os: a.os ? String(a.os).trim() : "",
+    office: a.office ? String(a.office).trim() : "",
+    ip_address: a.ip_address ? String(a.ip_address).trim() : "",
+    serial_no: a.serial_no ? String(a.serial_no).trim() : "",
+    os_key: a.os_key ? String(a.os_key).trim() : "",
+    os_type: a.os_type ? String(a.os_type).trim() : "",
+    office_key: a.office_key ? String(a.office_key).trim() : "",
+    office_type: a.office_type ? String(a.office_type).trim() : "",
+    lan_mac: a.lan_mac ? String(a.lan_mac).trim() : "",
+    wan_mac: a.wan_mac ? String(a.wan_mac).trim() : "",
+    antivirus: a.antivirus ? String(a.antivirus).trim() : "",
+    antivirus_key: a.antivirus_key ? String(a.antivirus_key).trim() : "",
+    validity: a.validity ? String(a.validity).trim() : "",
+    status: a.status ? String(a.status).trim() : "In Use",
+    amc_status: a.amc_status === "Not in AMC" ? "Not in AMC" : "In AMC",
+    monitor: a.monitor ? String(a.monitor).trim() : "",
+    monitor_serial_no: a.monitor_serial_no ? String(a.monitor_serial_no).trim() : "",
+    created_at: a.created_at || new Date().toISOString()
+  };
+}
+
 // Add a company asset
 app.post("/api/companies/:id/assets", async (req, res) => {
   const companyId = Number(req.params.id);
@@ -1770,16 +1808,26 @@ app.post("/api/companies/:id/assets", async (req, res) => {
 
   if (!db.assets) db.assets = [];
   const maxExistingAssetId = db.assets.reduce((max, a) => Math.max(max, Number(a.id) || 0), 0);
-  const nextId = Math.max(db.nextAssetId || 1, maxExistingAssetId + 1);
-  const newAsset: CompanyAsset = {
+  let nextId = Math.max(db.nextAssetId || 1, maxExistingAssetId + 1);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: maxRows } = await supabase.from("company_assets").select("id").order("id", { ascending: false }).limit(1);
+      if (maxRows && maxRows.length > 0 && maxRows[0].id) {
+        nextId = Math.max(nextId, Number(maxRows[0].id) + 1);
+      }
+    } catch (_) {}
+  }
+
+  const newAsset: CompanyAsset = sanitizeSupabaseAsset({
     id: nextId,
     company_id: companyId,
-    location: assetData.location || "",
-    asset_id: assetData.asset_id || "",
+    location: assetData.location || "Main Office",
+    asset_id: assetData.asset_id || `AST-${nextId}`,
     asset: assetData.asset || "Desktop",
     employee_name: assetData.employee_name || "",
     comp_name: assetData.comp_name || "",
-    model_no: assetData.model_no || "",
+    model_no: assetData.model_no || "Standard",
     serial_no: assetData.serial_no || "",
     config_processor: assetData.config_processor || "",
     config_ram: assetData.config_ram || "",
@@ -1801,7 +1849,7 @@ app.post("/api/companies/:id/assets", async (req, res) => {
     status: assetData.status || "In Use",
     amc_status: assetData.amc_status === "Not in AMC" ? "Not in AMC" : "In AMC",
     created_at: new Date().toISOString()
-  };
+  });
 
   if (!db.assets) db.assets = [];
   db.assets.push(newAsset);
@@ -1813,7 +1861,7 @@ app.post("/api/companies/:id/assets", async (req, res) => {
 
   if (isSupabaseConfigured && supabase) {
     try {
-      await supabase.from("company_assets").insert([newAsset]);
+      await supabase.from("company_assets").upsert([newAsset]);
     } catch (e) {
       console.warn("Could not insert asset to Supabase:", e);
     }
@@ -1854,6 +1902,15 @@ app.post("/api/companies/:id/assets/bulk-update", async (req, res) => {
   const maxExistingAssetId = db.assets.reduce((max, a) => Math.max(max, Number(a.id) || 0), 0);
   let nextId = Math.max(db.nextAssetId || 1, maxExistingAssetId + 1);
 
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: maxRows } = await supabase.from("company_assets").select("id").order("id", { ascending: false }).limit(1);
+      if (maxRows && maxRows.length > 0 && maxRows[0].id) {
+        nextId = Math.max(nextId, Number(maxRows[0].id) + 1);
+      }
+    } catch (_) {}
+  }
+
   for (const item of incomingAssets) {
     if (!item) continue;
     const cleanAssetId = (item.asset_id || "").trim();
@@ -1879,48 +1936,49 @@ app.post("/api/companies/:id/assets/bulk-update", async (req, res) => {
     if (existingIndex !== -1) {
       // Automatically UPDATE existing asset
       const current = db.assets[existingIndex];
-      const merged: CompanyAsset = {
+      const merged: CompanyAsset = sanitizeSupabaseAsset({
         ...current,
-        location: item.location !== undefined && item.location !== "" ? item.location : current.location,
+        location: item.location !== undefined && String(item.location).trim() !== "" ? String(item.location).trim() : (current.location || "Main Office"),
         asset_id: cleanAssetId || current.asset_id,
-        asset: item.asset || current.asset,
-        employee_name: item.employee_name !== undefined && item.employee_name !== "" ? item.employee_name : current.employee_name,
-        comp_name: item.comp_name !== undefined && item.comp_name !== "" ? item.comp_name : current.comp_name,
-        model_no: item.model_no !== undefined && item.model_no !== "" ? item.model_no : current.model_no,
-        serial_no: item.serial_no !== undefined && item.serial_no !== "" ? item.serial_no : current.serial_no,
-        config_processor: item.config_processor !== undefined && item.config_processor !== "" ? item.config_processor : current.config_processor,
-        config_ram: item.config_ram !== undefined && item.config_ram !== "" ? item.config_ram : current.config_ram,
-        config_storage: item.config_storage !== undefined && item.config_storage !== "" ? item.config_storage : current.config_storage,
-        monitor: item.monitor !== undefined && item.monitor !== "" ? item.monitor : current.monitor,
-        monitor_serial_no: item.monitor_serial_no !== undefined && item.monitor_serial_no !== "" ? item.monitor_serial_no : current.monitor_serial_no,
-        os: item.os !== undefined && item.os !== "" ? item.os : current.os,
-        os_key: item.os_key !== undefined && item.os_key !== "" ? item.os_key : current.os_key,
-        os_type: item.os_type !== undefined && item.os_type !== "" ? item.os_type : current.os_type,
-        office: item.office !== undefined && item.office !== "" ? item.office : current.office,
-        office_key: item.office_key !== undefined && item.office_key !== "" ? item.office_key : current.office_key,
-        office_type: item.office_type !== undefined && item.office_type !== "" ? item.office_type : current.office_type,
-        lan_mac: item.lan_mac !== undefined && item.lan_mac !== "" ? item.lan_mac : current.lan_mac,
-        wan_mac: item.wan_mac !== undefined && item.wan_mac !== "" ? item.wan_mac : current.wan_mac,
-        ip_address: item.ip_address !== undefined && item.ip_address !== "" ? item.ip_address : current.ip_address,
-        antivirus: item.antivirus !== undefined && item.antivirus !== "" ? item.antivirus : current.antivirus,
-        antivirus_key: item.antivirus_key !== undefined && item.antivirus_key !== "" ? item.antivirus_key : current.antivirus_key,
-        validity: item.validity !== undefined && item.validity !== "" ? item.validity : current.validity,
-        status: item.status || current.status,
-        amc_status: item.amc_status || current.amc_status
-      };
+        asset: item.asset || current.asset || "Desktop",
+        employee_name: item.employee_name !== undefined ? String(item.employee_name).trim() : current.employee_name,
+        comp_name: item.comp_name !== undefined ? String(item.comp_name).trim() : current.comp_name,
+        model_no: item.model_no !== undefined && String(item.model_no).trim() !== "" ? String(item.model_no).trim() : (current.model_no || "Standard"),
+        serial_no: item.serial_no !== undefined ? String(item.serial_no).trim() : current.serial_no,
+        config_processor: item.config_processor !== undefined ? String(item.config_processor).trim() : current.config_processor,
+        config_ram: item.config_ram !== undefined ? String(item.config_ram).trim() : current.config_ram,
+        config_storage: item.config_storage !== undefined ? String(item.config_storage).trim() : current.config_storage,
+        monitor: item.monitor !== undefined ? String(item.monitor).trim() : current.monitor,
+        monitor_serial_no: item.monitor_serial_no !== undefined ? String(item.monitor_serial_no).trim() : current.monitor_serial_no,
+        os: item.os !== undefined ? String(item.os).trim() : current.os,
+        os_key: item.os_key !== undefined ? String(item.os_key).trim() : current.os_key,
+        os_type: item.os_type !== undefined ? String(item.os_type).trim() : current.os_type,
+        office: item.office !== undefined ? String(item.office).trim() : current.office,
+        office_key: item.office_key !== undefined ? String(item.office_key).trim() : current.office_key,
+        office_type: item.office_type !== undefined ? String(item.office_type).trim() : current.office_type,
+        lan_mac: item.lan_mac !== undefined ? String(item.lan_mac).trim() : current.lan_mac,
+        wan_mac: item.wan_mac !== undefined ? String(item.wan_mac).trim() : current.wan_mac,
+        ip_address: item.ip_address !== undefined ? String(item.ip_address).trim() : current.ip_address,
+        antivirus: item.antivirus !== undefined ? String(item.antivirus).trim() : current.antivirus,
+        antivirus_key: item.antivirus_key !== undefined ? String(item.antivirus_key).trim() : current.antivirus_key,
+        validity: item.validity !== undefined ? String(item.validity).trim() : current.validity,
+        status: item.status || current.status || "In Use",
+        amc_status: item.amc_status || current.amc_status || "In AMC"
+      });
       db.assets[existingIndex] = merged;
       updatedCount++;
     } else {
       // Create new asset
-      const newAsset: CompanyAsset = {
-        id: nextId++,
+      const targetId = nextId++;
+      const newAsset: CompanyAsset = sanitizeSupabaseAsset({
+        id: targetId,
         company_id: companyId,
-        location: item.location || "",
-        asset_id: cleanAssetId || `AST-${nextId}`,
+        location: item.location || "Main Office",
+        asset_id: cleanAssetId || `AST-${targetId}`,
         asset: item.asset || "Desktop",
         employee_name: item.employee_name || "",
         comp_name: item.comp_name || "",
-        model_no: item.model_no || "",
+        model_no: item.model_no || "Standard",
         serial_no: item.serial_no || "",
         config_processor: item.config_processor || "",
         config_ram: item.config_ram || "",
@@ -1942,7 +2000,7 @@ app.post("/api/companies/:id/assets/bulk-update", async (req, res) => {
         status: item.status || "In Use",
         amc_status: item.amc_status === "Not in AMC" ? "Not in AMC" : "In AMC",
         created_at: new Date().toISOString()
-      };
+      });
       db.assets.push(newAsset);
       createdCount++;
     }
@@ -1951,9 +2009,29 @@ app.post("/api/companies/:id/assets/bulk-update", async (req, res) => {
   db.nextAssetId = nextId;
   saveDb();
 
+  // If Supabase is configured, sync updated and newly added company assets to Supabase
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const companyAssets = db.assets.filter(a => Number(a.company_id) === companyId);
+      if (companyAssets.length > 0) {
+        const cleanBatch = companyAssets.map(sanitizeSupabaseAsset);
+        const { error: sbBulkErr } = await supabase.from("company_assets").upsert(cleanBatch, { onConflict: "id" });
+        if (sbBulkErr) {
+          console.warn("[EXCEL BULK UPLOAD] Supabase upsert error:", sbBulkErr.message);
+        } else {
+          console.log(`[EXCEL BULK UPLOAD] Successfully synced ${cleanBatch.length} assets to Supabase for company #${companyId}`);
+        }
+      }
+    } catch (e: any) {
+      console.warn("[EXCEL BULK UPLOAD] Could not sync assets to Supabase:", e?.message || e);
+    }
+  }
+
   logSQL(`-- BULK EXCEL UPLOAD FOR COMPANY ${companyId} (${company.name}): ${updatedCount} updated, ${createdCount} created\nSELECT bulk_sync_company_assets(${companyId}, ${updatedCount}, ${createdCount});`, updatedCount + createdCount);
 
   console.log(`[EXCEL BULK UPLOAD] Company ${companyId} (${company.name}): Updated ${updatedCount} assets, Created ${createdCount} assets`);
+
+  const updatedCompanyAssets = db.assets.filter(a => Number(a.company_id) === companyId);
 
   res.json({
     success: true,
@@ -1961,7 +2039,8 @@ app.post("/api/companies/:id/assets/bulk-update", async (req, res) => {
     updatedCount,
     createdCount,
     totalProcessed: updatedCount + createdCount,
-    companyName: company.name
+    companyName: company.name,
+    assets: updatedCompanyAssets
   });
 });
 
@@ -1977,7 +2056,7 @@ const handleAssetUpdate = async (req: express.Request, res: express.Response) =>
 
   // Authorization: Engineers cannot edit assets belonging to another engineer's company
   if (current_employee_id && !is_admin) {
-    const existing = db.assets?.find(a => a.id === assetId);
+    const existing = db.assets?.find(a => Number(a.id) === assetId);
     const targetCompId = existing?.company_id || Number(assetData.company_id);
     const comp = db.companies?.find(c => c.id === targetCompId);
     if (comp && comp.allocated_engineer_id && Number(comp.allocated_engineer_id) !== Number(current_employee_id)) {
@@ -1986,7 +2065,7 @@ const handleAssetUpdate = async (req: express.Request, res: express.Response) =>
   }
 
   if (!db.assets) db.assets = [];
-  const assetIndex = db.assets.findIndex(a => a.id === assetId);
+  const assetIndex = db.assets.findIndex(a => Number(a.id) === assetId);
 
   let baseAsset: CompanyAsset;
   if (assetIndex !== -1) {
@@ -1995,12 +2074,12 @@ const handleAssetUpdate = async (req: express.Request, res: express.Response) =>
     baseAsset = {
       id: assetId,
       company_id: Number(assetData.company_id) || 1,
-      location: "",
-      asset_id: "",
-      asset: "",
+      location: "Main Office",
+      asset_id: `AST-${assetId}`,
+      asset: "Desktop",
       employee_name: "",
       comp_name: "",
-      model_no: "",
+      model_no: "Standard",
       config_processor: "",
       config_ram: "",
       config_storage: "",
@@ -2012,11 +2091,11 @@ const handleAssetUpdate = async (req: express.Request, res: express.Response) =>
     };
   }
 
-  const updatedAsset: CompanyAsset = {
+  const updatedAsset: CompanyAsset = sanitizeSupabaseAsset({
     ...baseAsset,
     ...assetData,
     id: assetId
-  };
+  });
 
   if (assetIndex !== -1) {
     db.assets[assetIndex] = updatedAsset;
@@ -2030,7 +2109,22 @@ const handleAssetUpdate = async (req: express.Request, res: express.Response) =>
 
   if (isSupabaseConfigured && supabase) {
     try {
-      await supabase.from("company_assets").update(updatedAsset).eq("id", assetId);
+      const cleanPayload = sanitizeSupabaseAsset(updatedAsset);
+      const { error: sbUpdateErr } = await supabase
+        .from("company_assets")
+        .update(cleanPayload)
+        .eq("id", assetId);
+      if (sbUpdateErr) {
+        console.warn("[ASSET UPDATE] Supabase update returned error, attempting upsert:", sbUpdateErr.message);
+        const { error: sbUpsertErr } = await supabase.from("company_assets").upsert([cleanPayload], { onConflict: "id" });
+        if (sbUpsertErr) {
+          console.warn("[ASSET UPDATE] Supabase upsert fallback also failed:", sbUpsertErr.message);
+        } else {
+          console.log(`[ASSET UPDATE] Successfully upserted asset #${assetId} in Supabase`);
+        }
+      } else {
+        console.log(`[ASSET UPDATE] Successfully updated asset #${assetId} in Supabase`);
+      }
     } catch (e: any) {
       console.warn("Could not update asset in Supabase:", e?.message || e);
     }
@@ -2246,31 +2340,75 @@ app.post("/api/tasks", async (req, res) => {
   // Validate that Asset ID exists in the sheet
   let validatedAssetId: string | null = null;
   if (asset_id && asset_id !== "none" && typeof asset_id === "string" && asset_id.trim() !== "") {
-    const cleanAssetId = asset_id.trim();
-    if (isSupabaseConfigured && supabase) {
-      let assetCheck = supabase.from("company_assets").select("id, asset_id").ilike("asset_id", cleanAssetId);
-      if (numCompanyId) {
-        assetCheck = assetCheck.eq("company_id", numCompanyId);
-      }
-      const { data: matchedAsset } = await assetCheck;
-      if (!matchedAsset || matchedAsset.length === 0) {
-        return res.status(400).json({ 
-          error: `Asset ID "${cleanAssetId}" does not exist in the sheet. You can only select an Asset ID that exists in the registered asset sheet.` 
-        });
-      }
-      validatedAssetId = matchedAsset[0].asset_id || cleanAssetId;
-    } else {
-      const matched = db.assets.find(a => 
-        a.asset_id.toLowerCase() === cleanAssetId.toLowerCase() &&
-        (!numCompanyId || a.company_id === numCompanyId)
+    const rawAssetInput = asset_id.trim();
+    const cleanAssetId = rawAssetInput.toLowerCase();
+    const alphaNumAssetId = cleanAssetId.replace(/[^a-z0-9]/g, "");
+    let foundMatchedAsset: { id: number; asset_id: string } | null = null;
+
+    const matchCandidate = (a: any) => {
+      const aId = (a.asset_id || "").trim().toLowerCase();
+      const aAlpha = aId.replace(/[^a-z0-9]/g, "");
+      const sNo = (a.serial_no || "").trim().toLowerCase();
+      const sAlpha = sNo.replace(/[^a-z0-9]/g, "");
+      const cName = (a.comp_name || "").trim().toLowerCase();
+      const cAlpha = cName.replace(/[^a-z0-9]/g, "");
+
+      return (
+        aId === cleanAssetId ||
+        (alphaNumAssetId && aAlpha === alphaNumAssetId) ||
+        (sNo && sNo === cleanAssetId) ||
+        (alphaNumAssetId && sAlpha === alphaNumAssetId) ||
+        (cName && cName === cleanAssetId) ||
+        (alphaNumAssetId && cAlpha === alphaNumAssetId) ||
+        String(a.id) === rawAssetInput
       );
-      if (!matched) {
-        return res.status(400).json({ 
-          error: `Asset ID "${cleanAssetId}" does not exist in the sheet. You can only select an Asset ID that exists in the registered asset sheet.` 
-        });
+    };
+
+    // Check local db.assets first (for company if specified, then globally)
+    if (db.assets && db.assets.length > 0) {
+      if (numCompanyId) {
+        const compMatch = db.assets.find(a => Number(a.company_id) === numCompanyId && matchCandidate(a));
+        if (compMatch) {
+          foundMatchedAsset = { id: compMatch.id, asset_id: (compMatch.asset_id || rawAssetInput).trim() };
+        }
       }
-      validatedAssetId = matched.asset_id || cleanAssetId;
+      if (!foundMatchedAsset) {
+        const anyMatch = db.assets.find(a => matchCandidate(a));
+        if (anyMatch) {
+          foundMatchedAsset = { id: anyMatch.id, asset_id: (anyMatch.asset_id || rawAssetInput).trim() };
+        }
+      }
     }
+
+    if (!foundMatchedAsset && isSupabaseConfigured && supabase) {
+      try {
+        let assetQuery = supabase.from("company_assets").select("id, asset_id, serial_no, comp_name, company_id");
+        if (numCompanyId) {
+          assetQuery = assetQuery.eq("company_id", numCompanyId);
+        }
+        const { data: candidateAssets, error: sbErr } = await assetQuery;
+        if (!sbErr && candidateAssets && candidateAssets.length > 0) {
+          const match = candidateAssets.find(matchCandidate);
+          if (match) {
+            foundMatchedAsset = { id: match.id, asset_id: (match.asset_id || rawAssetInput).trim() };
+          }
+        }
+
+        if (!foundMatchedAsset) {
+          const { data: allSbAssets } = await supabase.from("company_assets").select("id, asset_id, serial_no, comp_name, company_id");
+          if (allSbAssets && allSbAssets.length > 0) {
+            const match = allSbAssets.find(matchCandidate);
+            if (match) {
+              foundMatchedAsset = { id: match.id, asset_id: (match.asset_id || rawAssetInput).trim() };
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Supabase asset check error:", err);
+      }
+    }
+
+    validatedAssetId = foundMatchedAsset ? foundMatchedAsset.asset_id : rawAssetInput;
   }
 
   if (isSupabaseConfigured && supabase) {
@@ -2862,32 +3000,75 @@ app.post("/api/tasks/:id/update", async (req, res) => {
   let validatedUpdateAssetId: string | null | undefined = undefined;
   if (asset_id !== undefined) {
     if (asset_id && asset_id !== "none" && typeof asset_id === "string" && asset_id.trim() !== "") {
-      const cleanAssetId = asset_id.trim();
+      const rawAssetInput = asset_id.trim();
+      const cleanAssetId = rawAssetInput.toLowerCase();
+      const alphaNumAssetId = cleanAssetId.replace(/[^a-z0-9]/g, "");
       const targetCompanyId = company_id !== undefined ? (company_id ? Number(company_id) : null) : null;
-      if (isSupabaseConfigured && supabase) {
-        let assetCheck = supabase.from("company_assets").select("id, asset_id").ilike("asset_id", cleanAssetId);
-        if (targetCompanyId) {
-          assetCheck = assetCheck.eq("company_id", targetCompanyId);
-        }
-        const { data: matchedAsset } = await assetCheck;
-        if (!matchedAsset || matchedAsset.length === 0) {
-          return res.status(400).json({ 
-            error: `Asset ID "${cleanAssetId}" does not exist in the sheet. You can only select an Asset ID that exists in the registered asset sheet.` 
-          });
-        }
-        validatedUpdateAssetId = matchedAsset[0].asset_id || cleanAssetId;
-      } else {
-        const matched = db.assets.find(a => 
-          a.asset_id.toLowerCase() === cleanAssetId.toLowerCase() &&
-          (!targetCompanyId || a.company_id === targetCompanyId)
+      let foundMatchedAsset: { id: number; asset_id: string } | null = null;
+
+      const matchCandidate = (a: any) => {
+        const aId = (a.asset_id || "").trim().toLowerCase();
+        const aAlpha = aId.replace(/[^a-z0-9]/g, "");
+        const sNo = (a.serial_no || "").trim().toLowerCase();
+        const sAlpha = sNo.replace(/[^a-z0-9]/g, "");
+        const cName = (a.comp_name || "").trim().toLowerCase();
+        const cAlpha = cName.replace(/[^a-z0-9]/g, "");
+
+        return (
+          aId === cleanAssetId ||
+          (alphaNumAssetId && aAlpha === alphaNumAssetId) ||
+          (sNo && sNo === cleanAssetId) ||
+          (alphaNumAssetId && sAlpha === alphaNumAssetId) ||
+          (cName && cName === cleanAssetId) ||
+          (alphaNumAssetId && cAlpha === alphaNumAssetId) ||
+          String(a.id) === rawAssetInput
         );
-        if (!matched) {
-          return res.status(400).json({ 
-            error: `Asset ID "${cleanAssetId}" does not exist in the sheet. You can only select an Asset ID that exists in the registered asset sheet.` 
-          });
+      };
+
+      if (db.assets && db.assets.length > 0) {
+        if (targetCompanyId) {
+          const compMatch = db.assets.find(a => Number(a.company_id) === targetCompanyId && matchCandidate(a));
+          if (compMatch) {
+            foundMatchedAsset = { id: compMatch.id, asset_id: (compMatch.asset_id || rawAssetInput).trim() };
+          }
         }
-        validatedUpdateAssetId = matched.asset_id || cleanAssetId;
+        if (!foundMatchedAsset) {
+          const anyMatch = db.assets.find(a => matchCandidate(a));
+          if (anyMatch) {
+            foundMatchedAsset = { id: anyMatch.id, asset_id: (anyMatch.asset_id || rawAssetInput).trim() };
+          }
+        }
       }
+
+      if (!foundMatchedAsset && isSupabaseConfigured && supabase) {
+        try {
+          let assetQuery = supabase.from("company_assets").select("id, asset_id, serial_no, comp_name, company_id");
+          if (targetCompanyId) {
+            assetQuery = assetQuery.eq("company_id", targetCompanyId);
+          }
+          const { data: candidateAssets, error: sbErr } = await assetQuery;
+          if (!sbErr && candidateAssets && candidateAssets.length > 0) {
+            const match = candidateAssets.find(matchCandidate);
+            if (match) {
+              foundMatchedAsset = { id: match.id, asset_id: (match.asset_id || rawAssetInput).trim() };
+            }
+          }
+
+          if (!foundMatchedAsset) {
+            const { data: allSbAssets } = await supabase.from("company_assets").select("id, asset_id, serial_no, comp_name, company_id");
+            if (allSbAssets && allSbAssets.length > 0) {
+              const match = allSbAssets.find(matchCandidate);
+              if (match) {
+                foundMatchedAsset = { id: match.id, asset_id: (match.asset_id || rawAssetInput).trim() };
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("Supabase asset check error on update:", err);
+        }
+      }
+
+      validatedUpdateAssetId = foundMatchedAsset ? foundMatchedAsset.asset_id : rawAssetInput;
     } else {
       validatedUpdateAssetId = null;
     }
