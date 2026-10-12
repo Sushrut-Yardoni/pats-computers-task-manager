@@ -2763,7 +2763,7 @@ export default function CompanySection({
                     </span>
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    The uploaded file contains multiple records for the same Asset ID. Please select which details to keep as <strong className="text-emerald-700">In Use</strong> and which one(s) to shift to <strong className="text-amber-700">Decommissioned</strong>.
+                    The uploaded file contains multiple records for the same Asset ID. Check the records to keep as <strong className="text-emerald-700">In Use</strong> (unchecked records will be shifted to <strong className="text-amber-700">Decommissioned</strong>).
                   </p>
                 </div>
               </div>
@@ -2797,7 +2797,7 @@ export default function CompanySection({
                         className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
                           itemEntry.status === "In Use" 
                             ? "bg-emerald-50/60 border-emerald-300 shadow-xs" 
-                            : "bg-white border-slate-200 opacity-80"
+                            : "bg-amber-50/40 border-amber-200 opacity-90"
                         }`}
                       >
                         <div className="space-y-1 text-xs font-mono">
@@ -2814,46 +2814,23 @@ export default function CompanySection({
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
-                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs font-bold">
                             <input
-                              type="radio"
-                              name={`dup-group-${gIdx}`}
+                              type="checkbox"
                               checked={itemEntry.status === "In Use"}
-                              onChange={() => {
+                              onChange={(e) => {
+                                const newStatus = e.target.checked ? "In Use" : "Decommissioned";
                                 setDuplicateConflictModal(prev => {
                                   if (!prev) return null;
                                   const nextGroups = [...prev.duplicateGroups];
-                                  nextGroups[gIdx].items = nextGroups[gIdx].items.map((it, idx) => ({
-                                    ...it,
-                                    status: idx === iIdx ? "In Use" : "Decommissioned"
-                                  }));
+                                  nextGroups[gIdx].items[iIdx].status = newStatus;
                                   return { ...prev, duplicateGroups: nextGroups };
                                 });
                               }}
-                              className="text-emerald-600 focus:ring-emerald-500"
+                              className="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4 cursor-pointer"
                             />
-                            <span className={itemEntry.status === "In Use" ? "text-emerald-800 font-extrabold" : "text-slate-600"}>
-                              Keep as In Use
-                            </span>
-                          </label>
-
-                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold ml-2">
-                            <input
-                              type="radio"
-                              name={`dup-group-${gIdx}`}
-                              checked={itemEntry.status === "Decommissioned"}
-                              onChange={() => {
-                                setDuplicateConflictModal(prev => {
-                                  if (!prev) return null;
-                                  const nextGroups = [...prev.duplicateGroups];
-                                  nextGroups[gIdx].items[iIdx].status = "Decommissioned";
-                                  return { ...prev, duplicateGroups: nextGroups };
-                                });
-                              }}
-                              className="text-amber-600 focus:ring-amber-500"
-                            />
-                            <span className={itemEntry.status === "Decommissioned" ? "text-amber-800 font-extrabold" : "text-slate-600"}>
-                              Shift to Decommissioned
+                            <span className={itemEntry.status === "In Use" ? "text-emerald-800 font-extrabold" : "text-amber-800 font-bold"}>
+                              {itemEntry.status === "In Use" ? "Keep as In Use" : "Shift to Decommissioned"}
                             </span>
                           </label>
                         </div>

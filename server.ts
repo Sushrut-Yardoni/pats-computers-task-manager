@@ -1919,24 +1919,41 @@ app.post("/api/companies/:id/assets/bulk-update", async (req, res) => {
     } catch (_) {}
   }
 
+  const processedAssetEntries = new Set<string>();
+
   for (const item of incomingAssets) {
     if (!item) continue;
     const cleanAssetId = (item.asset_id || "").trim();
     if (!cleanAssetId && !item.serial_no && !item.comp_name) continue;
 
-    // Check if an asset with this asset_id exists for this company
+    const itemStatus = item.status || "In Use";
+    const lowerAssetId = cleanAssetId.toLowerCase();
+
+    // Check if an asset with this cleanAssetId exists for this company
     let existingIndex = -1;
-    if (cleanAssetId) {
+    if (lowerAssetId) {
       existingIndex = db.assets.findIndex(a => 
         Number(a.company_id) === companyId && 
         a.asset_id && 
-        a.asset_id.trim().toLowerCase() === cleanAssetId.toLowerCase()
+        a.asset_id.trim().toLowerCase() === lowerAssetId &&
+        (a.status || "In Use").toLowerCase() === itemStatus.toLowerCase() &&
+        !processedAssetEntries.has(`${companyId}-${a.id}`)
       );
+
+      if (existingIndex === -1) {
+        existingIndex = db.assets.findIndex(a => 
+          Number(a.company_id) === companyId && 
+          a.asset_id && 
+          a.asset_id.trim().toLowerCase() === lowerAssetId &&
+          !processedAssetEntries.has(`${companyId}-${a.id}`)
+        );
+      }
     }
 
     if (existingIndex !== -1) {
       // Automatically UPDATE existing asset
       const current = db.assets[existingIndex];
+      processedAssetEntries.add(`${companyId}-${current.id}`);
       const merged: CompanyAsset = sanitizeSupabaseAsset({
         ...current,
         location: item.location !== undefined && String(item.location).trim() !== "" ? String(item.location).trim() : (current.location || "Main Office"),
