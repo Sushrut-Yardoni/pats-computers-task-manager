@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Smartphone, Download, CheckCircle, Info, X, Share2, PlusSquare, ArrowRight, ShieldCheck, Zap } from "lucide-react";
-import { isAppInstalledPWA } from "../utils/geolocationTracker";
+
+function isAppInstalledPWA(): boolean {
+  if (typeof window === "undefined") return false;
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true;
+  return isStandalone;
+}
 
 interface PWAInstallBannerProps {
   compact?: boolean;

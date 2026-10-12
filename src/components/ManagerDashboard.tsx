@@ -3,10 +3,8 @@ import {
   PlusCircle, Search, Clock, CheckCircle2, ListFilter, X, Plus, User, Edit3, CheckSquare, Trash2, AlertCircle, Eye, UserPlus, Users, Columns, LayoutGrid, GripVertical, ChevronDown, Building, Satellite
 } from "lucide-react";
 import { TodoTask, Employee, DeletedTodoTask, isTargetMatch, Company, CompanyAsset } from "../types";
-import TodoHistoryModal from "./TodoHistoryModal";
-import AttendanceSection from "./AttendanceSection";
 import CompanySection from "./CompanySection";
-import EngineerLocationTrackingSection from "./EngineerLocationTrackingSection";
+import TodoHistoryModal from "./TodoHistoryModal";
 
 interface ManagerDashboardProps {
   currentUser: { id: number; name: string; role: string; email_id?: string };
@@ -26,7 +24,7 @@ export default function ManagerDashboard({
   const [todos, setTodos] = useState<TodoTask[]>([]);
   const [deletedTodos, setDeletedTodos] = useState<DeletedTodoTask[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"todo" | "finished" | "deleted" | "attendance" | "companies" | "tracking">("todo");
+  const [activeTab, setActiveTab] = useState<"todo" | "finished" | "deleted" | "companies">("todo");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAccountsUser, setSelectedAccountsUser] = useState("");
   const [viewMode, setViewMode] = useState<"userColumns" | "grid">("userColumns");
@@ -1132,17 +1130,6 @@ export default function ManagerDashboard({
               <span>Deleted Tasks</span>
             </button>
             <button
-              onClick={() => setActiveTab("attendance")}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all cursor-pointer ${
-                activeTab === "attendance" 
-                  ? "bg-white text-blue-700 shadow-xs border border-slate-200/80" 
-                  : "text-slate-500 hover:text-slate-950"
-              }`}
-            >
-              <Clock className="h-3.5 w-3.5" />
-              <span>Attendance Records</span>
-            </button>
-            <button
               onClick={() => setActiveTab("companies")}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all cursor-pointer ${
                 activeTab === "companies" 
@@ -1153,17 +1140,7 @@ export default function ManagerDashboard({
               <Building className="h-3.5 w-3.5" />
               <span>Company Assets</span>
             </button>
-            <button
-              onClick={() => setActiveTab("tracking")}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold uppercase tracking-wide transition-all cursor-pointer ${
-                activeTab === "tracking" 
-                  ? "bg-white text-emerald-700 shadow-xs border border-slate-200/80" 
-                  : "text-slate-500 hover:text-slate-950"
-              }`}
-            >
-              <Satellite className="h-3.5 w-3.5 text-emerald-600" />
-              <span>Live GPS Radar</span>
-            </button>
+
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1217,17 +1194,7 @@ export default function ManagerDashboard({
               }}
             />
           </div>
-        ) : activeTab === "tracking" ? (
-          <div className="pt-4">
-            <EngineerLocationTrackingSection employees={employees} />
-          </div>
-        ) : activeTab === "attendance" ? (
-          <div className="pt-4">
-            <AttendanceSection 
-              currentUser={{ id: currentUser.id, name: currentUser.name, role: currentUser.role, type: "manager" }}
-              employees={employees}
-            />
-          </div>
+
         ) : (
           <>
             {/* Filters and search */}

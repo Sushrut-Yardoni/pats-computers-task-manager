@@ -34,10 +34,11 @@ export default function CompanySection({
   const currentEmployeeId = currentUser?.id;
 
   // Helper to verify if current user can MANAGE (create, edit, delete) assets for a company:
-  // Admins & Managers can manage all. Engineers can ONLY manage assets for companies allocated to them.
+  // Admins & Managers can manage all. Engineers can manage assets for companies allocated to them, as well as Non-AMC or unallocated companies.
   const canManageCompanyAssets = (company?: Company | null) => {
     if (isAdminOrManager) return true;
     if (!company) return false;
+    if (company.type === "Non AMC" || !company.allocated_engineer_id) return true;
     return Number(company.allocated_engineer_id) === Number(currentEmployeeId);
   };
 
@@ -59,17 +60,20 @@ export default function CompanySection({
 
     // 1. Process props assets with any local edits or deletions
     assets.forEach(a => {
-      if (localDeletedAssetIds.has(a.id)) return;
-      const overridden = localAssetOverrides.get(a.id) || a;
+      const numId = Number(a.id);
+      if (localDeletedAssetIds.has(numId) || localDeletedAssetIds.has(a.id as any)) return;
+      const overridden = localAssetOverrides.get(numId) || localAssetOverrides.get(a.id as any) || a;
       list.push(overridden);
-      seenIds.add(a.id);
+      seenIds.add(numId);
     });
 
     // 2. Add locally created assets that might not be in prop yet
     localCreatedAssets.forEach(ca => {
-      if (!localDeletedAssetIds.has(ca.id) && !seenIds.has(ca.id)) {
-        list.push(localAssetOverrides.get(ca.id) || ca);
-        seenIds.add(ca.id);
+      const numCaId = Number(ca.id);
+      if (!localDeletedAssetIds.has(numCaId) && !localDeletedAssetIds.has(ca.id as any) && !seenIds.has(numCaId)) {
+        const overridden = localAssetOverrides.get(numCaId) || localAssetOverrides.get(ca.id as any) || ca;
+        list.push(overridden);
+        seenIds.add(numCaId);
       }
     });
 
@@ -366,12 +370,15 @@ export default function CompanySection({
           throw new Error(err.error || "Failed to update asset");
         }
         const updatedAsset = await resp.json();
+        const numId = Number(updatedAsset.id);
         setLocalAssetOverrides(prev => {
           const next = new Map(prev);
-          next.set(updatedAsset.id, updatedAsset);
+          next.set(numId, updatedAsset);
+          next.set(updatedAsset.id as any, updatedAsset);
           return next;
         });
-        showToast("Asset updated successfully!");
+        setLocalCreatedAssets(prev => prev.map(a => Number(a.id) === numId ? updatedAsset : a));
+        showToast(`Asset "${updatedAsset.asset_id || `AST-${updatedAsset.id}`}" updated successfully!`);
       }
 
       setAssetModal(null);
@@ -898,10 +905,8 @@ export default function CompanySection({
 
       for (const item of parsedList) {
         const itemAssetId = (item.asset_id || "").trim().toLowerCase();
-        const itemSerial = (item.serial_no || "").trim().toLowerCase();
         const exists = currentCompanyAssets.some(a => 
-          (itemAssetId && a.asset_id && a.asset_id.trim().toLowerCase() === itemAssetId) ||
-          (itemSerial && a.serial_no && a.serial_no.trim().toLowerCase() === itemSerial)
+          itemAssetId && a.asset_id && a.asset_id.trim().toLowerCase() === itemAssetId
         );
         if (exists) {
           updates++;
@@ -952,12 +957,16 @@ export default function CompanySection({
       if (result.assets && Array.isArray(result.assets)) {
         setLocalAssetOverrides(prev => {
           const next = new Map(prev);
-          result.assets.forEach((a: CompanyAsset) => next.set(a.id, a));
+          result.assets.forEach((a: CompanyAsset) => {
+            const numAId = Number(a.id);
+            next.set(numAId, a);
+            next.set(a.id as any, a);
+          });
           return next;
         });
         setLocalCreatedAssets(prev => {
-          const incomingIds = new Set(result.assets.map((a: CompanyAsset) => a.id));
-          return [...result.assets, ...prev.filter(a => !incomingIds.has(a.id))];
+          const incomingIds = new Set(result.assets.map((a: CompanyAsset) => Number(a.id)));
+          return [...result.assets, ...prev.filter(a => !incomingIds.has(Number(a.id)))];
         });
       }
 

@@ -8,8 +8,6 @@ import {
 import EmployeeTravelSection from "./EmployeeTravelSection";
 import { Task, Employee, Company, CompanyAsset } from "../types";
 import CompanySection from "./CompanySection";
-import AttendanceSection from "./AttendanceSection";
-import { geolocationTracker } from "../utils/geolocationTracker";
 import { notificationManager } from "../utils/notificationManager";
 import { extractCleanPhoneNumber, getCleanTelUri, extractSecondaryContact } from "../utils/phoneUtils";
 
@@ -26,8 +24,8 @@ interface EmployeeDashboardProps {
   onUpdatePassword?: (employeeId: number, newPassword: string) => Promise<void>;
   onUpdateMaterials?: (taskId: number, materials: string | null) => Promise<void>;
   onUpdateProfile?: (employeeId: number, profileData: Partial<Employee>) => Promise<void>;
-  activeTab?: "active" | "completed" | "travel" | "profile" | "attendance" | "companies";
-  onTabChange?: (tab: "active" | "completed" | "travel" | "profile" | "attendance" | "companies") => void;
+  activeTab?: "active" | "completed" | "travel" | "profile" | "companies";
+  onTabChange?: (tab: "active" | "completed" | "travel" | "profile" | "companies") => void;
   onTriggerTestNotification?: () => void;
 }
 
@@ -108,7 +106,7 @@ export default function EmployeeDashboard({
     }
   };
 
-  const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "attendance" | "companies">("active");
+  const [internalActiveTab, setInternalActiveTab] = useState<"active" | "completed" | "travel" | "profile" | "companies">("active");
   const activeTab = propsActiveTab !== undefined ? propsActiveTab : internalActiveTab;
   const setActiveTab = onTabChange !== undefined ? onTabChange : setInternalActiveTab;
   const [companySectionKey, setCompanySectionKey] = useState(0);
@@ -211,27 +209,7 @@ export default function EmployeeDashboard({
   const activeMyTasks = myTasks.filter(t => t.status === "Pending" || t.status === "In Progress");
   const completedMyTasks = myTasks.filter(t => t.status === "Finished");
 
-  // Silent background location transmission so admin can track precise location
-  useEffect(() => {
-    if (currentEmployee?.id) {
-      const activeTaskId = activeMyTasks.length > 0 ? activeMyTasks[0].id : null;
-      geolocationTracker.startTracking(
-        currentEmployee.id,
-        currentEmployee.name,
-        currentEmployee.role,
-        activeTaskId
-      );
-    }
 
-    return () => {
-      geolocationTracker.stopTracking();
-    };
-  }, [currentEmployee.id, currentEmployee.name, currentEmployee.role]);
-
-  useEffect(() => {
-    const activeTaskId = activeMyTasks.length > 0 ? activeMyTasks[0].id : null;
-    geolocationTracker.setTaskId(activeTaskId);
-  }, [activeMyTasks]);
 
   // Limits and Month filtering support for employee's own tasks
   const [empTaskLimit, setEmpTaskLimit] = useState<number | "All">(10);
@@ -487,18 +465,7 @@ export default function EmployeeDashboard({
             )}
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("attendance")}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
-              activeTab === "attendance"
-                ? "bg-amber-50 text-amber-805 border border-amber-100 font-extrabold shadow-2xs"
-                : "text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
-            }`}
-          >
-            <Clock className="h-4 w-4 text-amber-605 shrink-0" />
-            {!isSidebarCollapsed && <span className="font-sans">Punch Attendance</span>}
-          </button>
+
 
           <button
             type="button"
@@ -790,11 +757,7 @@ export default function EmployeeDashboard({
         </div>
       ) : activeTab === "travel" ? (
         <EmployeeTravelSection myTasks={myTasks} employeeId={currentEmployee.id} petrolPrice={petrolPrice} />
-      ) : activeTab === "attendance" ? (
-        <AttendanceSection 
-          currentUser={{ id: currentEmployee.id, name: currentEmployee.name, role: currentEmployee.role, type: "employee" }}
-          employees={employees}
-        />
+
       ) : activeTab === "companies" ? (
         <CompanySection
           key={`engineer-company-section-${companySectionKey}`}

@@ -1513,10 +1513,18 @@ app.get("/api/sync", async (req, res) => {
 
           const { data: ast, error: astErr } = await supabase.from("company_assets").select("*").order("id", { ascending: true });
           if (!astErr && ast && ast.length > 0) {
-            // Merge Supabase assets with any unsynced local-only assets
+            // Intelligently merge Supabase assets with local memory DB
+            const localAssetMap = new Map((db.assets || []).map(a => [Number(a.id), a]));
+            const mergedAst = ast.map(sbAsset => {
+              const localAsset = localAssetMap.get(Number(sbAsset.id));
+              if (localAsset) {
+                return { ...sbAsset, ...localAsset };
+              }
+              return sbAsset;
+            });
             const sbIdSet = new Set(ast.map(a => Number(a.id)));
             const unsyncedLocal = (db.assets || []).filter(a => !sbIdSet.has(Number(a.id)));
-            assetsList = [...ast, ...unsyncedLocal];
+            assetsList = [...mergedAst, ...unsyncedLocal];
             db.assets = assetsList;
             saveDb();
           }
@@ -1916,20 +1924,13 @@ app.post("/api/companies/:id/assets/bulk-update", async (req, res) => {
     const cleanAssetId = (item.asset_id || "").trim();
     if (!cleanAssetId && !item.serial_no && !item.comp_name) continue;
 
-    // Check if an asset with this asset_id exists for this company (or matching serial_no)
+    // Check if an asset with this asset_id exists for this company
     let existingIndex = -1;
     if (cleanAssetId) {
       existingIndex = db.assets.findIndex(a => 
         Number(a.company_id) === companyId && 
         a.asset_id && 
         a.asset_id.trim().toLowerCase() === cleanAssetId.toLowerCase()
-      );
-    }
-    if (existingIndex === -1 && item.serial_no && String(item.serial_no).trim()) {
-      existingIndex = db.assets.findIndex(a => 
-        Number(a.company_id) === companyId && 
-        a.serial_no && 
-        String(a.serial_no).trim().toLowerCase() === String(item.serial_no).trim().toLowerCase()
       );
     }
 
@@ -2055,17 +2056,18 @@ const handleAssetUpdate = async (req: express.Request, res: express.Response) =>
   }
 
   // Authorization: Engineers cannot edit assets belonging to another engineer's company
-  if (current_employee_id && !is_admin) {
-    const existing = db.assets?.find(a => Number(a.id) === assetId);
-    const targetCompId = existing?.company_id || Number(assetData.company_id);
-    const comp = db.companies?.find(c => c.id === targetCompId);
+  const isAdminOrManager = is_admin || req.body?.is_manager || req.headers["x-is-admin"] === "true";
+  if (current_employee_id && !isAdminOrManager) {
+    const existing = db.assets?.find(a => Number(a.id) === assetId || String(a.id) === String(assetId));
+    const targetCompId = existing?.company_id ? Number(existing.company_id) : Number(assetData.company_id);
+    const comp = db.companies?.find(c => Number(c.id) === targetCompId);
     if (comp && comp.allocated_engineer_id && Number(comp.allocated_engineer_id) !== Number(current_employee_id)) {
       return res.status(403).json({ error: "Read-only access: Engineers cannot edit other engineers' assets." });
     }
   }
 
   if (!db.assets) db.assets = [];
-  const assetIndex = db.assets.findIndex(a => Number(a.id) === assetId);
+  const assetIndex = db.assets.findIndex(a => Number(a.id) === assetId || String(a.id) === String(assetId));
 
   let baseAsset: CompanyAsset;
   if (assetIndex !== -1) {
@@ -2094,7 +2096,8 @@ const handleAssetUpdate = async (req: express.Request, res: express.Response) =>
   const updatedAsset: CompanyAsset = sanitizeSupabaseAsset({
     ...baseAsset,
     ...assetData,
-    id: assetId
+    id: assetId,
+    company_id: Number(assetData.company_id || baseAsset.company_id)
   });
 
   if (assetIndex !== -1) {
@@ -2110,13 +2113,16 @@ const handleAssetUpdate = async (req: express.Request, res: express.Response) =>
   if (isSupabaseConfigured && supabase) {
     try {
       const cleanPayload = sanitizeSupabaseAsset(updatedAsset);
-      const { error: sbUpdateErr } = await supabase
+      const { data: updatedRows, error: sbUpdateErr } = await supabase
         .from("company_assets")
         .update(cleanPayload)
-        .eq("id", assetId);
-      if (sbUpdateErr) {
-        console.warn("[ASSET UPDATE] Supabase update returned error, attempting upsert:", sbUpdateErr.message);
-        const { error: sbUpsertErr } = await supabase.from("company_assets").upsert([cleanPayload], { onConflict: "id" });
+        .eq("id", assetId)
+        .select();
+
+      // If update returned error or 0 rows (row not found in Supabase), fallback to upsert
+      if (sbUpdateErr || !updatedRows || updatedRows.length === 0) {
+        console.warn(`[ASSET UPDATE] Supabase update returned 0 rows or error for #${assetId}, attempting upsert:`, sbUpdateErr?.message);
+        const { error: sbUpsertErr } = await supabase.from("company_assets").upsert([cleanPayload], { onConflict: "id" }).select();
         if (sbUpsertErr) {
           console.warn("[ASSET UPDATE] Supabase upsert fallback also failed:", sbUpsertErr.message);
         } else {
@@ -4664,6 +4670,57 @@ app.get("/api/ip-lookup", async (req, res) => {
     region: "Maharashtra",
     country_name: "India"
   });
+});
+
+// Proxy reverse geocoding to resolve accurate street address without CORS/rate limits
+const geoCache = new Map<string, string>();
+app.get("/api/geocode/reverse", async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  if (isNaN(lat) || isNaN(lng)) {
+    return res.status(400).json({ error: "Invalid latitude or longitude parameters" });
+  }
+
+  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+  if (geoCache.has(cacheKey)) {
+    return res.json({ formatted_address: geoCache.get(cacheKey), source: "cache" });
+  }
+
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY || "AIzaSyAs8vT-YrFHu8XDuGnYccwFyOxPYRavzog";
+
+  // 1. Google Maps Geocoding API
+  try {
+    const gResp = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`, {
+      signal: AbortSignal.timeout(4000)
+    });
+    if (gResp.ok) {
+      const gData = await gResp.json();
+      if (gData.results && gData.results[0]) {
+        const address = gData.results[0].formatted_address;
+        geoCache.set(cacheKey, address);
+        return res.json({ formatted_address: address, source: "google_maps" });
+      }
+    }
+  } catch (e) {}
+
+  // 2. OpenStreetMap Nominatim fallback with proper User-Agent
+  try {
+    const osmResp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`, {
+      headers: { "User-Agent": "PATS-Computers-Tracking/1.0" },
+      signal: AbortSignal.timeout(4000)
+    });
+    if (osmResp.ok) {
+      const osmData = await osmResp.json();
+      if (osmData.display_name) {
+        const address = osmData.display_name;
+        geoCache.set(cacheKey, address);
+        return res.json({ formatted_address: address, source: "osm" });
+      }
+    }
+  } catch (e2) {}
+
+  const fallback = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+  res.json({ formatted_address: fallback, source: "coordinates" });
 });
 
 // ==========================================

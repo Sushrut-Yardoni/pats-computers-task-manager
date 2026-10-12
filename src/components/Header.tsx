@@ -25,12 +25,15 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
     if (granted) {
       notificationManager.playTaskChime();
       notificationManager.triggerVibration([150, 80, 150]);
+      notificationManager.sendSystemNotification("Notifications Enabled", {
+        body: "You will now receive high-priority floating mobile alerts for task assignments and system events."
+      });
     }
   };
 
   return (
     <header className="border-b border-slate-200 bg-white/95 backdrop-blur-md sticky top-0 z-50 shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between relative">
         {/* Left: Branding */}
         <div className="flex items-center gap-3">
           <div className="bg-gradient-to-tr from-blue-600 to-indigo-700 p-2 rounded-xl text-white shadow-xs">

@@ -124,6 +124,7 @@ class NotificationManager {
     // 1. Always play audio and vibrate
     this.playTaskChime();
     this.triggerVibration();
+    this.recordNotification(title, options.body, options.tag || (options.taskId ? 'task' : 'alert'));
 
     if (typeof window === 'undefined' || !('Notification' in window)) {
       return;
@@ -171,6 +172,58 @@ class NotificationManager {
         console.warn('System notification error:', e);
       }
     }
+  }
+
+  // Notification History Management
+  public getHistory(): Array<{ id: string; title: string; body: string; time: string; read: boolean; type?: string }> {
+    if (typeof window === 'undefined') return [];
+    try {
+      const data = localStorage.getItem('pats_notification_history');
+      if (!data) return [];
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
+  }
+
+  public recordNotification(title: string, body: string, type: string = 'alert') {
+    if (typeof window === 'undefined') return;
+    try {
+      const history = this.getHistory();
+      const newItem = {
+        id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        title,
+        body,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + ' ' + new Date().toLocaleDateString([], { month: 'short', day: 'numeric' }),
+        read: false,
+        type
+      };
+      history.unshift(newItem);
+      // Keep max 30 items
+      if (history.length > 30) history.pop();
+      localStorage.setItem('pats_notification_history', JSON.stringify(history));
+      // Dispatch custom event for UI reactivity
+      window.dispatchEvent(new CustomEvent('pats-notification-updated', { detail: newItem }));
+    } catch (e) {
+      console.warn('Failed to record notification history:', e);
+    }
+  }
+
+  public markAllRead() {
+    if (typeof window === 'undefined') return;
+    try {
+      const history = this.getHistory().map(n => ({ ...n, read: true }));
+      localStorage.setItem('pats_notification_history', JSON.stringify(history));
+      window.dispatchEvent(new CustomEvent('pats-notification-updated'));
+    } catch {}
+  }
+
+  public clearHistory() {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.removeItem('pats_notification_history');
+      window.dispatchEvent(new CustomEvent('pats-notification-updated'));
+    } catch {}
   }
 
   // Subscribe to background Web Push notifications so device receives alerts even when app is closed

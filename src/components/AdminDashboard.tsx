@@ -6,8 +6,6 @@ import { Task, Employee, SqlLog, Company, CompanyAsset } from "../types";
 import TaskManagementSection from "./TaskManagementSection";
 import TodoManagementSection from "./TodoManagementSection";
 import EmployeeManagementSection from "./EmployeeManagementSection";
-import AttendanceSection from "./AttendanceSection";
-import AdminTrackingSection from "./AdminTrackingSection";
 import TravelPetrolSection from "./TravelPetrolSection";
 import DatabaseExplorerSection from "./DatabaseExplorerSection";
 import AnalyticsSection from "./AnalyticsSection";
@@ -68,8 +66,7 @@ export default function AdminDashboard({
   onTogglePriority,
   onUpdatePassword
 }: AdminDashboardProps) {
-  // Master navigation state: "tasks" | "todos" | "employees" | "attendance" | "tracking" | "travel" | "companies" | "database" | "analytics" | "billing"
-  const [activeTab, setActiveTab] = useState<"tasks" | "todos" | "employees" | "attendance" | "tracking" | "travel" | "companies" | "database" | "analytics" | "billing">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "todos" | "employees" | "travel" | "companies" | "database" | "analytics" | "billing">("tasks");
 
   // Synchronize active tab with the main header SQL trigger
   useEffect(() => {
@@ -160,39 +157,7 @@ export default function AdminDashboard({
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("attendance")}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
-              activeTab === "attendance"
-                ? "bg-teal-50 text-teal-805 border border-teal-120 font-extrabold shadow-2xs"
-                : "text-slate-600 hover:text-slate-805 border border-transparent font-medium hover:bg-slate-50"
-            }`}
-          >
-            <Clock className="h-4 w-4 text-teal-650 shrink-0" />
-            <span className="font-sans font-bold">Attendance Hub</span>
-          </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("tracking")}
-            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
-              activeTab === "tracking"
-                ? "bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold shadow-2xs"
-                : "text-slate-600 hover:text-slate-805 border border-transparent font-medium hover:bg-slate-50"
-            }`}
-          >
-            <div className="relative flex items-center justify-center shrink-0">
-              <Navigation className="h-4 w-4 text-emerald-600 shrink-0" />
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
-            </div>
-            <span className="font-sans flex items-center justify-between w-full font-bold">
-              <span>Live GPS Tracker</span>
-              <span className="bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded text-[9px] font-bold">
-                Live
-              </span>
-            </span>
-          </button>
 
           <button
             type="button"
@@ -321,18 +286,7 @@ export default function AdminDashboard({
           />
         )}
 
-        {activeTab === "attendance" && (
-          <AttendanceSection 
-            currentUser={{ name: "Admin", role: "Admin", type: "admin" }}
-            employees={employees}
-          />
-        )}
-        {activeTab === "tracking" && (
-          <AdminTrackingSection 
-            employees={employees}
-            tasks={tasks}
-          />
-        )}
+
         {activeTab === "travel" && (
           <TravelPetrolSection />
         )}
