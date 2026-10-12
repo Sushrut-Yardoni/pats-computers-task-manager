@@ -145,6 +145,21 @@ export default function CompanySection({
   } | null>(null);
   const [isProcessingUpload, setIsProcessingUpload] = useState(false);
 
+  // Duplicate Conflict Resolution State for Excel Upload
+  const [duplicateConflictModal, setDuplicateConflictModal] = useState<{
+    company: Company;
+    fileName: string;
+    parsedAssets: Partial<CompanyAsset>[];
+    duplicateGroups: {
+      assetId: string;
+      items: {
+        originalIndex: number;
+        row: Partial<CompanyAsset>;
+        status: "In Use" | "Decommissioned";
+      }[];
+    }[];
+  } | null>(null);
+
   // Asset Form Modal State
   const [assetModal, setAssetModal] = useState<{
     isOpen: boolean;
@@ -898,6 +913,49 @@ export default function CompanySection({
         return;
       }
 
+      // Check for duplicate asset IDs (nodes) within the parsed list
+      const assetIdMap = new Map<string, { row: Partial<CompanyAsset>; originalIndex: number }[]>();
+      for (let i = 0; i < parsedList.length; i++) {
+        const item = parsedList[i];
+        const aId = (item.asset_id || "").trim().toLowerCase();
+        if (aId) {
+          if (!assetIdMap.has(aId)) assetIdMap.set(aId, []);
+          assetIdMap.get(aId)!.push({ row: item, originalIndex: i });
+        }
+      }
+
+      const duplicateGroups: {
+        assetId: string;
+        items: {
+          originalIndex: number;
+          row: Partial<CompanyAsset>;
+          status: "In Use" | "Decommissioned";
+        }[];
+      }[] = [];
+
+      for (const [aId, entries] of assetIdMap.entries()) {
+        if (entries.length > 1) {
+          duplicateGroups.push({
+            assetId: aId,
+            items: entries.map((entry, idx) => ({
+              originalIndex: entry.originalIndex,
+              row: entry.row,
+              status: idx === 0 ? "In Use" : "Decommissioned" // default first as In Use, rest as Decommissioned
+            }))
+          });
+        }
+      }
+
+      if (duplicateGroups.length > 0) {
+        setDuplicateConflictModal({
+          company: targetCompany,
+          fileName: file.name,
+          parsedAssets: parsedList,
+          duplicateGroups
+        });
+        return;
+      }
+
       // Calculate updates vs new adds
       const currentCompanyAssets = effectiveAssets.filter(a => Number(a.company_id) === Number(targetCompany.id));
       let updates = 0;
@@ -929,6 +987,48 @@ export default function CompanySection({
     } finally {
       e.target.value = "";
     }
+  };
+
+  // Resolve duplicate nodes from Excel upload
+  const handleResolveDuplicates = () => {
+    if (!duplicateConflictModal) return;
+    const updatedParsedAssets = [...duplicateConflictModal.parsedAssets];
+
+    for (const group of duplicateConflictModal.duplicateGroups) {
+      for (const itemEntry of group.items) {
+        if (updatedParsedAssets[itemEntry.originalIndex]) {
+          updatedParsedAssets[itemEntry.originalIndex] = {
+            ...updatedParsedAssets[itemEntry.originalIndex],
+            status: itemEntry.status
+          };
+        }
+      }
+    }
+
+    const currentCompanyAssets = effectiveAssets.filter(a => Number(a.company_id) === Number(duplicateConflictModal.company.id));
+    let updates = 0;
+    let creates = 0;
+
+    for (const item of updatedParsedAssets) {
+      const itemAssetId = (item.asset_id || "").trim().toLowerCase();
+      const exists = currentCompanyAssets.some(a => 
+        itemAssetId && a.asset_id && a.asset_id.trim().toLowerCase() === itemAssetId
+      );
+      if (exists) {
+        updates++;
+      } else {
+        creates++;
+      }
+    }
+
+    setUploadModal({
+      company: duplicateConflictModal.company,
+      fileName: duplicateConflictModal.fileName,
+      parsedAssets: updatedParsedAssets,
+      updateCount: updates,
+      createCount: creates
+    });
+    setDuplicateConflictModal(null);
   };
 
   // Submit bulk update to backend
@@ -2639,6 +2739,147 @@ export default function CompanySection({
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 <span>{isDeletingCompany ? "Deleting Company..." : "Permanently Delete"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ MODAL: Duplicate Node Conflict Resolution */}
+      {duplicateConflictModal && (
+        <div className="fixed inset-0 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-4 z-[99] animate-fade-in text-slate-800">
+          <div className="bg-white border border-slate-200 w-full max-w-3xl rounded-3xl overflow-hidden shadow-2xl p-6 space-y-4 relative max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-700 shrink-0">
+                  <RefreshCw className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
+                    <span>Duplicate Asset IDs Detected</span>
+                    <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-mono uppercase tracking-wider font-bold">
+                      Action Required
+                    </span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    The uploaded file contains multiple records for the same Asset ID. Please select which details to keep as <strong className="text-emerald-700">In Use</strong> and which one(s) to shift to <strong className="text-amber-700">Decommissioned</strong>.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDuplicateConflictModal(null)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Duplicate Groups */}
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
+              {duplicateConflictModal.duplicateGroups.map((group, gIdx) => (
+                <div key={gIdx} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-200/60 pb-2">
+                    <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wide flex items-center gap-2">
+                      <span>Asset ID:</span>
+                      <code className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-mono text-sm">{group.assetId}</code>
+                    </span>
+                    <span className="text-[11px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                      {group.items.length} conflicting records found
+                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {group.items.map((itemEntry, iIdx) => (
+                      <div 
+                        key={iIdx}
+                        className={`p-3 rounded-xl border transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${
+                          itemEntry.status === "In Use" 
+                            ? "bg-emerald-50/60 border-emerald-300 shadow-xs" 
+                            : "bg-white border-slate-200 opacity-80"
+                        }`}
+                      >
+                        <div className="space-y-1 text-xs font-mono">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900">{itemEntry.row.model_no || "Standard Model"}</span>
+                            <span className="text-slate-400">•</span>
+                            <span className="text-slate-600">Serial: {itemEntry.row.serial_no || "N/A"}</span>
+                            <span className="text-slate-400">•</span>
+                            <span className="text-slate-600">User: {itemEntry.row.employee_name || "Unassigned"}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 font-sans">
+                            Location: {itemEntry.row.location || "Main"} | IP: {itemEntry.row.ip_address || "N/A"} | Comp: {itemEntry.row.comp_name || "N/A"}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold">
+                            <input
+                              type="radio"
+                              name={`dup-group-${gIdx}`}
+                              checked={itemEntry.status === "In Use"}
+                              onChange={() => {
+                                setDuplicateConflictModal(prev => {
+                                  if (!prev) return null;
+                                  const nextGroups = [...prev.duplicateGroups];
+                                  nextGroups[gIdx].items = nextGroups[gIdx].items.map((it, idx) => ({
+                                    ...it,
+                                    status: idx === iIdx ? "In Use" : "Decommissioned"
+                                  }));
+                                  return { ...prev, duplicateGroups: nextGroups };
+                                });
+                              }}
+                              className="text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <span className={itemEntry.status === "In Use" ? "text-emerald-800 font-extrabold" : "text-slate-600"}>
+                              Keep as In Use
+                            </span>
+                          </label>
+
+                          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold ml-2">
+                            <input
+                              type="radio"
+                              name={`dup-group-${gIdx}`}
+                              checked={itemEntry.status === "Decommissioned"}
+                              onChange={() => {
+                                setDuplicateConflictModal(prev => {
+                                  if (!prev) return null;
+                                  const nextGroups = [...prev.duplicateGroups];
+                                  nextGroups[gIdx].items[iIdx].status = "Decommissioned";
+                                  return { ...prev, duplicateGroups: nextGroups };
+                                });
+                              }}
+                              className="text-amber-600 focus:ring-amber-500"
+                            />
+                            <span className={itemEntry.status === "Decommissioned" ? "text-amber-800 font-extrabold" : "text-slate-600"}>
+                              Shift to Decommissioned
+                            </span>
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setDuplicateConflictModal(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-xs font-bold text-slate-700 uppercase cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleResolveDuplicates}
+                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider cursor-pointer shadow-md flex items-center gap-2 transition-all"
+              >
+                <CheckCircle className="h-4 w-4" />
+                <span>Confirm & Continue Upload</span>
               </button>
             </div>
           </div>
