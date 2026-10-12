@@ -913,10 +913,35 @@ export default function CompanySection({
         return;
       }
 
+      // Deduplicate rows where all details are exactly the same
+      const uniqueParsedList: Partial<CompanyAsset>[] = [];
+      const seenSignatures = new Set<string>();
+
+      for (const item of parsedList) {
+        const sig = [
+          (item.asset_id || "").trim().toLowerCase(),
+          (item.model_no || "").trim().toLowerCase(),
+          (item.serial_no || "").trim().toLowerCase(),
+          (item.employee_name || "").trim().toLowerCase(),
+          (item.location || "").trim().toLowerCase(),
+          (item.ip_address || "").trim().toLowerCase(),
+          (item.comp_name || "").trim().toLowerCase(),
+          (item.config_processor || "").trim().toLowerCase(),
+          (item.config_ram || "").trim().toLowerCase(),
+          (item.config_storage || "").trim().toLowerCase()
+        ].join("||");
+
+        if (!seenSignatures.has(sig)) {
+          seenSignatures.add(sig);
+          uniqueParsedList.push(item);
+        }
+      }
+      const parsedListToUse = uniqueParsedList;
+
       // Check for duplicate asset IDs (nodes) within the parsed list
       const assetIdMap = new Map<string, { row: Partial<CompanyAsset>; originalIndex: number }[]>();
-      for (let i = 0; i < parsedList.length; i++) {
-        const item = parsedList[i];
+      for (let i = 0; i < parsedListToUse.length; i++) {
+        const item = parsedListToUse[i];
         const aId = (item.asset_id || "").trim().toLowerCase();
         if (aId) {
           if (!assetIdMap.has(aId)) assetIdMap.set(aId, []);
@@ -950,7 +975,7 @@ export default function CompanySection({
         setDuplicateConflictModal({
           company: targetCompany,
           fileName: file.name,
-          parsedAssets: parsedList,
+          parsedAssets: parsedListToUse,
           duplicateGroups
         });
         return;
@@ -2819,11 +2844,17 @@ export default function CompanySection({
                               type="checkbox"
                               checked={itemEntry.status === "In Use"}
                               onChange={(e) => {
-                                const newStatus = e.target.checked ? "In Use" : "Decommissioned";
                                 setDuplicateConflictModal(prev => {
                                   if (!prev) return null;
                                   const nextGroups = [...prev.duplicateGroups];
-                                  nextGroups[gIdx].items[iIdx].status = newStatus;
+                                  if (e.target.checked) {
+                                    // Exactly 1 In Use allowed per group
+                                    nextGroups[gIdx].items.forEach((it, idx) => {
+                                      it.status = idx === iIdx ? "In Use" : "Decommissioned";
+                                    });
+                                  } else {
+                                    nextGroups[gIdx].items[iIdx].status = "Decommissioned";
+                                  }
                                   return { ...prev, duplicateGroups: nextGroups };
                                 });
                               }}
