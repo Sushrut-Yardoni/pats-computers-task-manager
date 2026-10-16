@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Cpu, LogOut, Bell, BellOff, Settings } from "lucide-react";
 import { notificationManager } from "../utils/notificationManager";
+import NotificationDropdown from "./NotificationDropdown";
 
 interface HeaderProps {
   currentUser: { type: "admin"; email_id?: string } | { type: "employee"; id: number; name: string; role: string } | null;
@@ -17,6 +18,13 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
     if (typeof window !== "undefined" && "Notification" in window) {
       setNotifStatus(Notification.permission);
     }
+    const updatePerm = () => {
+      if (typeof window !== "undefined" && "Notification" in window) {
+        setNotifStatus(Notification.permission);
+      }
+    };
+    window.addEventListener("pats-permission-changed", updatePerm);
+    return () => window.removeEventListener("pats-permission-changed", updatePerm);
   }, []);
 
   const handleEnableNotifications = async () => {
@@ -24,10 +32,13 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
     setNotifStatus(granted ? "granted" : "denied");
     if (granted) {
       notificationManager.playTaskChime();
-      notificationManager.triggerVibration([150, 80, 150]);
+      notificationManager.triggerVibration([200, 100, 200]);
       notificationManager.sendSystemNotification("Notifications Enabled", {
-        body: "You will now receive high-priority floating mobile alerts for task assignments and system events."
+        body: "You will now receive high-priority desktop, website, and mobile alerts for task assignments and updates."
       });
+      if (currentUser && currentUser.type === "employee") {
+        notificationManager.subscribeToPushNotifications(currentUser.id).catch(() => {});
+      }
     }
   };
 
@@ -53,12 +64,12 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
         <div className="flex items-center gap-2.5 sm:gap-3">
           {currentUser && (
             <>
-              {/* Notification Permission Quick Action for Engineers */}
-              {currentUser.type === "employee" && notifStatus !== "granted" && (
+              {/* Notification Permission Quick Action */}
+              {notifStatus !== "granted" && (
                 <button
                   type="button"
                   onClick={handleEnableNotifications}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-medium transition-colors shadow-2xs cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50/90 hover:bg-blue-100 text-blue-700 text-xs font-semibold transition-colors shadow-2xs cursor-pointer animate-pulse"
                   title="Enable notifications to receive instant alerts when tasks are assigned"
                 >
                   <Bell className="h-3.5 w-3.5 text-blue-600" />
@@ -74,11 +85,14 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
                     <span className="text-blue-600 font-bold uppercase tracking-wider text-[10px]">{currentUser.email_id || "admin@pats.co.in"}</span>
                   ) : (
                     <span>
-                      Engineer: <strong className="text-slate-900 font-semibold">{currentUser.name}</strong>
+                      {currentUser.role || "Staff"}: <strong className="text-slate-900 font-semibold">{currentUser.name}</strong>
                     </span>
                   )}
                 </span>
               </div>
+
+              {/* Notification Center Dropdown */}
+              <NotificationDropdown />
 
               {/* Log Out button */}
               <button

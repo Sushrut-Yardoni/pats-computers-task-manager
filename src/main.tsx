@@ -9,17 +9,24 @@ if (typeof window !== "undefined") {
     console.info("[Notice]:", msg);
   };
 
-  // Register PWA service worker for Android mobile notifications and offline capability
+  // Register PWA service worker for Android mobile notifications, Desktop PWA and background capability
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
+    const registerSW = () => {
       navigator.serviceWorker.register('/sw.js')
         .then((reg) => {
           console.log('[PWA SW] Registered successfully with scope:', reg.scope);
+          reg.update().catch(() => {});
         })
         .catch((err) => {
           console.warn('[PWA SW] Registration failed:', err);
         });
-    });
+    };
+
+    if (document.readyState === 'complete') {
+      registerSW();
+    } else {
+      window.addEventListener('load', registerSW);
+    }
   }
 }
 

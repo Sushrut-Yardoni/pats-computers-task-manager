@@ -533,7 +533,8 @@ function initDb(): DatabaseSchema {
       { id: 101, name: "Rahul Sharma", role: "Desktop Engineer", joined_at: "2025-01-15", email_id: "rahul@pats.co.in", password: "pats@101" },
       { id: 102, name: "Sneha Patel", role: "Network Specialist", joined_at: "2025-01-15", email_id: "sneha@pats.co.in", password: "pats@102" },
       { id: 103, name: "David Miller", role: "System Administrator", joined_at: "2025-01-15", email_id: "david@pats.co.in", password: "pats@103" },
-      { id: 104, name: "Anjali Rao", role: "Software Support Expert", joined_at: "2025-01-15", email_id: "anjali@pats.co.in", password: "pats@104" }
+      { id: 104, name: "Anjali Rao", role: "Software Support Expert", joined_at: "2025-01-15", email_id: "anjali@pats.co.in", password: "pats@104" },
+      { id: 114, name: "Service Head", role: "Service Head", joined_at: "2025-01-15", email_id: "servicehead@pats.co.in", password: "pats@114" }
     ],
     tasks: [
       {
@@ -2782,6 +2783,9 @@ app.post("/api/tasks/:id/priority", async (req, res) => {
       const { data: employee } = await supabase.from("employees").select("name").eq("id", task.assigned_to).single();
 
       task.is_priority = nextPriority;
+      if (nextPriority) {
+        sendPushNotificationToEmployee(task.assigned_to, task).catch(() => {});
+      }
       res.json({
         message: `Task priority state toggled.`,
         task: {
@@ -2801,6 +2805,10 @@ app.post("/api/tasks/:id/priority", async (req, res) => {
     const task = db.tasks[taskIndex];
     task.is_priority = !task.is_priority;
     saveDb();
+
+    if (task.is_priority) {
+      sendPushNotificationToEmployee(task.assigned_to, task).catch(() => {});
+    }
 
     const query = `UPDATE tasks \nSET is_priority = ${task.is_priority ? 1 : 0} \nWHERE id = ${taskId};`;
     logSQL(query, 1);

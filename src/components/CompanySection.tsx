@@ -28,9 +28,10 @@ export default function CompanySection({
 }: CompanySectionProps) {
   // Determine user permissions
   const isAdmin = currentUser?.type === "admin";
-  const userRole = (currentUser?.role || "").toLowerCase();
+  const userRole = (currentUser?.role || "").toLowerCase().replace(/[\s_-]+/g, " ").trim();
   const isManager = userRole.includes("manager");
-  const isAdminOrManager = isAdmin || isManager;
+  const isServiceHead = userRole.includes("service head") || userRole.includes("servicehead");
+  const isAdminOrManager = isAdmin || isManager || isServiceHead;
   const currentEmployeeId = currentUser?.id;
 
   // Helper to verify if current user can MANAGE (create, edit, delete) assets for a company:

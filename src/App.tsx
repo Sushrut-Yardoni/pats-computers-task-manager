@@ -7,6 +7,7 @@ import AdminDashboard from "./components/AdminDashboard";
 import EmployeeDashboard from "./components/EmployeeDashboard";
 import AccountsDashboard from "./components/AccountsDashboard";
 import ManagerDashboard from "./components/ManagerDashboard";
+import ServiceHeadDashboard from "./components/ServiceHeadDashboard";
 import FloatingTaskNotification from "./components/FloatingTaskNotification";
 import { notificationManager } from "./utils/notificationManager";
 
@@ -32,8 +33,9 @@ export default function App() {
 
   // Floating assigned task notification state for service engineers
   const [floatingTask, setFloatingTask] = useState<Task | null>(null);
-  const seenTaskIdsRef = useRef<Set<number>>(new Set());
+  const seenTaskSignaturesRef = useRef<Set<string>>(new Set());
   const initialTaskSyncDoneRef = useRef(false);
+  const taskNotificationQueueRef = useRef<Task[]>([]);
 
   const [appNotice, setAppNotice] = useState<{ message: string; isError?: boolean } | null>(null);
   const showAppNotice = (message: string, isError = false) => {
@@ -94,46 +96,55 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Real-Time Task Assignment Detector: triggers floating notification & chime for engineers on Android mobile & desktop
+  // Real-Time Task Assignment Detector: triggers floating notification & chime across Website, Desktop & Mobile PWA
   useEffect(() => {
     if (!currentUser || currentUser.type !== "employee") {
       setFloatingTask(null);
+      notificationManager.clearAppBadge();
       return;
     }
 
     const currentEmpId = currentUser.id;
-    const myTasks = tasks.filter(t => t.assigned_to === currentEmpId);
+    const myTasks = tasks.filter((t) => t.assigned_to === currentEmpId);
+    const myActiveTasks = myTasks.filter((t) => t.status === "Pending" || t.status === "In Progress");
 
-    // Initial load: populate seen IDs without triggering alarm spam
+    // Always keep OS application badge in sync with pending/in-progress task count
+    notificationManager.updateAppBadge(myActiveTasks.length);
+
+    // Initial load: populate seen signatures for all current tasks
     if (!initialTaskSyncDoneRef.current) {
       if (tasks.length > 0) {
-        tasks.forEach(t => seenTaskIdsRef.current.add(t.id));
+        myTasks.forEach((t) => {
+          seenTaskSignaturesRef.current.add(`${t.id}#${t.assigned_to}#${t.status}#${t.is_priority ? "p1" : "p0"}`);
+        });
         initialTaskSyncDoneRef.current = true;
       }
       return;
     }
 
-    // Identify newly assigned task to this engineer (Pending or In Progress) that hasn't been shown
-    const newlyAssigned = myTasks.find(t => 
-      !seenTaskIdsRef.current.has(t.id) && 
-      (t.status === "Pending" || t.status === "In Progress")
-    );
+    // Identify tasks newly assigned, transferred, or marked high priority for this engineer
+    const newlyTriggeredTasks = myActiveTasks.filter((t) => {
+      const sig = `${t.id}#${t.assigned_to}#${t.status}#${t.is_priority ? "p1" : "p0"}`;
+      return !seenTaskSignaturesRef.current.has(sig);
+    });
 
-    if (newlyAssigned) {
-      // Mark all current tasks as seen
-      tasks.forEach(t => seenTaskIdsRef.current.add(t.id));
+    if (newlyTriggeredTasks.length > 0) {
+      newlyTriggeredTasks.forEach((t) => {
+        const sig = `${t.id}#${t.assigned_to}#${t.status}#${t.is_priority ? "p1" : "p0"}`;
+        seenTaskSignaturesRef.current.add(sig);
 
-      // Display floating in-app notification banner
-      setFloatingTask(newlyAssigned);
-
-      // Trigger system / Android native mobile push notification + chime + vibration
-      notificationManager.sendSystemNotification(`New Task Assigned: ${newlyAssigned.customer_name}`, {
-        body: `${newlyAssigned.problem_reported}${newlyAssigned.company_name ? ` • ${newlyAssigned.company_name}` : ""}${newlyAssigned.asset_id ? ` (Asset: ${newlyAssigned.asset_id})` : ""}`,
-        taskId: newlyAssigned.id
+        // System notification with chime, vibration, tab/favicon flashing
+        notificationManager.sendSystemNotification(`New Task Assigned: ${t.customer_name}`, {
+          body: `${t.problem_reported}${t.company_name ? ` • ${t.company_name}` : ""}${t.asset_id ? ` (Asset: ${t.asset_id})` : ""}`,
+          taskId: t.id,
+          isPriority: !!t.is_priority
+        });
       });
-    } else {
-      // Keep seen set up to date
-      tasks.forEach(t => seenTaskIdsRef.current.add(t.id));
+
+      // Display floating card or add to queue
+      const [firstTask, ...remaining] = newlyTriggeredTasks;
+      taskNotificationQueueRef.current.push(...remaining);
+      setFloatingTask(firstTask);
     }
   }, [tasks, currentUser]);
 
@@ -146,29 +157,46 @@ export default function App() {
     }
   }, [currentUser]);
 
-  // Handle Android notification click / deep link navigation when opened from closed state or notification tray
+  // Resilient tab wake-up, window focus, online reconnect, and Service Worker message listener
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    const handleReSync = () => {
+      fetchData(true);
+    };
 
-    // Check if launched from a notification URL (?taskId=123)
-    const params = new URLSearchParams(window.location.search);
-    const urlTaskId = params.get("taskId");
-    if (urlTaskId) {
-      const tId = Number(urlTaskId);
-      const found = tasks.find(t => t.id === tId);
-      if (found) {
-        setFloatingTask(found);
-        setEmployeeActiveTab("active");
+    window.addEventListener("focus", handleReSync);
+    window.addEventListener("online", handleReSync);
+    const visibilityHandler = () => {
+      if (!document.hidden) {
+        handleReSync();
       }
-      window.history.replaceState({}, document.title, window.location.pathname);
+    };
+    document.addEventListener("visibilitychange", visibilityHandler);
+
+    // Deep link navigation (?taskId=123)
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlTaskId = params.get("taskId");
+      if (urlTaskId) {
+        const tId = Number(urlTaskId);
+        const found = tasks.find((t) => t.id === tId);
+        if (found) {
+          setFloatingTask(found);
+          setEmployeeActiveTab("active");
+        }
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
     }
 
-    // Listen for direct messages from Service Worker when clicked
-    if ("serviceWorker" in navigator) {
-      const messageHandler = (event: MessageEvent) => {
-        if (event.data?.type === "PATS_OPEN_TASK" && event.data?.taskId) {
+    // Listen for direct messages from Service Worker (Background Push received or Notification clicked)
+    let messageHandler: ((event: MessageEvent) => void) | null = null;
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      messageHandler = (event: MessageEvent) => {
+        if (event.data?.type === "PATS_PUSH_RECEIVED") {
+          // Push arrived in background: immediately pull newest tasks without delay
+          handleReSync();
+        } else if (event.data?.type === "PATS_OPEN_TASK" && event.data?.taskId) {
           const tId = Number(event.data.taskId);
-          const found = tasks.find(t => t.id === tId);
+          const found = tasks.find((t) => t.id === tId);
           if (found) {
             setFloatingTask(found);
             setEmployeeActiveTab("active");
@@ -176,8 +204,16 @@ export default function App() {
         }
       };
       navigator.serviceWorker.addEventListener("message", messageHandler);
-      return () => navigator.serviceWorker.removeEventListener("message", messageHandler);
     }
+
+    return () => {
+      window.removeEventListener("focus", handleReSync);
+      window.removeEventListener("online", handleReSync);
+      document.removeEventListener("visibilitychange", visibilityHandler);
+      if (messageHandler && "serviceWorker" in navigator) {
+        navigator.serviceWorker.removeEventListener("message", messageHandler);
+      }
+    };
   }, [tasks]);
 
   const handleLogin = (user: typeof currentUser) => {
@@ -455,6 +491,20 @@ export default function App() {
               onTogglePriority={handleTogglePriority}
               onUpdatePassword={handleUpdatePassword}
             />
+          ) : (currentUser.role.toLowerCase().replace(/[\s_-]+/g, " ").trim() === "service head" || currentUser.role.toLowerCase().replace(/[\s_-]+/g, " ").trim() === "servicehead") ? (
+            <ServiceHeadDashboard
+              currentUser={currentUser}
+              tasks={tasks}
+              employees={employees}
+              companies={companies}
+              assets={assets}
+              onAssignTask={handleAssignTask}
+              refreshLogs={() => fetchData(true)}
+              onUpdateRemarks={handleUpdateRemarks}
+              onUpdateTaskDetails={handleUpdateTaskDetails}
+              onTogglePriority={handleTogglePriority}
+              onUpdatePassword={handleUpdatePassword}
+            />
           ) : (currentUser.role.toLowerCase() === "employee" || currentUser.role.toLowerCase() === "employee dept" || currentUser.role.toLowerCase() === "accounts" || currentUser.role.toLowerCase() === "accounts dept") ? (
             <AccountsDashboard
               currentUser={currentUser}
@@ -525,9 +575,19 @@ export default function App() {
               console.warn("Auto accept task error:", e);
             }
             setEmployeeActiveTab("active");
-            setFloatingTask(null);
+            if (taskNotificationQueueRef.current.length > 0) {
+              setFloatingTask(taskNotificationQueueRef.current.shift() || null);
+            } else {
+              setFloatingTask(null);
+            }
           }}
-          onDismiss={() => setFloatingTask(null)}
+          onDismiss={() => {
+            if (taskNotificationQueueRef.current.length > 0) {
+              setFloatingTask(taskNotificationQueueRef.current.shift() || null);
+            } else {
+              setFloatingTask(null);
+            }
+          }}
         />
 
         {appNotice && (

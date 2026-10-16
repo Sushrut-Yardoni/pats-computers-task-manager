@@ -3,13 +3,14 @@ import {
   CheckCircle, Clock, AlertTriangle, Phone, Mail, 
   X, Cpu, Calendar, CheckSquare, MessageSquare, ArrowRight, Play, Check, Navigation, Package,
   User, ShieldAlert, ChevronLeft, ChevronRight, Menu, AlertCircle, Settings, Building,
-  Shield, Laptop, Search, Bell, BellRing, Smartphone, Volume2
+  Shield, Laptop, Search, Bell, BellRing, Smartphone, Volume2, CheckCircle2, ShieldCheck, Music
 } from "lucide-react";
 import EmployeeTravelSection from "./EmployeeTravelSection";
 import { Task, Employee, Company, CompanyAsset } from "../types";
 import CompanySection from "./CompanySection";
 import { notificationManager } from "../utils/notificationManager";
 import { extractCleanPhoneNumber, getCleanTelUri, extractSecondaryContact } from "../utils/phoneUtils";
+import NotificationToneModal from "./NotificationToneModal";
 
 interface EmployeeDashboardProps {
   currentEmployee: { id: number; name: string; role: string };
@@ -63,11 +64,20 @@ export default function EmployeeDashboard({
   // Android Mobile Floating Notification Permission State
   const [notifPermission, setNotifPermission] = useState<string>("default");
   const [dismissedNotifBanner, setDismissedNotifBanner] = useState<boolean>(false);
+  const [isToneModalOpen, setIsToneModalOpen] = useState<boolean>(false);
+  const [selectedToneDetails, setSelectedToneDetails] = useState(
+    notificationManager.getSelectedToneDetails()
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
       setNotifPermission(Notification.permission);
     }
+    const onToneUpdate = () => {
+      setSelectedToneDetails(notificationManager.getSelectedToneDetails());
+    };
+    window.addEventListener("pats-tone-changed", onToneUpdate);
+    return () => window.removeEventListener("pats-tone-changed", onToneUpdate);
   }, []);
 
   const handleRequestNotif = async () => {
@@ -669,18 +679,24 @@ export default function EmployeeDashboard({
             </div>
           )}
 
-          {/* Card 3: Mobile & Desktop Notifications Preferences */}
+          {/* Card 3: Mobile, Desktop & Website Notifications Preferences */}
           <div className="bg-white border border-slate-200 rounded-2xl p-6 space-y-4 shadow-xs">
             <div className="border-b border-slate-100 pb-3 flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <Smartphone className="h-4 w-4 text-blue-600" />
                 <h4 className="text-sm font-bold text-slate-800">
-                  Mobile & Browser Notifications
+                  Real-Time Alerts & Notification Engine
                 </h4>
               </div>
               {notifPermission === "granted" ? (
-                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Notifications Active
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Alerts Fully Active
+                </span>
+              ) : notifPermission === "denied" ? (
+                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  Blocked in Browser Settings
                 </span>
               ) : (
                 <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
@@ -690,38 +706,136 @@ export default function EmployeeDashboard({
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              When enabled, your device will receive floating heads-up alerts with an audio chime and haptic vibration whenever a new task is assigned to you. Background push ensures alerts arrive even when your browser or app is closed.
+              PATS provides synchronized alerts across <strong>Website view</strong>, <strong>Desktop view</strong>, and <strong>Mobile device downloaded view (PWA)</strong>. When tasks are assigned or transferred to you, your device plays a melodic chime, triggers high-impact vibration, flashes the browser tab, and delivers heads-up floating push notifications even when your device is locked.
             </p>
 
-            <div className="flex flex-wrap items-center gap-3 pt-1">
+            {/* Diagnostics grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="block text-[10px] text-slate-400 font-mono uppercase">Audio Engine</span>
+                <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
+                  <Volume2 className="h-3 w-3 text-blue-600" />
+                  Melodic Chime Ready
+                </span>
+              </div>
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="block text-[10px] text-slate-400 font-mono uppercase">Haptics</span>
+                <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
+                  <Smartphone className="h-3 w-3 text-emerald-600" />
+                  Vibration Active
+                </span>
+              </div>
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="block text-[10px] text-slate-400 font-mono uppercase">Background Push</span>
+                <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
+                  <BellRing className="h-3 w-3 text-indigo-600" />
+                  FCM / Web Push
+                </span>
+              </div>
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <span className="block text-[10px] text-slate-400 font-mono uppercase">App Badges</span>
+                <span className="font-bold text-slate-800 flex items-center gap-1 mt-0.5">
+                  <ShieldCheck className="h-3 w-3 text-purple-600" />
+                  OS Taskbar / Dock
+                </span>
+              </div>
+            </div>
+
+            {/* Personal Notification Tone Selector Bar for Mobile Download View & Desktop */}
+            <div className="p-4 bg-gradient-to-r from-blue-50/80 via-indigo-50/50 to-slate-50 border border-blue-200/80 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <Music className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-bold text-slate-900">
+                      Personal Tone: {selectedToneDetails.name}
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-200">
+                      {selectedToneDetails.category}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    {selectedToneDetails.tagline} • Mobile Downloaded App & Browser
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    notificationManager.unlockAudioEngine();
+                    notificationManager.playTaskChime();
+                  }}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  title="Listen to active tone"
+                >
+                  <Volume2 className="h-3.5 w-3.5 text-blue-600" />
+                  <span>Preview</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsToneModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <Music className="h-3.5 w-3.5" />
+                  <span>Choose Right Tone</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 pt-2">
               {notifPermission !== "granted" ? (
                 <button
                   type="button"
                   onClick={handleRequestNotif}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-2 shadow-xs"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-colors cursor-pointer flex items-center gap-2 shadow-xs"
                 >
                   <Bell className="h-3.5 w-3.5" />
-                  <span>Enable Notifications</span>
+                  <span>Enable System Notifications</span>
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={handleServerPushTest}
-                  disabled={isTestingServerPush}
-                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs px-3.5 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                  title="Sends a test notification to verify background delivery"
-                >
-                  <BellRing className="h-3.5 w-3.5 text-blue-600" />
-                  <span>{isTestingServerPush ? "Sending Test..." : "Send Test Alert"}</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      notificationManager.unlockAudioEngine();
+                      notificationManager.playTaskChime();
+                      notificationManager.triggerVibration([400, 150, 400, 150, 600]);
+                      if (onTriggerTestNotification) {
+                        onTriggerTestNotification();
+                      }
+                      showEmpDashToast("Local notification, chime, and vibration triggered!");
+                    }}
+                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-3.5 py-2.5 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+                    title="Tests sound, vibration, tab alert, and in-app banner"
+                  >
+                    <Volume2 className="h-3.5 w-3.5" />
+                    <span>Test Local Alerts & Chime</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleServerPushTest}
+                    disabled={isTestingServerPush}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs px-3.5 py-2.5 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    title="Sends a background push to verify delivery when phone screen is locked"
+                  >
+                    <BellRing className="h-3.5 w-3.5 text-blue-600" />
+                    <span>{isTestingServerPush ? "Sending Server Push..." : "Test Background Device Push"}</span>
+                  </button>
+                </>
               )}
 
               <button
                 type="button"
                 onClick={() => setShowOlderAndroidGuide(!showOlderAndroidGuide)}
-                className="text-blue-600 hover:text-blue-700 text-xs font-medium cursor-pointer py-2 hover:underline"
+                className="text-blue-600 hover:text-blue-700 text-xs font-medium cursor-pointer py-2 hover:underline ml-auto"
               >
-                {showOlderAndroidGuide ? "Hide device setup guide" : "Android battery & background optimization guide →"}
+                {showOlderAndroidGuide ? "Hide device setup guide" : "Device notification optimization guide →"}
               </button>
             </div>
 
@@ -729,25 +843,25 @@ export default function EmployeeDashboard({
             {showOlderAndroidGuide && (
               <div className="mt-4 pt-4 border-t border-slate-100 space-y-3 text-xs text-slate-600 animate-in fade-in">
                 <h5 className="font-semibold text-slate-800">
-                  Android Background Alert Optimization Guide (Android 8–14, MIUI, ColorOS, Vivo, Samsung)
+                  Device Setup & Background Delivery Guide (Mobile PWA, Desktop & Web)
                 </h5>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <p className="font-semibold text-slate-800 mb-1">1. Battery Optimization</p>
+                    <p className="font-semibold text-slate-800 mb-1">1. Android Battery Optimization</p>
                     <p className="text-[11px] leading-relaxed">
-                      Go to phone <strong>Settings → Apps → PATS Tasks (or Chrome) → Battery</strong> and select <strong>Unrestricted</strong> or <strong>Don't optimize</strong> so Android delivers alerts promptly when phone is locked.
+                      Go to phone <strong>Settings → Apps → PATS Tasks (or Chrome) → Battery</strong> and select <strong>Unrestricted</strong> so Android doesn't put background push delivery to sleep.
                     </p>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <p className="font-semibold text-slate-800 mb-1">2. Floating / Pop on Screen</p>
+                    <p className="font-semibold text-slate-800 mb-1">2. Floating & Heads-up Banners</p>
                     <p className="text-[11px] leading-relaxed">
-                      In <strong>App Info → Notifications</strong>, verify that <strong>Allow notifications</strong> and <strong>Pop on screen / Heads-up</strong> are enabled.
+                      In <strong>App Info → Notifications</strong>, verify that <strong>Allow notifications</strong> and <strong>Pop on screen / Heads-up</strong> are toggled ON.
                     </p>
                   </div>
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <p className="font-semibold text-slate-800 mb-1">3. Autostart Permission</p>
+                    <p className="font-semibold text-slate-800 mb-1">3. Desktop & Downloaded View</p>
                     <p className="text-[11px] leading-relaxed">
-                      On Xiaomi MIUI, Vivo, or Oppo: enable <strong>Autostart</strong> in Manage Apps to guarantee background push reception when the app is swiped away.
+                      On Desktop (Chrome, Edge, Mac), verify Windows Focus Assist or Mac Do Not Disturb allows browser banners. For iPhone/iPad, use <strong>Share → Add to Home Screen</strong> to enable Push Notifications.
                     </p>
                   </div>
                 </div>
@@ -1452,6 +1566,16 @@ export default function EmployeeDashboard({
           </button>
         </div>
       )}
+
+      {/* 🎵 Personal Notification Tone Modal */}
+      <NotificationToneModal
+        isOpen={isToneModalOpen}
+        onClose={() => setIsToneModalOpen(false)}
+        onToneSaved={(tone) => {
+          setSelectedToneDetails(tone);
+          showEmpDashToast(`Personal notification tone set to "${tone.name}"!`);
+        }}
+      />
 
       </div>
     </div>

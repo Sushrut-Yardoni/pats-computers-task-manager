@@ -36,6 +36,111 @@ interface TaskManagementSectionProps {
   onTogglePriority?: (taskId: number) => Promise<void>;
 }
 
+interface DropdownOption {
+  value: string;
+  label: string;
+  sublabel?: string;
+}
+
+function CustomSearchableDropdown({
+  options,
+  value,
+  onChange,
+  placeholder,
+  searchPlaceholder
+}: {
+  options: DropdownOption[];
+  value: string;
+  onChange: (val: string) => void;
+  placeholder: string;
+  searchPlaceholder: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const filteredOptions = useMemo(() => {
+    if (!query.trim()) return options;
+    const q = query.toLowerCase();
+    return options.filter(o => 
+      o.label.toLowerCase().includes(q) || 
+      (o.sublabel && o.sublabel.toLowerCase().includes(q))
+    );
+  }, [options, query]);
+
+  const selectedOption = options.find(o => o.value === value);
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs text-left flex items-center justify-between focus:outline-none transition-colors cursor-pointer"
+      >
+        <span className={selectedOption ? "font-medium text-slate-900 truncate" : "text-slate-400 truncate"}>
+          {selectedOption ? selectedOption.label : placeholder}
+        </span>
+        <span className="text-slate-400 text-[10px] ml-2 shrink-0">▼</span>
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden animate-fade-in">
+          <div className="p-2 border-b border-slate-100 bg-slate-50">
+            <input
+              type="text"
+              placeholder={searchPlaceholder}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-blue-500"
+              autoFocus
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto p-1 space-y-0.5">
+            <button
+              type="button"
+              onClick={() => {
+                onChange("");
+                setIsOpen(false);
+                setQuery("");
+              }}
+              className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-slate-500 hover:bg-slate-100 transition-colors font-medium cursor-pointer"
+            >
+              {placeholder}
+            </button>
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-3 text-center text-xs text-slate-400 italic">
+                No matching options found.
+              </div>
+            ) : (
+              filteredOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    onChange(opt.value);
+                    setIsOpen(false);
+                    setQuery("");
+                  }}
+                  className={`w-full text-left px-2.5 py-2 rounded-xl text-xs transition-colors cursor-pointer flex flex-col ${
+                    value === opt.value
+                      ? "bg-blue-50 text-blue-900 font-bold border border-blue-100"
+                      : "text-slate-800 hover:bg-slate-100"
+                  }`}
+                >
+                  <span className="truncate">{opt.label}</span>
+                  {opt.sublabel && (
+                    <span className="text-[10px] text-slate-500 truncate font-mono mt-0.5">{opt.sublabel}</span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TaskManagementSection({
   tasks,
   employees,
@@ -780,19 +885,16 @@ export default function TaskManagementSection({
                       <span>Add Company</span>
                     </button>
                   </div>
-                  <select
+                  <CustomSearchableDropdown
+                    options={[
+                      ...availableCompanies.map(c => ({ value: String(c.id), label: c.name })),
+                      { value: "custom", label: "+ Other / Custom Client (No sheet)" }
+                    ]}
                     value={selectedCompanyId}
-                    onChange={(e) => handleCompanyChange(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors"
-                  >
-                    <option value="">-- Choose {contractType} Company --</option>
-                    {availableCompanies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                    <option value="custom">+ Other / Custom Client (No sheet)</option>
-                  </select>
+                    onChange={(val) => handleCompanyChange(val)}
+                    placeholder={`-- Choose ${contractType} Company --`}
+                    searchPlaceholder="Search company..."
+                  />
                 </div>
 
                 {/* 3. Asset ID Selector - ONLY ALLOWS SELECTING IF IT EXISTS IN THE SHEET */}
@@ -831,24 +933,21 @@ export default function TaskManagementSection({
                       Please select a company above to select an Asset ID from its registered sheet.
                     </div>
                   ) : companyAssets.length > 0 ? (
-                    <select
+                    <CustomSearchableDropdown
+                      options={[
+                        ...companyAssets.map(a => {
+                          const val = (a.asset_id || a.serial_no || String(a.id)).trim();
+                          const label = a.asset_id ? a.asset_id.trim() : (a.serial_no?.trim() || `Asset #${a.id}`);
+                          const sub = [a.asset, a.employee_name ? `User: ${a.employee_name}` : ""].filter(Boolean).join(" • ");
+                          return { value: val, label, sublabel: sub };
+                        }),
+                        { value: "none", label: "General Support (No Asset ID)" }
+                      ]}
                       value={selectedAssetId}
-                      onChange={(e) => handleAssetChange(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-sans"
-                    >
-                      <option value="">-- Choose Asset from Sheet --</option>
-                      {companyAssets.map((a) => {
-                        const val = (a.asset_id || a.serial_no || String(a.id)).trim();
-                        return (
-                          <option key={a.id} value={val}>
-                            {a.asset_id ? a.asset_id.trim() : (a.serial_no?.trim() || `Asset #${a.id}`)}
-                            {a.asset ? ` • ${a.asset}` : ""}
-                            {a.employee_name ? ` (${a.employee_name})` : ""}
-                          </option>
-                        );
-                      })}
-                      <option value="none">General Support (No Asset ID)</option>
-                    </select>
+                      onChange={(val) => handleAssetChange(val)}
+                      placeholder="-- Choose Asset from Sheet --"
+                      searchPlaceholder="Search asset ID, serial, user..."
+                    />
                   ) : (
                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2">
@@ -1267,23 +1366,21 @@ export default function TaskManagementSection({
                       </label>
                     </div>
                     {editTaskCompanyAssets.length > 0 ? (
-                      <select
+                      <CustomSearchableDropdown
+                        options={[
+                          ...editTaskCompanyAssets.map(a => {
+                            const val = (a.asset_id || a.serial_no || String(a.id)).trim();
+                            const label = a.asset_id ? a.asset_id.trim() : (a.serial_no?.trim() || `Asset #${a.id}`);
+                            const sub = [a.asset, a.employee_name ? `User: ${a.employee_name}` : ""].filter(Boolean).join(" • ");
+                            return { value: val, label, sublabel: sub };
+                          }),
+                          { value: "", label: "-- No Asset / General Support --" }
+                        ]}
                         value={editAssetId}
-                        onChange={(e) => setEditAssetId(e.target.value)}
-                        className="w-full bg-white border border-slate-200 hover:border-slate-300 focus:border-blue-500 px-3 py-2 rounded-xl text-xs focus:outline-none transition-colors font-sans"
-                      >
-                        <option value="">-- No Asset / General Support --</option>
-                        {editTaskCompanyAssets.map((a) => {
-                          const val = (a.asset_id || a.serial_no || String(a.id)).trim();
-                          return (
-                            <option key={a.id} value={val}>
-                              {a.asset_id ? a.asset_id.trim() : (a.serial_no?.trim() || `Asset #${a.id}`)}
-                              {a.asset ? ` • ${a.asset}` : ""}
-                              {a.employee_name ? ` (${a.employee_name})` : ""}
-                            </option>
-                          );
-                        })}
-                      </select>
+                        onChange={(val) => setEditAssetId(val)}
+                        placeholder="-- No Asset / General Support --"
+                        searchPlaceholder="Search asset..."
+                      />
                     ) : (
                       <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] flex items-start gap-2">
                         <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
