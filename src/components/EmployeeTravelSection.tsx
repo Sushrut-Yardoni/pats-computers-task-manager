@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Eye, X, Calendar, User, Phone, MapPin, ClipboardList, Clock, Package, AlertCircle } from "lucide-react";
+import { Eye, X, Calendar, User, Phone, MapPin, ClipboardList, Clock, Package, AlertCircle, Building, Lock } from "lucide-react";
 import { OfflineTravel, Task } from "../types";
 import { extractCleanPhoneNumber, getCleanTelUri } from "../utils/phoneUtils";
 
@@ -267,54 +267,69 @@ export default function EmployeeTravelSection({ myTasks, employeeId, petrolPrice
             <div className="p-6 space-y-5 overflow-y-auto flex-1 text-slate-800">
               {activeTaskDetails ? (
                 <div className="space-y-4">
-                  
-                  {/* Customer Information Cards */}
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150 space-y-3 font-sans">
-                    <span className="text-[10px] font-extrabold tracking-wider uppercase text-slate-400 block">Customer Information</span>
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div className="space-y-0.5">
-                        <span className="text-slate-500 font-semibold block">Customer Name</span>
-                        <div className="font-extrabold text-slate-800 flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5 text-slate-400" />
-                          {activeTaskDetails.customer_name}
-                        </div>
+                  {(!activeTaskDetails.accepted_at || activeTaskDetails.status === "Pending") ? (
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150 space-y-2 font-sans">
+                      <span className="text-[10px] font-extrabold tracking-wider uppercase text-slate-400 block">Company Information</span>
+                      <div className="text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                        <Building className="h-4 w-4 text-blue-600" />
+                        {activeTaskDetails.company_name || activeTaskDetails.customer_name || "Assigned Company"}
                       </div>
-                      <div className="space-y-0.5">
-                        <span className="text-slate-500 font-semibold block">Contact Details</span>
-                        <div className="font-extrabold text-slate-800 flex items-center gap-1.5 font-mono">
-                          <Phone className="h-3.5 w-3.5 text-slate-400" />
-                          {extractCleanPhoneNumber(activeTaskDetails.contact_details) ? (
-                            <a 
-                              href={getCleanTelUri(activeTaskDetails.contact_details)} 
-                              className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-colors"
-                            >
-                              {extractCleanPhoneNumber(activeTaskDetails.contact_details)}
-                            </a>
-                          ) : (
-                            <span className="text-slate-400 font-normal">N/A</span>
-                          )}
-                        </div>
+                      <div className="text-[11px] text-slate-500 italic flex items-center gap-1.5 pt-1">
+                        <Lock className="h-3 w-3 text-slate-400" />
+                        Contact details, address, and problem description locked until task is accepted.
                       </div>
                     </div>
-                  </div>
-
-                  {/* Problem reported card */}
-                  <div className="space-y-1 bg-amber-50/55 border border-amber-150 p-4 rounded-2xl font-sans">
-                    <span className="text-[10px] font-extrabold tracking-wider uppercase text-amber-700 block">Problem Reported</span>
-                    <p className="text-xs font-semibold text-slate-800 leading-relaxed mt-1">
-                      {activeTaskDetails.problem_reported}
-                    </p>
-                  </div>
-
-                  {/* Address */}
-                  {activeTaskDetails.address && (
-                    <div className="space-y-1 font-sans">
-                      <span className="text-[10px] font-extrabold tracking-wider uppercase text-slate-400 block">Service Location Address</span>
-                      <div className="text-xs font-semibold text-slate-700 flex items-start gap-1.5 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-150">
-                        <MapPin className="h-3.5 w-3.5 text-indigo-500 shrink-0 mt-0.5" />
-                        <span>{activeTaskDetails.address}</span>
+                  ) : (
+                    <>
+                      {/* Customer Information Cards */}
+                      <div className="bg-slate-50 p-4 rounded-2xl border border-slate-150 space-y-3 font-sans">
+                        <span className="text-[10px] font-extrabold tracking-wider uppercase text-slate-400 block">Customer Information</span>
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                          <div className="space-y-0.5">
+                            <span className="text-slate-500 font-semibold block">Customer Name</span>
+                            <div className="font-extrabold text-slate-800 flex items-center gap-1.5">
+                              <User className="h-3.5 w-3.5 text-slate-400" />
+                              {activeTaskDetails.customer_name}
+                            </div>
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-slate-500 font-semibold block">Contact Details</span>
+                            <div className="font-extrabold text-slate-800 flex items-center gap-1.5 font-mono">
+                              <Phone className="h-3.5 w-3.5 text-slate-400" />
+                              {extractCleanPhoneNumber(activeTaskDetails.contact_details) ? (
+                                <a 
+                                  href={getCleanTelUri(activeTaskDetails.contact_details)} 
+                                  className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-colors"
+                                >
+                                  {extractCleanPhoneNumber(activeTaskDetails.contact_details)}
+                                </a>
+                              ) : (
+                                <span className="text-slate-400 font-normal">N/A</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
+
+                      {/* Problem reported card */}
+                      <div className="space-y-1 bg-amber-50/55 border border-amber-150 p-4 rounded-2xl font-sans">
+                        <span className="text-[10px] font-extrabold tracking-wider uppercase text-amber-700 block">Problem Reported</span>
+                        <p className="text-xs font-semibold text-slate-800 leading-relaxed mt-1">
+                          {activeTaskDetails.problem_reported}
+                        </p>
+                      </div>
+
+                      {/* Address */}
+                      {activeTaskDetails.address && (
+                        <div className="space-y-1 font-sans">
+                          <span className="text-[10px] font-extrabold tracking-wider uppercase text-slate-400 block">Service Location Address</span>
+                          <div className="text-xs font-semibold text-slate-700 flex items-start gap-1.5 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-150">
+                            <MapPin className="h-3.5 w-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                            <span>{activeTaskDetails.address}</span>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {/* Materials Carrying / Carried for the Call */}

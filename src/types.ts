@@ -135,6 +135,70 @@ export interface Company {
   created_by: string;
   allocated_engineer_id?: number | null;
   allocated_engineer_name?: string | null;
+  network_diagram_url?: string | null;
+  network_diagram_updated_at?: string | null;
+  network_diagram_updated_by?: string | null;
+  network_diagram_notes?: string | null;
+  network_diagram_data?: NetworkDiagramData | null;
+}
+
+export type NetworkComponentType = 
+  | "router" 
+  | "firewall" 
+  | "switch" 
+  | "core_switch" 
+  | "access_point" 
+  | "modem" 
+  | "server" 
+  | "workstation" 
+  | "laptop" 
+  | "printer" 
+  | "cctv" 
+  | "voip" 
+  | "cloud";
+
+export interface NetworkNode {
+  id: string;
+  type: NetworkComponentType;
+  label: string;
+  ip?: string;
+  subnet?: string;
+  mac?: string;
+  location?: string;
+  status?: "online" | "offline" | "standby";
+  x: number;
+  y: number;
+  notes?: string;
+  ports_count?: number; // Total physical ports (for switches, routers, patch panels)
+}
+
+export interface NetworkConnection {
+  id: string;
+  fromId: string;
+  toId: string;
+  type?: "cat6" | "fiber" | "wifi" | "uplink";
+  label?: string;
+  fromPort?: string;
+  toPort?: string;
+}
+
+export interface NetworkSubnetZone {
+  id: string;
+  name: string;
+  vlan?: string;
+  cidr?: string;
+  color?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface NetworkDiagramData {
+  nodes: NetworkNode[];
+  connections: NetworkConnection[];
+  zones?: NetworkSubnetZone[];
+  updated_at?: string;
 }
 
 export interface CompanyAsset {
@@ -205,39 +269,63 @@ export function isTargetMatch(targetRaw: string, userNameRaw: string, userEmailR
   return false;
 }
 
-export interface EngineerLiveLocation {
-  employee_id: number;
-  employee_name: string;
-  employee_role: string;
-  latitude: number;
-  longitude: number;
-  accuracy: number; // In meters (GPS precision)
-  altitude?: number | null;
-  altitude_accuracy?: number | null;
-  heading?: number | null; // 0 - 360 degrees
-  speed?: number | null; // in km/h
-  battery_level?: number | null; // percentage 0 - 100
-  is_charging?: boolean;
-  status: "on-duty" | "in-transit" | "stationary" | "idle" | "off-duty";
-  device_type: "installed_pwa" | "mobile_browser" | "desktop";
-  is_pwa_installed?: boolean;
-  address?: string;
-  current_task_id?: number | null;
-  current_task_title?: string | null;
+export type SoftwareCategory = 
+  | "Antivirus & Security"
+  | "Productivity & Office"
+  | "OS & System Drivers"
+  | "Browsers & Web"
+  | "Utilities & Tools"
+  | "Remote Support"
+  | "Accounting & ERP"
+  | "Other";
+
+export type SoftwarePlatform = "Windows" | "macOS" | "Linux" | "Android" | "All";
+
+export interface SoftwareItem {
+  id: number;
+  name: string;
+  version: string;
+  category: SoftwareCategory;
+  platform: SoftwarePlatform;
+  description?: string;
+  storage_type: "file" | "url";
+  file_url?: string;
+  file_name?: string;
+  original_file_name?: string;
+  file_size?: string;
+  license_key?: string;
+  silent_install_command?: string;
+  installation_notes?: string;
+  created_by: string;
+  created_by_role: string;
+  created_at: string;
   updated_at: string;
-  phone?: string | null;
 }
 
-export interface LocationBreadcrumb {
+export interface SoftwareGroupItem {
+  software_id: number;
+  is_mandatory: boolean;
+  notes?: string;
+}
+
+export type TargetProfile = 
+  | "Standard Workstation"
+  | "Executive / Laptop"
+  | "Accounting & Finance"
+  | "Design & CAD"
+  | "Development"
+  | "Retail / POS"
+  | "Custom";
+
+export interface SoftwareGroup {
   id: number;
-  employee_id: number;
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-  speed?: number | null;
-  heading?: number | null;
-  timestamp: string;
-  address?: string;
-  battery_level?: number | null;
+  name: string;
+  description: string;
+  target_profile: TargetProfile;
+  items: SoftwareGroupItem[];
+  created_by: string;
+  created_by_role: string;
+  created_at: string;
+  updated_at: string;
 }
 

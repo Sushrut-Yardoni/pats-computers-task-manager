@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { 
   CheckCircle, Clock, AlertTriangle, Phone, Mail, 
-  X, Cpu, Calendar, CheckSquare, MessageSquare, ArrowRight, Play, Check, Navigation, Package,
+  X, Cpu, Calendar, CheckSquare, MessageSquare, ArrowRight, Play, Check, Navigation, Package, FileArchive,
   User, ShieldAlert, ChevronLeft, ChevronRight, Menu, AlertCircle, Settings, Building,
-  Shield, Laptop, Search, Bell, BellRing, Smartphone, Volume2, CheckCircle2, ShieldCheck, Music
+  Shield, Laptop, Search, Bell, BellRing, Smartphone, Volume2, CheckCircle2, ShieldCheck, Music, Lock,
+  Network
 } from "lucide-react";
 import EmployeeTravelSection from "./EmployeeTravelSection";
-import { Task, Employee, Company, CompanyAsset } from "../types";
+import { Task, Employee, Company, CompanyAsset, NetworkDiagramData } from "../types";
 import CompanySection from "./CompanySection";
 import { notificationManager } from "../utils/notificationManager";
 import { extractCleanPhoneNumber, getCleanTelUri, extractSecondaryContact } from "../utils/phoneUtils";
 import NotificationToneModal from "./NotificationToneModal";
+import NotificationUnblockModal from "./NotificationUnblockModal";
+import EngineerSoftwareKitModal from "./EngineerSoftwareKitModal";
+import NetworkDiagramBuilder from "./NetworkDiagramBuilder";
 
 interface EmployeeDashboardProps {
   currentEmployee: { id: number; name: string; role: string };
@@ -65,9 +69,45 @@ export default function EmployeeDashboard({
   const [notifPermission, setNotifPermission] = useState<string>("default");
   const [dismissedNotifBanner, setDismissedNotifBanner] = useState<boolean>(false);
   const [isToneModalOpen, setIsToneModalOpen] = useState<boolean>(false);
+  const [isUnblockModalOpen, setIsUnblockModalOpen] = useState<boolean>(false);
+  const [isSoftwareKitOpen, setIsSoftwareKitOpen] = useState<boolean>(false);
+  const [diagramModalCompany, setDiagramModalCompany] = useState<Company | null>(null);
   const [selectedToneDetails, setSelectedToneDetails] = useState(
     notificationManager.getSelectedToneDetails()
   );
+
+  const handleSaveDiagramForCompany = async (data: { diagram_data: NetworkDiagramData; image_data?: string; notes?: string }) => {
+    if (!diagramModalCompany) return;
+    const payload: any = {
+      diagram_data: data.diagram_data,
+      notes: data.notes !== undefined ? data.notes : (diagramModalCompany.network_diagram_notes || null),
+      updated_by: `${currentEmployee?.name || "Field Engineer"} (Field Engineer)`
+    };
+    if (data.image_data) {
+      payload.image_data = data.image_data;
+      payload.image_name = `${diagramModalCompany.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_topology.png`;
+    }
+    const resp = await fetch(`/api/companies/${diagramModalCompany.id}/network-diagram`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to save network diagram");
+    }
+    const updatedComp: Company = await resp.json();
+    setDiagramModalCompany(updatedComp);
+    showEmpDashToast(`Network topology saved for "${updatedComp.name}"!`);
+    if (onSyncCompany) {
+      await onSyncCompany();
+    }
+  };
+
+  const isStandalone =
+    typeof window !== "undefined" &&
+    (window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone === true);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -76,13 +116,39 @@ export default function EmployeeDashboard({
     const onToneUpdate = () => {
       setSelectedToneDetails(notificationManager.getSelectedToneDetails());
     };
+    const onPermChange = (e: any) => {
+      const p =
+        e.detail?.permission ||
+        (typeof window !== "undefined" && "Notification" in window
+          ? Notification.permission
+          : "default");
+      setNotifPermission(p);
+      if (p === "granted") {
+        notificationManager.subscribeToPushNotifications(currentEmployee.id);
+      }
+    };
     window.addEventListener("pats-tone-changed", onToneUpdate);
-    return () => window.removeEventListener("pats-tone-changed", onToneUpdate);
-  }, []);
+    window.addEventListener("pats-permission-changed", onPermChange);
+    return () => {
+      window.removeEventListener("pats-tone-changed", onToneUpdate);
+      window.removeEventListener("pats-permission-changed", onPermChange);
+    };
+  }, [currentEmployee.id]);
 
   const handleRequestNotif = async () => {
+    if (
+      typeof window !== "undefined" &&
+      "Notification" in window &&
+      Notification.permission === "denied"
+    ) {
+      setIsUnblockModalOpen(true);
+      return;
+    }
     const granted = await notificationManager.requestPermission();
-    setNotifPermission(granted ? "granted" : "denied");
+    const currentPerm = notificationManager.getPermissionStatus();
+    setNotifPermission(
+      currentPerm === "granted" ? "granted" : currentPerm === "denied" ? "denied" : "default"
+    );
     if (granted) {
       // Auto subscribe device for background push
       await notificationManager.subscribeToPushNotifications(currentEmployee.id);
@@ -91,7 +157,15 @@ export default function EmployeeDashboard({
         onTriggerTestNotification();
       }
     } else {
-      showEmpDashToast("Notification permission was denied in your browser settings.", true);
+      if (currentPerm === "denied") {
+        setIsUnblockModalOpen(true);
+        showEmpDashToast(
+          isStandalone
+            ? "Notifications disabled in phone settings. Tap to unblock."
+            : "Notification permission was blocked. Tap to view unblock steps.",
+          true
+        );
+      }
     }
   };
 
@@ -266,13 +340,20 @@ export default function EmployeeDashboard({
       }
       if (empSearchQuery.trim()) {
         const q = empSearchQuery.toLowerCase();
-        const m1 = task.customer_name?.toLowerCase().includes(q);
-        const m2 = task.company_name?.toLowerCase().includes(q);
-        const m3 = task.asset_id?.toLowerCase().includes(q);
-        const m4 = task.problem_reported?.toLowerCase().includes(q);
-        const m5 = task.address?.toLowerCase().includes(q);
-        const m6 = String(task.id).includes(q);
-        if (!m1 && !m2 && !m3 && !m4 && !m5 && !m6) return false;
+        const isPending = task.status === "Pending" || !task.accepted_at;
+        if (isPending) {
+          const mComp = (task.company_name || task.customer_name || "").toLowerCase().includes(q);
+          const mId = String(task.id).includes(q);
+          if (!mComp && !mId) return false;
+        } else {
+          const m1 = task.customer_name?.toLowerCase().includes(q);
+          const m2 = task.company_name?.toLowerCase().includes(q);
+          const m3 = task.asset_id?.toLowerCase().includes(q);
+          const m4 = task.problem_reported?.toLowerCase().includes(q);
+          const m5 = task.address?.toLowerCase().includes(q);
+          const m6 = String(task.id).includes(q);
+          if (!m1 && !m2 && !m3 && !m4 && !m5 && !m6) return false;
+        }
       }
       return true;
     });
@@ -363,6 +444,8 @@ export default function EmployeeDashboard({
       const updatedTask = tasks.find(t => t.id === taskId);
       if (updatedTask) {
         setSelectedTask({ ...updatedTask, status: "In Progress", accepted_at: new Date().toISOString() });
+      } else if (selectedTask && selectedTask.id === taskId) {
+        setSelectedTask(prev => prev ? { ...prev, status: "In Progress", accepted_at: new Date().toISOString() } : null);
       } else {
         handleCloseModal();
       }
@@ -508,6 +591,16 @@ export default function EmployeeDashboard({
 
           <button
             type="button"
+            onClick={() => setIsSoftwareKitOpen(true)}
+            className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer text-slate-600 hover:text-slate-800 border border-transparent font-medium hover:bg-slate-50"
+            title="Open Software & Provisioning Kit"
+          >
+            <Package className="h-4 w-4 text-teal-600 shrink-0" />
+            {!isSidebarCollapsed && <span className="font-sans font-bold">Software Kit</span>}
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("profile")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
               activeTab === "profile"
@@ -533,6 +626,17 @@ export default function EmployeeDashboard({
               <p className="text-xs text-slate-500 mt-1 font-sans font-medium">
                 Employee ID: #{currentEmployee.id}
               </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSoftwareKitOpen(true)}
+                className="px-4 py-2.5 bg-gradient-to-r from-teal-700 to-emerald-700 hover:from-teal-800 hover:to-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-all shrink-0"
+                title="Download software groups in ZIP or get license keys"
+              >
+                <FileArchive className="h-4 w-4" />
+                <span>Software Kit (Download ZIP)</span>
+              </button>
             </div>
           </section>
         )}
@@ -694,10 +798,19 @@ export default function EmployeeDashboard({
                   Alerts Fully Active
                 </span>
               ) : notifPermission === "denied" ? (
-                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
-                  <AlertCircle className="h-3.5 w-3.5" />
-                  Blocked in Browser Settings
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsUnblockModalOpen(true)}
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 active:scale-98 text-rose-700 border border-rose-200 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                  title="Tap to view step-by-step unblock instructions"
+                >
+                  <ShieldAlert className="h-3.5 w-3.5 text-rose-600" />
+                  <span>
+                    {isStandalone
+                      ? "Disabled in Phone Settings • Tap to Unblock"
+                      : "Blocked in Browser • Tap to Unblock"}
+                  </span>
+                </button>
               ) : (
                 <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
                   Permission Required
@@ -788,11 +901,22 @@ export default function EmployeeDashboard({
             </div>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
-              {notifPermission !== "granted" ? (
+              {notifPermission === "denied" ? (
+                <button
+                  type="button"
+                  onClick={() => setIsUnblockModalOpen(true)}
+                  className="bg-rose-600 hover:bg-rose-700 active:scale-98 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-xs"
+                >
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  <span>
+                    {isStandalone ? "Unblock in Phone Settings" : "Unblock Browser Notifications"}
+                  </span>
+                </button>
+              ) : notifPermission !== "granted" ? (
                 <button
                   type="button"
                   onClick={handleRequestNotif}
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-colors cursor-pointer flex items-center gap-2 shadow-xs"
+                  className="bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 shadow-xs"
                 >
                   <Bell className="h-3.5 w-3.5" />
                   <span>Enable System Notifications</span>
@@ -1018,9 +1142,81 @@ export default function EmployeeDashboard({
             </div>
           ) : (
             displayedMyTasks.map((task) => {
-            const isPending = task.status === "Pending";
+            const isPending = task.status === "Pending" || !task.accepted_at;
             const isInProgress = task.status === "In Progress";
             const isFinished = task.status === "Finished";
+
+            // If task is not yet accepted, engineer sees ONLY the company name
+            if (isPending) {
+              return (
+                <div
+                  key={task.id}
+                  onClick={() => handleOpenTaskDetails(task)}
+                  className="bg-white border-2 border-amber-200/80 hover:border-blue-500 rounded-2xl p-5 hover:bg-slate-50/20 transition-all shadow-xs cursor-pointer flex flex-col justify-between group relative overflow-hidden"
+                >
+                  <div className="absolute top-0 right-0 w-20 h-1 bg-amber-400 group-hover:bg-blue-600 transition-all" />
+                  
+                  <div>
+                    <div className="flex items-center justify-between mb-3.5 flex-wrap gap-1.5">
+                      <span className="font-mono text-xs text-indigo-600 font-extrabold select-all">
+                        #{task.id}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-[9px] font-bold text-amber-700 ring-1 ring-amber-200 uppercase tracking-wider">
+                          Pending Acceptance
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Display ONLY company name until accepted */}
+                    <div className="space-y-1">
+                      <div className="text-[10px] font-extrabold text-blue-600 flex items-center gap-1.5 uppercase tracking-wider font-mono">
+                        <Building className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                        <span>Company</span>
+                      </div>
+                      <h3 className="font-display font-black text-slate-900 text-base leading-snug">
+                        {task.company_name || task.customer_name || "Assigned Company"}
+                      </h3>
+                    </div>
+
+                    {/* Locked notice for Engineer */}
+                    <div className="mt-3.5 p-3.5 bg-blue-50/60 border border-blue-200/70 rounded-xl text-xs space-y-1.5">
+                      <div className="flex items-center gap-1.5 text-blue-900 font-bold text-[11px]">
+                        <Lock className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                        <span>Details Locked Until Accepted</span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-relaxed font-sans">
+                        Accept this task to unlock customer contact person, phone number, site address, and reported problem.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3.5 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                    <span className="flex items-center gap-1 select-all">
+                      <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                      {new Date(task.assigned_at).toLocaleDateString()}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAccept(task.id);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-extrabold text-[10.5px] shadow-sm flex items-center gap-1.5 transition-all cursor-pointer uppercase tracking-wider"
+                      >
+                        <Play className="h-3 w-3 fill-current" />
+                        <span>Accept Task</span>
+                      </button>
+                      <span className="text-blue-600 group-hover:text-blue-800 font-sans font-bold hover:underline flex items-center gap-0.5 text-xs">
+                        Inspect
+                        <ArrowRight className="h-3.5 w-3.5 ml-0.5" />
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
 
             return (
               <div
@@ -1060,11 +1256,6 @@ export default function EmployeeDashboard({
                       {task.is_repeat && (
                         <span className="inline-flex items-center rounded-md bg-purple-50 px-1.5 py-0.5 text-[8.5px] font-extrabold text-purple-700 ring-1 ring-purple-200 uppercase tracking-wide">
                           🔄 Repeat Call
-                        </span>
-                      )}
-                      {isPending && (
-                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-0.5 text-[9px] font-bold text-amber-700 ring-1 ring-amber-200 uppercase tracking-wider">
-                          New assigned
                         </span>
                       )}
                       {isInProgress && (
@@ -1152,236 +1343,369 @@ export default function EmployeeDashboard({
             {/* Modal Body Scroll */}
             <div className="p-6 overflow-y-auto space-y-5">
               
-              {/* Client & Contract Context Banner */}
-              <div className="space-y-2 bg-slate-50 p-4 border border-slate-200 rounded-xl font-sans">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <span className="text-[10px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">
-                    Client Context Details
-                  </span>
-                  {selectedTask.contract_type && (
-                    <span className={`px-2.5 py-0.5 text-[10px] font-black uppercase rounded-md tracking-wider border flex items-center gap-1 ${
-                      selectedTask.contract_type === "AMC"
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
-                        : "bg-amber-50 text-amber-800 border-amber-300"
-                    }`}>
-                      {selectedTask.contract_type === "AMC" ? <Shield className="h-3 w-3 text-emerald-600" /> : <Building className="h-3 w-3 text-amber-600" />}
-                      <span>{selectedTask.contract_type === "AMC" ? "AMC Contract Client" : "Non-AMC Direct Support"}</span>
-                    </span>
-                  )}
-                </div>
-
-                {selectedTask.company_name && selectedTask.company_name !== selectedTask.customer_name && (
-                  <div className="text-xs font-bold text-slate-600 flex items-center gap-1.5 pt-0.5">
-                    <Building className="h-4 w-4 text-slate-400 shrink-0" />
-                    <span>Company: <strong className="text-slate-900 font-extrabold">{selectedTask.company_name}</strong></span>
-                  </div>
-                )}
-
-                <h4 className="text-base font-extrabold text-slate-900 select-all">
-                  {selectedTask.customer_name}
-                </h4>
-                
-                <div className="flex flex-col sm:flex-row gap-2 pt-1 text-xs text-slate-600 font-sans">
-                  {extractCleanPhoneNumber(selectedTask.contact_details) && (
-                    <a href={getCleanTelUri(selectedTask.contact_details)} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
-                      <Phone className="h-3.5 w-3.5 text-slate-400" />
-                      <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-all">
-                        {extractCleanPhoneNumber(selectedTask.contact_details)}
-                      </span>
-                    </a>
-                  )}
-                  {extractSecondaryContact(selectedTask.contact_details) && (
-                    <>
-                      <span className="hidden sm:inline text-slate-300">|</span>
-                      <span className="flex items-center gap-1.5 select-all text-slate-500">
-                        <Mail className="h-3.5 w-3.5 text-slate-400" />
-                        <span>{extractSecondaryContact(selectedTask.contact_details)}</span>
-                      </span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Hardware Asset Technical Specifications Card */}
-              {(() => {
-                const matchedAsset = selectedTask.asset_id ? (
-                  assets.find(a => (selectedTask.company_id ? a.company_id === selectedTask.company_id : true) && a.asset_id?.toLowerCase() === selectedTask.asset_id?.toLowerCase()) ||
-                  assets.find(a => a.asset_id?.toLowerCase() === selectedTask.asset_id?.toLowerCase())
-                ) : null;
-
-                return (
-                  <div className="bg-indigo-50/50 border border-indigo-200/80 rounded-xl p-4 space-y-3 font-sans">
+              {/* Task Details - If pending acceptance, engineer sees ONLY the company name */}
+              {(selectedTask.status === "Pending" || !selectedTask.accepted_at) ? (
+                <>
+                  {/* Company Details Only Banner */}
+                  <div className="space-y-3 bg-gradient-to-br from-blue-50/90 via-indigo-50/40 to-slate-50 p-5 border border-blue-200/80 rounded-2xl font-sans">
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
-                          <Laptop className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-mono uppercase tracking-widest text-indigo-600 font-extrabold block">Hardware Asset Assigned</span>
-                          <h5 className="font-mono text-sm font-black text-indigo-950">
-                            {selectedTask.asset_id ? `Asset ID: #${selectedTask.asset_id}` : "General Support Call (No Asset ID)"}
-                          </h5>
-                        </div>
-                      </div>
-                      {selectedTask.asset_id && (
-                        <span className={`px-2 py-0.5 text-[9.5px] font-black uppercase rounded-md border ${
-                          (matchedAsset?.amc_status || (selectedTask.contract_type === "Non AMC" ? "Not in AMC" : "In AMC")) === "Not in AMC"
-                            ? "bg-amber-100 text-amber-800 border-amber-300"
-                            : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                      <span className="text-[10px] text-blue-700 font-mono uppercase tracking-widest font-extrabold flex items-center gap-1.5">
+                        <Building className="h-4 w-4 text-blue-600 shrink-0" />
+                        Company Details
+                      </span>
+                      <span className="px-2.5 py-0.5 text-[9.5px] font-black uppercase rounded-md tracking-wider border flex items-center gap-1 bg-amber-50 text-amber-800 border-amber-300">
+                        <Lock className="h-3 w-3 text-amber-600" />
+                        Awaiting Technician Acceptance
+                      </span>
+                    </div>
+
+                    <div className="pt-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 font-mono block">Assigned Company</span>
+                      <h4 className="text-xl font-black text-slate-900 select-all mt-0.5">
+                        {selectedTask.company_name || selectedTask.customer_name || "Assigned Company"}
+                      </h4>
+                    </div>
+
+                    <div className="pt-2 border-t border-blue-200/60 flex items-center gap-2 text-xs text-slate-600">
+                      <Lock className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                      <span className="text-[11px] font-medium leading-relaxed">
+                        Customer contact person name, phone number, and email will be revealed immediately once you accept this ticket.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Hardware Asset Privacy Card */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center gap-3 font-sans">
+                    <div className="p-2 bg-slate-100 text-slate-500 rounded-lg shrink-0">
+                      <Lock className="h-4 w-4 text-slate-500" />
+                    </div>
+                    <div>
+                      <span className="text-[9px] font-mono uppercase tracking-widest text-slate-500 font-extrabold block">Hardware Asset Assigned</span>
+                      <p className="text-xs text-slate-600 font-medium mt-0.5">
+                        Target hardware model, specifications, device bay location, and IP address unlock upon accepting.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Problem Diagnosis Privacy Card */}
+                  <div className="space-y-1.5 bg-amber-50/50 border border-amber-200/80 p-4 rounded-xl font-sans">
+                    <div className="flex items-center gap-1.5 text-amber-800">
+                      <Lock className="h-4 w-4 text-amber-600 shrink-0" />
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">
+                        Reported Problem / Fault Diagnosis
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-900/80 bg-white/90 border border-amber-200/60 p-3.5 rounded-xl leading-relaxed italic">
+                      Problem description and fault diagnostics are hidden until task acceptance. Accept this ticket to view the reported problem and prepare required materials.
+                    </p>
+                  </div>
+
+                  {/* Location Address Privacy Card */}
+                  <div className="space-y-1 bg-slate-50 p-4 border border-slate-200 rounded-xl font-sans">
+                    <span className="text-[10px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">Customer Location Address</span>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 pt-1">
+                      <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="italic">Full dispatch address and navigation guidance will unlock after you accept this ticket.</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Client & Contract Context Banner */}
+                  <div className="space-y-2 bg-slate-50 p-4 border border-slate-200 rounded-xl font-sans">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <span className="text-[10px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">
+                        Client Context Details
+                      </span>
+                      {selectedTask.contract_type && (
+                        <span className={`px-2.5 py-0.5 text-[10px] font-black uppercase rounded-md tracking-wider border flex items-center gap-1 ${
+                          selectedTask.contract_type === "AMC"
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : "bg-amber-50 text-amber-800 border-amber-300"
                         }`}>
-                          {matchedAsset?.amc_status || (selectedTask.contract_type === "Non AMC" ? "Not in AMC" : "In AMC")}
+                          {selectedTask.contract_type === "AMC" ? <Shield className="h-3 w-3 text-emerald-600" /> : <Building className="h-3 w-3 text-amber-600" />}
+                          <span>{selectedTask.contract_type === "AMC" ? "AMC Contract Client" : "Non-AMC Direct Support"}</span>
                         </span>
                       )}
                     </div>
 
-                    {matchedAsset ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-white/80 border border-indigo-100 p-3 rounded-xl">
-                        <div>
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Device Type / Model</span>
-                          <p className="font-bold text-slate-800">{matchedAsset.asset || "Computer"} - {matchedAsset.model_no || matchedAsset.comp_name || "N/A"}</p>
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Assigned User / Employee</span>
-                          <p className="font-bold text-slate-800">{matchedAsset.employee_name || "Unassigned"}</p>
-                        </div>
-                        {matchedAsset.location && (
-                          <div>
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Location / Workstation Bay</span>
-                            <p className="font-medium text-slate-700">{matchedAsset.location}</p>
-                          </div>
-                        )}
-                        {matchedAsset.ip_address && (
-                          <div>
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">IP Address</span>
-                            <p className="font-mono text-slate-700">{matchedAsset.ip_address}</p>
-                          </div>
-                        )}
-                        {matchedAsset.os && (
-                          <div>
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Operating System</span>
-                            <p className="font-medium text-slate-700">{matchedAsset.os}</p>
-                          </div>
-                        )}
-                        {(matchedAsset.config_processor || matchedAsset.config_ram) && (
-                          <div>
-                            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Hardware Specs</span>
-                            <p className="font-medium text-slate-700">{[matchedAsset.config_processor, matchedAsset.config_ram, matchedAsset.config_storage].filter(Boolean).join(" / ")}</p>
-                          </div>
-                        )}
-                      </div>
-                    ) : selectedTask.asset_id ? (
-                      <div className="bg-white/80 border border-indigo-100 p-3 rounded-xl text-xs">
-                        <p className="text-slate-700 font-medium">
-                          Target Hardware Tag: <strong className="font-mono text-indigo-700 font-bold select-all">#{selectedTask.asset_id}</strong>
-                        </p>
-                        <p className="text-[10.5px] text-slate-400 mt-0.5">Please locate and verify this hardware asset serial or tag on-site with the client.</p>
-                      </div>
-                    ) : (
-                      <div className="bg-white/80 border border-indigo-100 p-2.5 rounded-xl text-xs text-slate-500 italic">
-                        No specific hardware Asset ID was registered for this service ticket.
+                    {selectedTask.company_name && selectedTask.company_name !== selectedTask.customer_name && (
+                      <div className="text-xs font-bold text-slate-600 flex items-center gap-1.5 pt-0.5">
+                        <Building className="h-4 w-4 text-slate-400 shrink-0" />
+                        <span>Company: <strong className="text-slate-900 font-extrabold">{selectedTask.company_name}</strong></span>
                       </div>
                     )}
+
+                    <h4 className="text-base font-extrabold text-slate-900 select-all">
+                      {selectedTask.customer_name}
+                    </h4>
+                    
+                    <div className="flex flex-col sm:flex-row gap-2 pt-1 text-xs text-slate-600 font-sans">
+                      {extractCleanPhoneNumber(selectedTask.contact_details) && (
+                        <a href={getCleanTelUri(selectedTask.contact_details)} className="flex items-center gap-1.5 hover:text-blue-600 select-all">
+                          <Phone className="h-3.5 w-3.5 text-slate-400" />
+                          <span className="font-mono font-extrabold tracking-wider text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-0.5 rounded-lg border border-blue-200/60 shadow-xs transition-all">
+                            {extractCleanPhoneNumber(selectedTask.contact_details)}
+                          </span>
+                        </a>
+                      )}
+                      {extractSecondaryContact(selectedTask.contact_details) && (
+                        <>
+                          <span className="hidden sm:inline text-slate-300">|</span>
+                          <span className="flex items-center gap-1.5 select-all text-slate-500">
+                            <Mail className="h-3.5 w-3.5 text-slate-400" />
+                            <span>{extractSecondaryContact(selectedTask.contact_details)}</span>
+                          </span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                );
-              })()}
 
-              {/* Problem Reported / Fault Diagnosis Card */}
-              <div className="space-y-1.5 bg-red-50/40 border border-red-200/80 p-4 rounded-xl font-sans">
-                <div className="flex items-center gap-1.5 text-red-700">
-                  <AlertCircle className="h-4 w-4" />
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">
-                    Reported Problem / Fault Diagnosis
-                  </span>
-                </div>
-                <p className="text-xs text-slate-800 bg-white border border-red-100 p-3.5 rounded-xl leading-relaxed select-all font-medium whitespace-pre-wrap">
-                  {selectedTask.problem_reported}
-                </p>
-              </div>
+                  {/* Hardware Asset Technical Specifications Card */}
+                  {(() => {
+                    const matchedAsset = selectedTask.asset_id ? (
+                      assets.find(a => (selectedTask.company_id ? a.company_id === selectedTask.company_id : true) && a.asset_id?.toLowerCase() === selectedTask.asset_id?.toLowerCase()) ||
+                      assets.find(a => a.asset_id?.toLowerCase() === selectedTask.asset_id?.toLowerCase())
+                    ) : null;
 
-              {/* Task Servicing Location Match */}
-              <div className="space-y-1 bg-slate-50 p-4 border border-slate-200 rounded-xl font-sans">
-                <span className="text-[10px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">Customer Location Address</span>
-                <p className="text-xs font-semibold text-slate-800 select-all">
-                  {selectedTask.address || "N/A - No dispatch address was provided."}
-                </p>
-              </div>
+                    return (
+                      <div className="bg-indigo-50/50 border border-indigo-200/80 rounded-xl p-4 space-y-3 font-sans">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-indigo-100 text-indigo-700 rounded-lg">
+                              <Laptop className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-mono uppercase tracking-widest text-indigo-600 font-extrabold block">Hardware Asset Assigned</span>
+                              <h5 className="font-mono text-sm font-black text-indigo-950">
+                                {selectedTask.asset_id ? `Asset ID: #${selectedTask.asset_id}` : "General Support Call (No Asset ID)"}
+                              </h5>
+                            </div>
+                          </div>
+                          {selectedTask.asset_id && (
+                            <span className={`px-2 py-0.5 text-[9.5px] font-black uppercase rounded-md border ${
+                              (matchedAsset?.amc_status || (selectedTask.contract_type === "Non AMC" ? "Not in AMC" : "In AMC")) === "Not in AMC"
+                                ? "bg-amber-100 text-amber-800 border-amber-300"
+                                : "bg-emerald-100 text-emerald-800 border-emerald-300"
+                            }`}>
+                              {matchedAsset?.amc_status || (selectedTask.contract_type === "Non AMC" ? "Not in AMC" : "In AMC")}
+                            </span>
+                          )}
+                        </div>
 
-              {/* Materials Carried for the Call */}
-              <div className="space-y-2.5 bg-slate-50 p-4 border border-slate-200 rounded-xl font-sans">
-                <div className="flex items-center justify-between">
-                  <h5 className="text-[10px] text-slate-500 font-mono uppercase tracking-widest font-bold flex items-center gap-1.5">
-                    <Package className="h-4 w-4 text-slate-500" />
-                    Materials Carrying for this Call
-                  </h5>
-                  {selectedTask.materials_carried && (
-                    <span className="text-[9px] font-mono text-slate-400 font-bold">
-                      {selectedTask.materials_carried.split(",").filter(Boolean).length} logged
-                    </span>
-                  )}
-                </div>
+                        {matchedAsset ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-white/80 border border-indigo-100 p-3 rounded-xl">
+                            <div>
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Device Type / Model</span>
+                              <p className="font-bold text-slate-800">{matchedAsset.asset || "Computer"} - {matchedAsset.model_no || matchedAsset.comp_name || "N/A"}</p>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Assigned User / Employee</span>
+                              <p className="font-bold text-slate-800">{matchedAsset.employee_name || "Unassigned"}</p>
+                            </div>
+                            {matchedAsset.location && (
+                              <div>
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Location / Workstation Bay</span>
+                                <p className="font-medium text-slate-700">{matchedAsset.location}</p>
+                              </div>
+                            )}
+                            {matchedAsset.ip_address && (
+                              <div>
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">IP Address</span>
+                                <p className="font-mono text-slate-700">{matchedAsset.ip_address}</p>
+                              </div>
+                            )}
+                            {matchedAsset.os && (
+                              <div>
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Operating System</span>
+                                <p className="font-medium text-slate-700">{matchedAsset.os}</p>
+                              </div>
+                            )}
+                            {(matchedAsset.config_processor || matchedAsset.config_ram) && (
+                              <div>
+                                <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block font-mono">Hardware Specs</span>
+                                <p className="font-medium text-slate-700">{[matchedAsset.config_processor, matchedAsset.config_ram, matchedAsset.config_storage].filter(Boolean).join(" / ")}</p>
+                              </div>
+                            )}
+                          </div>
+                        ) : selectedTask.asset_id ? (
+                          <div className="bg-white/80 border border-indigo-100 p-3 rounded-xl text-xs">
+                            <p className="text-slate-700 font-medium">
+                              Target Hardware Tag: <strong className="font-mono text-indigo-700 font-bold select-all">#{selectedTask.asset_id}</strong>
+                            </p>
+                            <p className="text-[10.5px] text-slate-400 mt-0.5">Please locate and verify this hardware asset serial or tag on-site with the client.</p>
+                          </div>
+                        ) : (
+                          <div className="bg-white/80 border border-indigo-100 p-2.5 rounded-xl text-xs text-slate-500 italic">
+                            No specific hardware Asset ID was registered for this service ticket.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
-                {/* List of current materials */}
-                {selectedTask.materials_carried ? (
-                  <div className="flex flex-wrap gap-1.5 py-1">
-                    {selectedTask.materials_carried.split(",").map((mat, i) => {
-                      const trimmedMat = mat.trim();
-                      if (!trimmedMat) return null;
-                      return (
-                        <span key={i} className="inline-flex items-center gap-1 bg-blue-50/70 border border-blue-200 text-blue-700 px-2 py-0.5 rounded-lg text-xs font-bold font-sans">
-                          {trimmedMat}
-                          <button 
-                            type="button" 
-                            onClick={() => {
-                              const currentList = selectedTask.materials_carried?.split(",") || [];
-                              const newList = currentList.filter((_, idx) => idx !== i).map(m => m.trim()).filter(Boolean).join(", ");
-                              handleUpdateCarriedMaterials(newList);
-                            }}
-                            className="text-blue-400 hover:text-blue-700 font-extrabold text-[12px] ml-1 px-0.5 rounded cursor-pointer transition-colors"
-                            title="Remove material"
-                          >
-                            ×
-                          </button>
-                        </span>
+                  {/* 🌐 Network Topology & Infrastructure Card */}
+                  {(() => {
+                    const matchedCompany = (selectedTask.company_id
+                      ? companies.find(c => c.id === selectedTask.company_id)
+                      : null) || companies.find(c => 
+                        (c.name && selectedTask.company_name && c.name.trim().toLowerCase() === selectedTask.company_name.trim().toLowerCase()) ||
+                        (c.name && selectedTask.customer_name && c.name.trim().toLowerCase() === selectedTask.customer_name.trim().toLowerCase())
                       );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-slate-400 italic text-[10.5px]">No materials carried logged yet. Add any spare parts, cables, or diagnostic tools you are carrying for this dispatch.</p>
-                )}
 
-                {/* Form to add material */}
-                <div className="flex gap-2 pt-1">
-                  <input
-                    type="text"
-                    id="material_input_field"
-                    placeholder="e.g. Cat6 Cable, RAM (8GB)..."
-                    value={materialInput}
-                    onChange={(e) => setMaterialInput(e.target.value)}
-                    className="flex-1 bg-white border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-1.5 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        if (!materialInput.trim()) return;
-                        const current = selectedTask.materials_carried ? selectedTask.materials_carried + ", " + materialInput.trim() : materialInput.trim();
-                        handleUpdateCarriedMaterials(current);
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    id="add_material_btn_id"
-                    onClick={() => {
-                      if (!materialInput.trim()) return;
-                      const current = selectedTask.materials_carried ? selectedTask.materials_carried + ", " + materialInput.trim() : materialInput.trim();
-                      handleUpdateCarriedMaterials(current);
-                    }}
-                    disabled={savingMaterials || !materialInput.trim()}
-                    className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white disabled:text-slate-400 rounded-xl text-[11px] font-extrabold uppercase tracking-wider transition-all shadow-2xs cursor-pointer"
-                  >
-                    {savingMaterials ? "Saving..." : "Add Material"}
-                  </button>
-                </div>
-              </div>
+                    if (!matchedCompany) return null;
+
+                    const nodeCount = matchedCompany.network_diagram_data?.nodes?.length || 0;
+                    const hasDiagram = !!matchedCompany.network_diagram_url || nodeCount > 0;
+
+                    return (
+                      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 text-white space-y-3 font-sans shadow-md">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-2 bg-blue-600/30 border border-blue-500/40 text-blue-400 rounded-xl">
+                              <Network className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-mono uppercase tracking-widest text-blue-400 font-extrabold block">
+                                Network Topology & Architecture
+                              </span>
+                              <h5 className="text-xs font-bold text-slate-100 flex items-center gap-2">
+                                <span>{matchedCompany.name}</span>
+                                {nodeCount > 0 ? (
+                                  <span className="text-[10px] font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-md">
+                                    {nodeCount} Components Mapped
+                                  </span>
+                                ) : hasDiagram ? (
+                                  <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                                    Diagram Active
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                                    No Diagram Yet
+                                  </span>
+                                )}
+                              </h5>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => setDiagramModalCompany(matchedCompany)}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                          >
+                            <Network className="h-3.5 w-3.5" />
+                            <span>{hasDiagram ? "Open Topology Builder" : "+ Build Topology Diagram"}</span>
+                          </button>
+                        </div>
+
+                        {matchedCompany.network_diagram_notes && (
+                          <div className="bg-slate-950 border border-slate-800/80 rounded-lg p-2.5 text-[11px] font-mono text-slate-300 leading-relaxed max-h-24 overflow-y-auto whitespace-pre-wrap">
+                            {matchedCompany.network_diagram_notes}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Problem Reported / Fault Diagnosis Card */}
+                  <div className="space-y-1.5 bg-red-50/40 border border-red-200/80 p-4 rounded-xl font-sans">
+                    <div className="flex items-center gap-1.5 text-red-700">
+                      <AlertCircle className="h-4 w-4" />
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider font-mono">
+                        Reported Problem / Fault Diagnosis
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-800 bg-white border border-red-100 p-3.5 rounded-xl leading-relaxed select-all font-medium whitespace-pre-wrap">
+                      {selectedTask.problem_reported}
+                    </p>
+                  </div>
+
+                  {/* Task Servicing Location Match */}
+                  <div className="space-y-1 bg-slate-50 p-4 border border-slate-200 rounded-xl font-sans">
+                    <span className="text-[10px] text-slate-400 font-mono uppercase tracking-widest font-extrabold block">Customer Location Address</span>
+                    <p className="text-xs font-semibold text-slate-800 select-all">
+                      {selectedTask.address || "N/A - No dispatch address was provided."}
+                    </p>
+                  </div>
+
+                  {/* Materials Carried for the Call */}
+                  <div className="space-y-2.5 bg-slate-50 p-4 border border-slate-200 rounded-xl font-sans">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-[10px] text-slate-500 font-mono uppercase tracking-widest font-bold flex items-center gap-1.5">
+                        <Package className="h-4 w-4 text-slate-500" />
+                        Materials Carrying for this Call
+                      </h5>
+                      {selectedTask.materials_carried && (
+                        <span className="text-[9px] font-mono text-slate-400 font-bold">
+                          {selectedTask.materials_carried.split(",").filter(Boolean).length} logged
+                        </span>
+                      )}
+                    </div>
+
+                    {/* List of current materials */}
+                    {selectedTask.materials_carried ? (
+                      <div className="flex flex-wrap gap-1.5 py-1">
+                        {selectedTask.materials_carried.split(",").map((mat, i) => {
+                          const trimmedMat = mat.trim();
+                          if (!trimmedMat) return null;
+                          return (
+                            <span key={i} className="inline-flex items-center gap-1 bg-blue-50/70 border border-blue-200 text-blue-700 px-2 py-0.5 rounded-lg text-xs font-bold font-sans">
+                              {trimmedMat}
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  const currentList = selectedTask.materials_carried?.split(",") || [];
+                                  const newList = currentList.filter((_, idx) => idx !== i).map(m => m.trim()).filter(Boolean).join(", ");
+                                  handleUpdateCarriedMaterials(newList);
+                                }}
+                                className="text-blue-400 hover:text-blue-700 font-extrabold text-[12px] ml-1 px-0.5 rounded cursor-pointer transition-colors"
+                                title="Remove material"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-slate-400 italic text-[10.5px]">No materials carried logged yet. Add any spare parts, cables, or diagnostic tools you are carrying for this dispatch.</p>
+                    )}
+
+                    {/* Form to add material */}
+                    <div className="flex gap-2 pt-1">
+                      <input
+                        type="text"
+                        id="material_input_field"
+                        placeholder="e.g. Cat6 Cable, RAM (8GB)..."
+                        value={materialInput}
+                        onChange={(e) => setMaterialInput(e.target.value)}
+                        className="flex-1 bg-white border border-slate-200 hover:border-slate-300 focus:border-blue-500 text-slate-800 px-3 py-1.5 rounded-xl text-xs placeholder-slate-400 focus:outline-none transition-colors"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (!materialInput.trim()) return;
+                            const current = selectedTask.materials_carried ? selectedTask.materials_carried + ", " + materialInput.trim() : materialInput.trim();
+                            handleUpdateCarriedMaterials(current);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        id="add_material_btn_id"
+                        onClick={() => {
+                          if (!materialInput.trim()) return;
+                          const current = selectedTask.materials_carried ? selectedTask.materials_carried + ", " + materialInput.trim() : materialInput.trim();
+                          handleUpdateCarriedMaterials(current);
+                        }}
+                        disabled={savingMaterials || !materialInput.trim()}
+                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 text-white disabled:text-slate-400 rounded-xl text-[11px] font-extrabold uppercase tracking-wider transition-all shadow-2xs cursor-pointer"
+                      >
+                        {savingMaterials ? "Saving..." : "Add Material"}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Service Remarks Section (Editable only AFTER task is finished to correct mistakes) */}
               {selectedTask.status === "Finished" ? (
@@ -1514,11 +1838,11 @@ export default function EmployeeDashboard({
                 </button>
 
                 {/* Accept Button -> Finish Button States */}
-                {selectedTask.status === "Pending" && (
+                {(selectedTask.status === "Pending" || !selectedTask.accepted_at) && (
                   <button
                     type="button"
                     onClick={() => handleAccept(selectedTask.id)}
-                    className="px-5 py-2 rounded-xl text-white font-extrabold bg-blue-700 hover:bg-blue-800 text-xs shadow-md flex items-center gap-1.5 transition-all border border-blue-800 uppercase tracking-wider cursor-pointer"
+                    className="px-6 py-2.5 rounded-xl text-white font-extrabold bg-blue-600 hover:bg-blue-700 active:scale-95 text-xs shadow-md flex items-center gap-2 transition-all border border-blue-700 uppercase tracking-wider cursor-pointer"
                   >
                     <Play className="h-3.5 w-3.5 fill-current" />
                     <span>Accept Service Ticket</span>
@@ -1576,6 +1900,38 @@ export default function EmployeeDashboard({
           showEmpDashToast(`Personal notification tone set to "${tone.name}"!`);
         }}
       />
+
+      {/* 🛡️ Notification Unblock Instructions Modal for Phone & Browser */}
+      <NotificationUnblockModal
+        isOpen={isUnblockModalOpen}
+        onClose={() => setIsUnblockModalOpen(false)}
+        onUnblocked={() => {
+          setNotifPermission("granted");
+          notificationManager.subscribeToPushNotifications(currentEmployee.id);
+          showEmpDashToast("Device notifications unblocked and fully active!");
+        }}
+      />
+
+      {/* 📦 IT Provisioning Kit Modal for Field Engineers */}
+      <EngineerSoftwareKitModal
+        isOpen={isSoftwareKitOpen}
+        onClose={() => setIsSoftwareKitOpen(false)}
+      />
+
+      {/* 🌐 Network Topology & Diagram Builder Modal */}
+      {diagramModalCompany && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 animate-fade-in text-slate-800">
+          <div className="bg-white border border-slate-200 w-full max-w-7xl h-[92vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col relative">
+            <NetworkDiagramBuilder
+              company={diagramModalCompany}
+              currentUser={{ name: currentEmployee.name, role: currentEmployee.role, id: currentEmployee.id }}
+              onSaveDiagram={handleSaveDiagramForCompany}
+              onClose={() => setDiagramModalCompany(null)}
+              readOnly={false}
+            />
+          </div>
+        </div>
+      )}
 
       </div>
     </div>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { 
-  PlusCircle, Database, Cpu, Terminal, Layers, Users, BarChart4, Sparkles, Fuel, ChevronLeft, ChevronRight, LayoutDashboard, Building, Clock, Receipt, Navigation
+  PlusCircle, Database, Cpu, Terminal, Layers, Users, BarChart4, Sparkles, Fuel, ChevronLeft, ChevronRight, LayoutDashboard, Building, Clock, Receipt, Navigation, Package
 } from "lucide-react";
 import { Task, Employee, SqlLog, Company, CompanyAsset } from "../types";
 import TaskManagementSection from "./TaskManagementSection";
@@ -11,8 +11,10 @@ import DatabaseExplorerSection from "./DatabaseExplorerSection";
 import AnalyticsSection from "./AnalyticsSection";
 import CompanySection from "./CompanySection";
 import BillingSection from "./BillingSection";
+import SoftwareHubSection from "./SoftwareHubSection";
 
 interface AdminDashboardProps {
+  currentUser?: { name: string; role: string };
   tasks: Task[];
   employees: Employee[];
   companies: Company[];
@@ -50,6 +52,7 @@ interface AdminDashboardProps {
 }
 
 export default function AdminDashboard({ 
+  currentUser,
   tasks, 
   employees, 
   companies,
@@ -66,7 +69,7 @@ export default function AdminDashboard({
   onTogglePriority,
   onUpdatePassword
 }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"tasks" | "todos" | "employees" | "travel" | "companies" | "database" | "analytics" | "billing">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "todos" | "employees" | "travel" | "companies" | "database" | "analytics" | "billing" | "software">("tasks");
 
   // Synchronize active tab with the main header SQL trigger
   useEffect(() => {
@@ -213,6 +216,19 @@ export default function AdminDashboard({
 
           <button
             type="button"
+            onClick={() => setActiveTab("software")}
+            className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
+              activeTab === "software"
+                ? "bg-teal-50 text-teal-800 border border-teal-200 font-extrabold shadow-2xs"
+                : "text-slate-600 hover:text-slate-850 border border-transparent font-medium hover:bg-slate-50"
+            }`}
+          >
+            <Package className="h-4 w-4 text-teal-600 shrink-0" />
+            <span className="font-sans font-bold">Software Hub</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("billing")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
               activeTab === "billing"
@@ -248,6 +264,7 @@ export default function AdminDashboard({
                 {activeTab === "travel" && "Travel & Fuel Cost"}
                 {activeTab === "companies" && "Companies & Assets Hub"}
                 {activeTab === "database" && "Database Tables"}
+                {activeTab === "software" && "Software Hub & Provisioning"}
                 {activeTab === "billing" && "Billing & Invoicing"}
               </span>
             </h2>
@@ -311,6 +328,11 @@ export default function AdminDashboard({
           <AnalyticsSection
             tasks={tasks}
             employees={employees}
+          />
+        )}
+        {activeTab === "software" && (
+          <SoftwareHubSection
+            currentUser={currentUser || { name: "Admin", role: "Admin" }}
           />
         )}
         {activeTab === "billing" && (

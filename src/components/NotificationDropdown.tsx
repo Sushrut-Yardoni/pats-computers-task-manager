@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import { notificationManager, EnvironmentDiagnostics } from "../utils/notificationManager";
 import NotificationToneModal from "./NotificationToneModal";
+import NotificationUnblockModal from "./NotificationUnblockModal";
 
 export default function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,6 +12,7 @@ export default function NotificationDropdown() {
   const [diagnostics, setDiagnostics] = useState<EnvironmentDiagnostics | null>(null);
   const [testStatus, setTestStatus] = useState<string | null>(null);
   const [isToneModalOpen, setIsToneModalOpen] = useState(false);
+  const [isUnblockModalOpen, setIsUnblockModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const loadHistory = () => {
@@ -47,6 +49,14 @@ export default function NotificationDropdown() {
   const unreadCount = history.filter((h) => !h.read).length;
 
   const handleEnablePermissions = async () => {
+    if (
+      typeof window !== "undefined" &&
+      "Notification" in window &&
+      Notification.permission === "denied"
+    ) {
+      setIsUnblockModalOpen(true);
+      return;
+    }
     const granted = await notificationManager.requestPermission();
     setDiagnostics(notificationManager.getEnvironmentDiagnostics());
     if (granted) {
@@ -55,6 +65,10 @@ export default function NotificationDropdown() {
       notificationManager.sendSystemNotification("Notifications Enabled", {
         body: "Your device is now armed to receive instant alerts across Website, Desktop & Mobile views."
       });
+    } else {
+      if (notificationManager.getPermissionStatus() === "denied") {
+        setIsUnblockModalOpen(true);
+      }
     }
   };
 
@@ -145,10 +159,17 @@ export default function NotificationDropdown() {
                     Alerts Active
                   </span>
                 ) : diagnostics.permission === "denied" ? (
-                  <span className="inline-flex items-center gap-1 font-bold text-[10px] text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
-                    <AlertTriangle className="h-3 w-3" />
-                    Blocked in Browser
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsUnblockModalOpen(true)}
+                    className="inline-flex items-center gap-1 font-bold text-[10px] text-rose-700 bg-rose-50 hover:bg-rose-100 active:scale-98 px-2 py-0.5 rounded-md border border-rose-200 cursor-pointer transition-all shadow-2xs"
+                    title="Tap to view step-by-step unblock instructions"
+                  >
+                    <AlertTriangle className="h-3 w-3 text-rose-600" />
+                    <span>
+                      {diagnostics.isStandalone ? "Disabled on Phone • Unblock" : "Blocked in Browser • Unblock"}
+                    </span>
+                  </button>
                 ) : (
                   <button
                     type="button"
@@ -233,6 +254,16 @@ export default function NotificationDropdown() {
         isOpen={isToneModalOpen}
         onClose={() => setIsToneModalOpen(false)}
         onToneSaved={() => loadHistory()}
+      />
+
+      {/* 🛡️ Unblock Instructions Modal */}
+      <NotificationUnblockModal
+        isOpen={isUnblockModalOpen}
+        onClose={() => {
+          setIsUnblockModalOpen(false);
+          loadHistory();
+        }}
+        onUnblocked={() => loadHistory()}
       />
     </div>
   );

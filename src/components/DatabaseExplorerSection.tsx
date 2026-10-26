@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { 
-  Database, Search, FileJson, Table, RefreshCw, Layers, Users, Fuel, Settings, Terminal, Shield, ArrowRight, Eye
+  Database, Search, FileJson, Table, RefreshCw, Layers, Users, Fuel, Settings, Terminal, Shield, ArrowRight, Eye, Package, Boxes
 } from "lucide-react";
-import { Task, Employee, OfflineTravel, SqlLog } from "../types";
+import { Task, Employee, OfflineTravel, SqlLog, SoftwareItem, SoftwareGroup } from "../types";
 
 export default function DatabaseExplorerSection({
   tasks: initialTasks,
@@ -11,12 +11,14 @@ export default function DatabaseExplorerSection({
   tasks: Task[];
   employees: Employee[];
 }) {
-  const [selectedTable, setSelectedTable] = useState<"employees" | "tasks" | "offline_travels" | "settings" | "sql_logs">("employees");
+  const [selectedTable, setSelectedTable] = useState<"employees" | "tasks" | "softwares" | "software_groups" | "offline_travels" | "settings" | "sql_logs">("employees");
   const [searchQuery, setSearchQuery] = useState("");
   
   // Local state for fetched database tables to ensure interactive live refresh and full reads
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [softwares, setSoftwares] = useState<SoftwareItem[]>([]);
+  const [softwareGroups, setSoftwareGroups] = useState<SoftwareGroup[]>([]);
   const [offlineTravels, setOfflineTravels] = useState<OfflineTravel[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [sqlLogs, setSqlLogs] = useState<SqlLog[]>([]);
@@ -43,12 +45,14 @@ export default function DatabaseExplorerSection({
         }
       };
 
-      const [empRes, taskRes, travelRes, settingsRes, logsRes] = await Promise.all([
+      const [empRes, taskRes, travelRes, settingsRes, logsRes, softRes, grpRes] = await Promise.all([
         fetchJson("/api/employees", []),
         fetchJson("/api/tasks", []),
         fetchJson("/api/offline-travels", []),
         fetchJson("/api/settings", { petrol_price: 100 }),
-        fetchJson("/api/sql/logs", [])
+        fetchJson("/api/sql/logs", []),
+        fetchJson("/api/softwares", []),
+        fetchJson("/api/software-groups", [])
       ]);
 
       setEmployees(empRes);
@@ -56,6 +60,8 @@ export default function DatabaseExplorerSection({
       setOfflineTravels(travelRes);
       setSettings(settingsRes || { petrol_price: 100 });
       setSqlLogs(logsRes);
+      setSoftwares(softRes);
+      setSoftwareGroups(grpRes);
     } catch (error) {
       console.error("Failed to load full database tables:", error);
     } finally {
@@ -74,6 +80,10 @@ export default function DatabaseExplorerSection({
         return employees;
       case "tasks":
         return tasks;
+      case "softwares":
+        return softwares;
+      case "software_groups":
+        return softwareGroups;
       case "offline_travels":
         return offlineTravels;
       case "settings":
@@ -184,6 +194,22 @@ export default function DatabaseExplorerSection({
           description: "Registered diagnostic tickets, client descriptions, resolution status and associated technician tasks with AMC classification, company, and asset ID.",
           columns: ["id", "customer_name", "company_name", "contract_type", "asset_id", "assigned_to", "problem_reported", "status", "assigned_at", "accepted_at", "finished_at", "remarks", "is_priority"]
         };
+      case "softwares":
+        return {
+          name: "softwares",
+          primaryKey: "id",
+          foreignKeys: "None",
+          description: "Software packages, installers, download links, and license keys for IT field provisioning.",
+          columns: ["id", "name", "storage_type", "file_name", "file_size", "license_key", "installation_notes", "created_by"]
+        };
+      case "software_groups":
+        return {
+          name: "software_groups",
+          primaryKey: "id",
+          foreignKeys: "items.software_id -> softwares.id",
+          description: "Bundled software groups configured for instant 1-click ZIP package download by field engineers.",
+          columns: ["id", "name", "items", "created_by", "created_at"]
+        };
       case "offline_travels":
         return {
           name: "offline_travels",
@@ -217,12 +243,12 @@ export default function DatabaseExplorerSection({
     <div className="space-y-6 animate-fade-in text-slate-800">
       
       {/* DB Overview Dashboard Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         
         {/* Table Employee Card */}
         <button
           onClick={() => { setSelectedTable("employees"); setSelectedRow(null); }}
-          className={`p-4 border rounded-2xl text-left transition-all cursor-pointer ${
+          className={`p-3 sm:p-4 border rounded-2xl text-left transition-all cursor-pointer ${
             selectedTable === "employees"
               ? "bg-blue-50/50 border-blue-500 shadow-md ring-1 ring-blue-500/20"
               : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
@@ -233,13 +259,13 @@ export default function DatabaseExplorerSection({
             <Users className="h-4 w-4 text-blue-600" />
           </div>
           <p className="text-xl font-extrabold font-mono text-slate-900">{employees.length}</p>
-          <p className="text-[10px] text-slate-400 font-medium mt-1">Primary Table</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-1">Staff</p>
         </button>
 
         {/* Table Tasks Card */}
         <button
           onClick={() => { setSelectedTable("tasks"); setSelectedRow(null); }}
-          className={`p-4 border rounded-2xl text-left transition-all cursor-pointer ${
+          className={`p-3 sm:p-4 border rounded-2xl text-left transition-all cursor-pointer ${
             selectedTable === "tasks"
               ? "bg-indigo-50/50 border-indigo-500 shadow-md ring-1 ring-indigo-500/20"
               : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
@@ -250,13 +276,47 @@ export default function DatabaseExplorerSection({
             <Layers className="h-4 w-4 text-indigo-600" />
           </div>
           <p className="text-xl font-extrabold font-mono text-slate-900">{tasks.length}</p>
-          <p className="text-[10px] text-slate-400 font-medium mt-1">Support Tickets</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-1">Tickets</p>
+        </button>
+
+        {/* Table Softwares Card */}
+        <button
+          onClick={() => { setSelectedTable("softwares"); setSelectedRow(null); }}
+          className={`p-3 sm:p-4 border rounded-2xl text-left transition-all cursor-pointer ${
+            selectedTable === "softwares"
+              ? "bg-teal-50/50 border-teal-500 shadow-md ring-1 ring-teal-500/20"
+              : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+          }`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Softwares</span>
+            <Package className="h-4 w-4 text-teal-600" />
+          </div>
+          <p className="text-xl font-extrabold font-mono text-slate-900">{softwares.length}</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-1">Installers</p>
+        </button>
+
+        {/* Table Software Groups Card */}
+        <button
+          onClick={() => { setSelectedTable("software_groups"); setSelectedRow(null); }}
+          className={`p-3 sm:p-4 border rounded-2xl text-left transition-all cursor-pointer ${
+            selectedTable === "software_groups"
+              ? "bg-cyan-50/50 border-cyan-500 shadow-md ring-1 ring-cyan-500/20"
+              : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+          }`}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Groups</span>
+            <Boxes className="h-4 w-4 text-cyan-600" />
+          </div>
+          <p className="text-xl font-extrabold font-mono text-slate-900">{softwareGroups.length}</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-1">ZIP Bundles</p>
         </button>
 
         {/* Table Offline Travels Card */}
         <button
           onClick={() => { setSelectedTable("offline_travels"); setSelectedRow(null); }}
-          className={`p-4 border rounded-2xl text-left transition-all cursor-pointer ${
+          className={`p-3 sm:p-4 border rounded-2xl text-left transition-all cursor-pointer ${
             selectedTable === "offline_travels"
               ? "bg-emerald-50/50 border-emerald-500 shadow-md ring-1 ring-emerald-500/20"
               : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
@@ -267,13 +327,13 @@ export default function DatabaseExplorerSection({
             <Fuel className="h-4 w-4 text-emerald-600" />
           </div>
           <p className="text-xl font-extrabold font-mono text-slate-900">{offlineTravels.length}</p>
-          <p className="text-[10px] text-slate-400 font-medium mt-1">Travel Distance</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-1">KM Logs</p>
         </button>
 
         {/* Admin Settings Card */}
         <button
           onClick={() => { setSelectedTable("settings"); setSelectedRow(null); }}
-          className={`p-4 border rounded-2xl text-left transition-all cursor-pointer ${
+          className={`p-3 sm:p-4 border rounded-2xl text-left transition-all cursor-pointer ${
             selectedTable === "settings"
               ? "bg-purple-50/50 border-purple-500 shadow-md ring-1 ring-purple-500/20"
               : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
@@ -284,24 +344,24 @@ export default function DatabaseExplorerSection({
             <Settings className="h-4 w-4 text-purple-600" />
           </div>
           <p className="text-xl font-extrabold font-mono text-slate-900">₹ {settings?.petrol_price || "-"}</p>
-          <p className="text-[10px] text-slate-400 font-medium mt-1">System Params</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-1">Params</p>
         </button>
 
         {/* SQL Transaction Log Card */}
         <button
           onClick={() => { setSelectedTable("sql_logs"); setSelectedRow(null); }}
-          className={`p-4 border rounded-2xl text-left transition-all cursor-pointer ${
+          className={`p-3 sm:p-4 border rounded-2xl text-left transition-all cursor-pointer ${
             selectedTable === "sql_logs"
-              ? "bg-teal-50/50 border-teal-500 shadow-md ring-1 ring-teal-500/20"
+              ? "bg-slate-100 border-slate-500 shadow-md ring-1 ring-slate-500/20"
               : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
           }`}
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">SQL Audit</span>
-            <Terminal className="h-4 w-4 text-teal-600" />
+            <Terminal className="h-4 w-4 text-slate-600" />
           </div>
           <p className="text-xl font-extrabold font-mono text-slate-900">{sqlLogs.length}</p>
-          <p className="text-[10px] text-slate-400 font-medium mt-1">Transaction History</p>
+          <p className="text-[10px] text-slate-400 font-medium mt-1">Audit Logs</p>
         </button>
 
       </div>

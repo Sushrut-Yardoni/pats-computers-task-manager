@@ -1,6 +1,12 @@
 // PATS Real-Time Sound, Vibration, Tab Alert, App Badge and Mobile Web Push Notification Manager
 // Designed for 100% reliability across Website View, Desktop View, and Mobile Downloaded View (PWA)
 // Includes full Personal Notification Tone selection & customization for mobile & desktop
+import {
+  saveAudioToStorage,
+  loadAudioFromStorage,
+  deleteAudioFromStorage,
+  StoredAudioTone
+} from './audioStorage';
 
 export interface NotificationTone {
   id: string;
@@ -222,6 +228,8 @@ export interface EnvironmentDiagnostics {
   isStandalone: boolean;
   isMobile: boolean;
   permission: NotificationPermission | 'unsupported';
+  permissionLabel: string;
+  isBlocked: boolean;
   hasServiceWorker: boolean;
   hasPush: boolean;
   hasVibration: boolean;
@@ -229,6 +237,9 @@ export interface EnvironmentDiagnostics {
   badgeSupported: boolean;
   activeTone: string;
   activeToneName: string;
+  hasCustomTone: boolean;
+  customToneName: string | null;
+  customToneDuration?: string | null;
 }
 
 class NotificationManager {
@@ -241,6 +252,10 @@ class NotificationManager {
   private alertFaviconDataUri = '';
   private selectedToneId: string = 'pats_classic';
   private selectedVibrationId: string = 'classic';
+  private customToneName: string | null = null;
+  private customToneDataUri: string | null = null;
+  private customToneSize: string | null = null;
+  private customToneDuration: string | null = null;
   private wavCache: Map<string, string> = new Map();
 
   constructor() {
@@ -248,23 +263,38 @@ class NotificationManager {
       this.originalDocumentTitle = document.title;
       this.initFaviconTracking();
 
-      // Load personal tone and vibration preferences
+      // Synchronous quick load from localStorage
       try {
+        this.customToneName = localStorage.getItem('pats_custom_tone_name');
+        this.customToneDataUri = localStorage.getItem('pats_custom_tone_data');
+        this.customToneSize = localStorage.getItem('pats_custom_tone_size');
+        this.customToneDuration = localStorage.getItem('pats_custom_tone_duration');
+
         const storedTone = localStorage.getItem('pats_selected_tone');
-        if (storedTone && AVAILABLE_NOTIFICATION_TONES.some((t) => t.id === storedTone)) {
+        if (storedTone === 'custom') {
+          this.selectedToneId = 'custom';
+        } else if (storedTone && AVAILABLE_NOTIFICATION_TONES.some((t) => t.id === storedTone)) {
           this.selectedToneId = storedTone;
         }
+
         const storedVibration = localStorage.getItem('pats_selected_vibration');
         if (storedVibration && AVAILABLE_VIBRATION_PATTERNS.some((v) => v.id === storedVibration)) {
           this.selectedVibrationId = storedVibration;
         }
       } catch {}
 
+      // Asynchronous deep load from IndexedDB (preserves large audio files from device)
+      this.initCustomTone();
+
       // Pre-generate fallback HTML5 audio element
-      const initialWav = this.getToneWavDataUri(this.selectedToneId);
-      if (initialWav) {
+      const initialAudioSrc =
+        this.selectedToneId === 'custom' && this.customToneDataUri
+          ? this.customToneDataUri
+          : this.getToneWavDataUri(this.selectedToneId);
+
+      if (initialAudioSrc) {
         try {
-          this.fallbackAudio = new Audio(initialWav);
+          this.fallbackAudio = new Audio(initialAudioSrc);
           this.fallbackAudio.preload = 'auto';
         } catch (e) {
           console.warn('Audio element preload note:', e);
@@ -282,13 +312,37 @@ class NotificationManager {
       // Clean up tab title/favicon when user switches back to active window
       window.addEventListener('focus', () => {
         this.stopTabAlerts();
+        this.broadcastPermissionCheck();
       });
 
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
           this.stopTabAlerts();
+          this.broadcastPermissionCheck();
         }
       });
+
+      // Continuous permission monitoring (detects when user unblocks in Android app info or browser settings)
+      if (typeof navigator !== 'undefined' && 'permissions' in navigator) {
+        try {
+          navigator.permissions.query({ name: 'notifications' as PermissionName }).then((status) => {
+            status.onchange = () => {
+              window.dispatchEvent(
+                new CustomEvent('pats-permission-changed', { detail: { permission: status.state } })
+              );
+            };
+          }).catch(() => {});
+        } catch {}
+      }
+    }
+  }
+
+  // Broadcast current permission check across UI
+  public broadcastPermissionCheck() {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      window.dispatchEvent(
+        new CustomEvent('pats-permission-changed', { detail: { permission: Notification.permission } })
+      );
     }
   }
 
@@ -363,17 +417,212 @@ class NotificationManager {
   }
 
   // Tone management APIs
+  // Asynchronously load custom device tone from IndexedDB
+  private async initCustomTone() {
+    try {
+      const stored = await loadAudioFromStorage();
+      if (stored && stored.dataUri) {
+        this.customToneName = stored.name;
+        this.customToneDataUri = stored.dataUri;
+        this.customToneSize = stored.size;
+        this.customToneDuration = stored.duration || null;
+
+        const activeTone = localStorage.getItem('pats_selected_tone');
+        if (activeTone === 'custom' || !activeTone) {
+          this.selectedToneId = 'custom';
+        }
+
+        if (this.fallbackAudio) {
+          this.fallbackAudio.src = stored.dataUri;
+          this.fallbackAudio.load();
+        }
+
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('pats-tone-changed', {
+              detail: { toneId: 'custom', name: stored.name, custom: true }
+            })
+          );
+        }
+      }
+    } catch (e) {
+      console.warn('Custom tone init note:', e);
+    }
+  }
+
+  // Device context detection helpers
+  public isStandalone(): boolean {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true
+    );
+  }
+
+  public isMobile(): boolean {
+    if (typeof navigator === 'undefined') return false;
+    return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  }
+
+  public getPermissionStatusLabel(): {
+    label: string;
+    isBlocked: boolean;
+    canPrompt: boolean;
+    helperText: string;
+  } {
+    const status = this.getPermissionStatus();
+    const standalone = this.isStandalone();
+    const mobile = this.isMobile();
+
+    if (status === 'granted') {
+      return {
+        label: 'Alerts Fully Active',
+        isBlocked: false,
+        canPrompt: false,
+        helperText: 'Real-time chimes, vibrations and push alerts enabled.'
+      };
+    }
+
+    if (status === 'denied') {
+      return {
+        label: standalone || mobile ? 'Disabled in Phone Settings' : 'Blocked in Browser Settings',
+        isBlocked: true,
+        canPrompt: false,
+        helperText: standalone || mobile
+          ? 'Notifications blocked by phone app settings. Tap to unblock.'
+          : 'Notifications blocked by browser. Tap padlock in address bar to allow.'
+      };
+    }
+
+    return {
+      label: 'Permission Required',
+      isBlocked: false,
+      canPrompt: true,
+      helperText: 'Enable notifications to get heads-up alerts when new tasks are assigned.'
+    };
+  }
+
+  // Tone management APIs
   public getSelectedTone(): string {
     return this.selectedToneId;
   }
 
   public getSelectedToneDetails(): NotificationTone {
+    if (this.selectedToneId === 'custom' && this.customToneDataUri) {
+      return {
+        id: 'custom',
+        name: this.customToneName || 'Device Custom Audio',
+        tagline: 'Custom sound loaded from this device',
+        description: 'Personal audio file selected from your phone or computer.',
+        category: 'Custom' as any,
+        badgeColor: 'teal',
+        durationLabel: this.customToneDuration || this.customToneSize || 'Device File'
+      };
+    }
     return (
       AVAILABLE_NOTIFICATION_TONES.find((t) => t.id === this.selectedToneId) || AVAILABLE_NOTIFICATION_TONES[0]
     );
   }
 
+  public getCustomTone(): { name: string; dataUri: string; size: string; duration?: string } | null {
+    if (this.customToneDataUri && this.customToneName) {
+      return {
+        name: this.customToneName,
+        dataUri: this.customToneDataUri,
+        size: this.customToneSize || '',
+        duration: this.customToneDuration || ''
+      };
+    }
+    return null;
+  }
+
+  public async setCustomTone(
+    name: string,
+    dataUri: string,
+    size: string = '',
+    duration: string = ''
+  ): Promise<boolean> {
+    try {
+      this.customToneName = name;
+      this.customToneDataUri = dataUri;
+      this.customToneSize = size;
+      this.customToneDuration = duration;
+      this.selectedToneId = 'custom';
+
+      // Persist into IndexedDB (supports up to 20MB audio files from phone/PC)
+      await saveAudioToStorage({
+        id: 'custom',
+        name,
+        dataUri,
+        size,
+        duration,
+        updatedAt: Date.now()
+      });
+
+      if (this.fallbackAudio) {
+        this.fallbackAudio.src = dataUri;
+        this.fallbackAudio.load();
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('pats-tone-changed', {
+            detail: { toneId: 'custom', name, custom: true }
+          })
+        );
+      }
+      return true;
+    } catch (e) {
+      console.warn('Failed to store custom tone:', e);
+      return false;
+    }
+  }
+
+  public async removeCustomTone() {
+    this.customToneName = null;
+    this.customToneDataUri = null;
+    this.customToneSize = null;
+    this.customToneDuration = null;
+
+    await deleteAudioFromStorage();
+
+    if (this.selectedToneId === 'custom') {
+      this.setSelectedTone('pats_classic');
+    } else {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('pats-tone-changed', {
+            detail: { toneId: this.selectedToneId }
+          })
+        );
+      }
+    }
+  }
+
   public setSelectedTone(toneId: string) {
+    if (toneId === 'custom' && this.customToneDataUri) {
+      this.selectedToneId = 'custom';
+      try {
+        localStorage.setItem('pats_selected_tone', 'custom');
+      } catch {}
+
+      if (this.fallbackAudio) {
+        try {
+          this.fallbackAudio.src = this.customToneDataUri;
+          this.fallbackAudio.load();
+        } catch {}
+      }
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('pats-tone-changed', {
+            detail: { toneId: 'custom', name: this.customToneName, custom: true }
+          })
+        );
+      }
+      return;
+    }
+
     const valid = AVAILABLE_NOTIFICATION_TONES.find((t) => t.id === toneId);
     if (!valid) return;
 
@@ -602,6 +851,22 @@ class NotificationManager {
   // Play a specific tone or the user's personal selected tone
   public playTone(toneId?: string) {
     const targetTone = toneId || this.selectedToneId;
+
+    if (targetTone === 'custom') {
+      if (this.customToneDataUri) {
+        try {
+          const audio = new Audio(this.customToneDataUri);
+          audio.currentTime = 0;
+          audio.play().catch((e) => {
+            console.warn('Custom tone play note:', e);
+          });
+          return;
+        } catch (err) {
+          console.warn('Custom audio playback error:', err);
+        }
+      }
+    }
+
     let played = this.playWebAudioTone(targetTone);
 
     // Fallback via HTML5 Audio element
@@ -1018,6 +1283,8 @@ class NotificationManager {
     const activeTone = this.getSelectedTone();
     const activeToneDetails = this.getSelectedToneDetails();
 
+    const permInfo = this.getPermissionStatusLabel();
+
     return {
       mode: isStandalone
         ? isMobile
@@ -1029,13 +1296,18 @@ class NotificationManager {
       isStandalone,
       isMobile,
       permission,
+      permissionLabel: permInfo.label,
+      isBlocked: permInfo.isBlocked,
       hasServiceWorker,
       hasPush,
       hasVibration,
       isAudioUnlocked: this.isAudioUnlocked,
       badgeSupported,
       activeTone,
-      activeToneName: activeToneDetails.name
+      activeToneName: activeToneDetails.name,
+      hasCustomTone: !!(this.customToneDataUri && this.customToneName),
+      customToneName: this.customToneName,
+      customToneDuration: this.customToneDuration
     };
   }
 

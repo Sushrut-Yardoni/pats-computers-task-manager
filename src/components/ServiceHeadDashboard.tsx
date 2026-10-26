@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import { 
-  Layers, Fuel, Building, Sparkles, UserCheck, Clock, CheckCircle2, ShieldCheck, AlertCircle, Users, Receipt
+  Layers, Fuel, Building, Sparkles, UserCheck, Clock, CheckCircle2, ShieldCheck, AlertCircle, Users, Package
 } from "lucide-react";
 import { Task, Employee, Company, CompanyAsset } from "../types";
 import TaskManagementSection from "./TaskManagementSection";
 import EmployeeManagementSection from "./EmployeeManagementSection";
 import TravelPetrolSection from "./TravelPetrolSection";
 import CompanySection from "./CompanySection";
-import BillingSection from "./BillingSection";
+import SoftwareHubSection from "./SoftwareHubSection";
 
 interface ServiceHeadDashboardProps {
   currentUser: { id: number; name: string; role: string; email_id?: string };
@@ -55,7 +55,7 @@ export default function ServiceHeadDashboard({
   onTogglePriority,
   onUpdatePassword
 }: ServiceHeadDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"tasks" | "employees" | "travel" | "companies" | "billing">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "employees" | "travel" | "companies" | "software">("tasks");
 
   const pendingTasksCount = tasks.filter(t => t.status === "Pending").length;
   const inProgressTasksCount = tasks.filter(t => t.status === "In Progress").length;
@@ -161,20 +161,15 @@ export default function ServiceHeadDashboard({
 
           <button
             type="button"
-            onClick={() => setActiveTab("billing")}
+            onClick={() => setActiveTab("software")}
             className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all w-full shrink-0 cursor-pointer ${
-              activeTab === "billing"
-                ? "bg-purple-50 text-purple-800 border border-purple-200 font-extrabold shadow-2xs"
+              activeTab === "software"
+                ? "bg-teal-50 text-teal-800 border border-teal-200 font-extrabold shadow-2xs"
                 : "text-slate-600 hover:text-slate-900 border border-transparent font-medium hover:bg-slate-50"
             }`}
           >
-            <Receipt className="h-4 w-4 text-purple-600 shrink-0" />
-            <span className="font-sans flex items-center justify-between w-full font-bold">
-              <span>Billing</span>
-              <span className="bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded text-[9px] font-bold">
-                {finishedTasksCount}
-              </span>
-            </span>
+            <Package className="h-4 w-4 text-teal-600 shrink-0" />
+            <span className="font-sans font-bold">Software Hub</span>
           </button>
         </nav>
       </aside>
@@ -191,7 +186,7 @@ export default function ServiceHeadDashboard({
                 {activeTab === "employees" && "Engineers Hub & Technical Staff"}
                 {activeTab === "travel" && "Travel & Fuel Reimbursement Desk"}
                 {activeTab === "companies" && "Company Workstations & Asset Inventory"}
-                {activeTab === "billing" && "Billing & Invoice Generation"}
+                {activeTab === "software" && "Software Hub & Provisioning"}
               </span>
             </h2>
 
@@ -219,7 +214,7 @@ export default function ServiceHeadDashboard({
             </div>
             <div className="h-7 w-px bg-slate-200 hidden sm:block" />
             <div className="flex flex-col">
-              <span className="text-[10px] uppercase font-bold text-slate-400">Billing Ready</span>
+              <span className="text-[10px] uppercase font-bold text-slate-400">Resolved</span>
               <span className="font-extrabold text-slate-900 text-sm">{finishedTasksCount}</span>
             </div>
           </div>
@@ -271,10 +266,9 @@ export default function ServiceHeadDashboard({
             />
           )}
 
-          {activeTab === "billing" && (
-            <BillingSection
-              tasks={tasks}
-              refreshLogs={refreshLogs}
+          {activeTab === "software" && (
+            <SoftwareHubSection
+              currentUser={{ name: currentUser.name, role: currentUser.role }}
             />
           )}
         </div>

@@ -475,6 +475,7 @@ export default function App() {
           ) : currentUser.type === "admin" ? (
             // Admin control room layout view
             <AdminDashboard 
+              currentUser={currentUser}
               tasks={tasks}
               employees={employees}
               companies={companies}

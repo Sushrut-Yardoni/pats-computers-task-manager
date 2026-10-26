@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Cpu, LogOut, Bell, BellOff, Settings } from "lucide-react";
+import { Cpu, LogOut, Bell, BellOff, Settings, ShieldAlert } from "lucide-react";
 import { notificationManager } from "../utils/notificationManager";
 import NotificationDropdown from "./NotificationDropdown";
+import NotificationUnblockModal from "./NotificationUnblockModal";
 
 interface HeaderProps {
   currentUser: { type: "admin"; email_id?: string } | { type: "employee"; id: number; name: string; role: string } | null;
@@ -13,6 +14,12 @@ interface HeaderProps {
 
 export default function Header({ currentUser, onLogout, openSqlConsole, sqlConsoleActive, onOpenSettings }: HeaderProps) {
   const [notifStatus, setNotifStatus] = useState<string>("default");
+  const [isUnblockModalOpen, setIsUnblockModalOpen] = useState<boolean>(false);
+
+  const isStandalone =
+    typeof window !== "undefined" &&
+    (window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone === true);
 
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
@@ -28,8 +35,19 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
   }, []);
 
   const handleEnableNotifications = async () => {
+    if (
+      typeof window !== "undefined" &&
+      "Notification" in window &&
+      Notification.permission === "denied"
+    ) {
+      setIsUnblockModalOpen(true);
+      return;
+    }
     const granted = await notificationManager.requestPermission();
-    setNotifStatus(granted ? "granted" : "denied");
+    const currentPerm = notificationManager.getPermissionStatus();
+    setNotifStatus(
+      currentPerm === "granted" ? "granted" : currentPerm === "denied" ? "denied" : "default"
+    );
     if (granted) {
       notificationManager.playTaskChime();
       notificationManager.triggerVibration([200, 100, 200]);
@@ -38,6 +56,10 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
       });
       if (currentUser && currentUser.type === "employee") {
         notificationManager.subscribeToPushNotifications(currentUser.id).catch(() => {});
+      }
+    } else {
+      if (currentPerm === "denied") {
+        setIsUnblockModalOpen(true);
       }
     }
   };
@@ -65,7 +87,21 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
           {currentUser && (
             <>
               {/* Notification Permission Quick Action */}
-              {notifStatus !== "granted" && (
+              {notifStatus === "denied" ? (
+                <button
+                  type="button"
+                  onClick={() => setIsUnblockModalOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold transition-colors shadow-2xs cursor-pointer"
+                  title={
+                    isStandalone
+                      ? "Notifications disabled in phone settings. Tap to unblock."
+                      : "Notifications blocked in browser. Tap to unblock."
+                  }
+                >
+                  <ShieldAlert className="h-3.5 w-3.5 text-rose-600" />
+                  <span className="hidden sm:inline">Unblock Alerts</span>
+                </button>
+              ) : notifStatus !== "granted" ? (
                 <button
                   type="button"
                   onClick={handleEnableNotifications}
@@ -75,7 +111,7 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
                   <Bell className="h-3.5 w-3.5 text-blue-600" />
                   <span className="hidden sm:inline">Enable Alerts</span>
                 </button>
-              )}
+              ) : null}
 
               {/* Show role banner */}
               <div className="hidden md:flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-full py-1 px-3.5">
@@ -106,6 +142,25 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
           )}
         </div>
       </div>
+
+      {/* 🛡️ Notification Unblock Instructions Modal for Phone & Browser */}
+      <NotificationUnblockModal
+        isOpen={isUnblockModalOpen}
+        onClose={() => {
+          setIsUnblockModalOpen(false);
+          if (typeof window !== "undefined" && "Notification" in window) {
+            setNotifStatus(Notification.permission);
+          }
+        }}
+        onUnblocked={() => {
+          if (typeof window !== "undefined" && "Notification" in window) {
+            setNotifStatus(Notification.permission);
+          }
+          if (currentUser && currentUser.type === "employee") {
+            notificationManager.subscribeToPushNotifications(currentUser.id).catch(() => {});
+          }
+        }}
+      />
     </header>
   );
 }

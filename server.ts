@@ -4,13 +4,29 @@ import fs from "fs";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import webpush from "web-push";
+import JSZip from "jszip";
 
 // Load Environment Variables (.env)
 dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
-app.use(express.json());
+app.use(express.json({ limit: "150mb" }));
+app.use(express.urlencoded({ extended: true, limit: "150mb" }));
+
+// Static uploads directory for softwares
+const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads", "softwares");
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+app.use("/uploads/softwares", express.static(UPLOADS_DIR));
+
+// Static uploads directory for company network diagrams
+const DIAGRAMS_DIR = path.join(process.cwd(), "public", "uploads", "diagrams");
+if (!fs.existsSync(DIAGRAMS_DIR)) {
+  fs.mkdirSync(DIAGRAMS_DIR, { recursive: true });
+}
+app.use("/uploads/diagrams", express.static(DIAGRAMS_DIR));
 
 // Custom CORS middleware to allow cross-origin requests from mobile applications or external previews
 app.use((req, res, next) => {
@@ -244,6 +260,11 @@ interface Company {
   created_by: string;
   allocated_engineer_id?: number | null;
   allocated_engineer_name?: string | null;
+  network_diagram_url?: string | null;
+  network_diagram_updated_at?: string | null;
+  network_diagram_updated_by?: string | null;
+  network_diagram_notes?: string | null;
+  network_diagram_data?: any | null;
 }
 
 interface CompanyAsset {
@@ -302,40 +323,64 @@ interface PushSubscriptionRecord {
   created_at: string;
 }
 
-export interface EngineerLiveLocationRecord {
-  employee_id: number;
-  employee_name: string;
-  employee_role: string;
-  latitude: number;
-  longitude: number;
-  accuracy: number; // in meters (high precision)
-  altitude?: number | null;
-  altitude_accuracy?: number | null;
-  heading?: number | null;
-  speed?: number | null;
-  battery_level?: number | null;
-  is_charging?: boolean;
-  status: "on-duty" | "in-transit" | "stationary" | "idle" | "off-duty";
-  device_type: "installed_pwa" | "mobile_browser" | "desktop";
-  is_pwa_installed?: boolean;
-  address?: string;
-  current_task_id?: number | null;
-  current_task_title?: string | null;
+export type SoftwareCategory = 
+  | "Antivirus & Security"
+  | "Productivity & Office"
+  | "OS & System Drivers"
+  | "Browsers & Web"
+  | "Utilities & Tools"
+  | "Remote Support"
+  | "Accounting & ERP"
+  | "Other";
+
+export type SoftwarePlatform = "Windows" | "macOS" | "Linux" | "Android" | "All";
+
+export interface SoftwareItem {
+  id: number;
+  name: string;
+  version: string;
+  category: SoftwareCategory;
+  platform: SoftwarePlatform;
+  description?: string;
+  storage_type: "file" | "url";
+  file_url?: string;
+  file_name?: string;
+  original_file_name?: string;
+  file_size?: string;
+  license_key?: string;
+  silent_install_command?: string;
+  installation_notes?: string;
+  created_by: string;
+  created_by_role: string;
+  created_at: string;
   updated_at: string;
-  phone?: string | null;
 }
 
-export interface EngineerLocationBreadcrumbRecord {
+export interface SoftwareGroupItem {
+  software_id: number;
+  is_mandatory: boolean;
+  notes?: string;
+}
+
+export type TargetProfile = 
+  | "Standard Workstation"
+  | "Executive / Laptop"
+  | "Accounting & Finance"
+  | "Design & CAD"
+  | "Development"
+  | "Retail / POS"
+  | "Custom";
+
+export interface SoftwareGroup {
   id: number;
-  employee_id: number;
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-  speed?: number | null;
-  heading?: number | null;
-  timestamp: string;
-  address?: string;
-  battery_level?: number | null;
+  name: string;
+  description: string;
+  target_profile: TargetProfile;
+  items: SoftwareGroupItem[];
+  created_by: string;
+  created_by_role: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface DatabaseSchema {
@@ -348,13 +393,14 @@ interface DatabaseSchema {
   assets?: CompanyAsset[];
   attendance?: AttendanceRecord[];
   push_subscriptions?: PushSubscriptionRecord[];
-  engineer_live_locations?: EngineerLiveLocationRecord[];
-  engineer_location_history?: EngineerLocationBreadcrumbRecord[];
-  nextLocationBreadcrumbId?: number;
   vapid_keys?: {
     publicKey: string;
     privateKey: string;
   };
+  softwares?: SoftwareItem[];
+  software_groups?: SoftwareGroup[];
+  nextSoftwareId?: number;
+  nextSoftwareGroupId?: number;
   nextTaskId: number;
   nextTodoId?: number;
   nextOfflineTravelId?: number;
@@ -500,24 +546,64 @@ function initDb(): DatabaseSchema {
         data.push_subscriptions = [];
         migrated = true;
       }
-      if (!data.engineer_live_locations) {
-        data.engineer_live_locations = [];
+      if ((data as any).engineer_live_locations) {
+        delete (data as any).engineer_live_locations;
         migrated = true;
       }
-      if (!data.engineer_location_history) {
-        data.engineer_location_history = [];
+      if ((data as any).engineer_location_history) {
+        delete (data as any).engineer_location_history;
         migrated = true;
       }
-      if (typeof data.nextLocationBreadcrumbId !== "number") {
-        data.nextLocationBreadcrumbId = data.engineer_location_history.length > 0 
-          ? Math.max(...data.engineer_location_history.map(b => b.id)) + 1 
-          : 1;
+      if ((data as any).nextLocationBreadcrumbId) {
+        delete (data as any).nextLocationBreadcrumbId;
+        migrated = true;
+      }
+      // Clean up any initial dummy softwares and software groups
+      const dummySoftwareNames = new Set([
+        "Google Chrome Enterprise",
+        "AnyDesk Remote Desktop",
+        "7-Zip Compression Utility",
+        "LibreOffice Productivity Suite",
+        "Quick Heal Total Security"
+      ]);
+      const dummyGroupNames = new Set([
+        "Standard AMC Workstation Kit",
+        "Finance & Accounts Bundle"
+      ]);
+
+      if (!data.softwares) {
+        data.softwares = [];
+        migrated = true;
+      } else {
+        const initialCount = data.softwares.length;
+        data.softwares = data.softwares.filter(s => !dummySoftwareNames.has(s.name));
+        if (data.softwares.length !== initialCount) {
+          migrated = true;
+        }
+      }
+      if (typeof data.nextSoftwareId !== "number") {
+        data.nextSoftwareId = data.softwares.length > 0 ? Math.max(...data.softwares.map(s => s.id)) + 1 : 1;
+        migrated = true;
+      }
+
+      if (!data.software_groups) {
+        data.software_groups = [];
+        migrated = true;
+      } else {
+        const initialGroupCount = data.software_groups.length;
+        data.software_groups = data.software_groups.filter(g => !dummyGroupNames.has(g.name));
+        if (data.software_groups.length !== initialGroupCount) {
+          migrated = true;
+        }
+      }
+      if (typeof data.nextSoftwareGroupId !== "number") {
+        data.nextSoftwareGroupId = data.software_groups.length > 0 ? Math.max(...data.software_groups.map(g => g.id)) + 1 : 1;
         migrated = true;
       }
       if (migrated) {
         try {
           fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-          console.log("Database employees and todos migrated with clean credentials successfully.");
+          console.log("Database employees, todos, and software repository migrated successfully.");
         } catch (writeErr: any) {
           console.error("⚠️ Failed to write migrated database to filesystem:", writeErr?.message || writeErr);
         }
@@ -630,6 +716,10 @@ function initDb(): DatabaseSchema {
     nextAssetId: 1,
     attendance: [],
     nextAttendanceId: 1,
+    softwares: [],
+    software_groups: [],
+    nextSoftwareId: 1,
+    nextSoftwareGroupId: 1,
     settings: {
       petrol_price: 100
     }
@@ -1711,6 +1801,127 @@ app.post("/api/companies/:id/allocate", async (req, res) => {
   }
 
   res.json(db.companies![companyIndex]);
+});
+
+// Upload or update network diagram for a company
+app.post("/api/companies/:id/network-diagram", async (req, res) => {
+  try {
+    const companyId = Number(req.params.id);
+    if (isNaN(companyId)) {
+      return res.status(400).json({ error: "Invalid company ID" });
+    }
+
+    if (!db.companies) db.companies = [];
+    const companyIndex = db.companies.findIndex(c => Number(c.id) === companyId);
+    if (companyIndex === -1) {
+      return res.status(404).json({ error: "Company not found" });
+    }
+
+    const { image_data, image_name, notes, updated_by, diagram_data } = req.body;
+    let diagramUrl = db.companies[companyIndex].network_diagram_url || null;
+
+    if (image_data) {
+      if (typeof image_data === "string" && image_data.startsWith("http")) {
+        diagramUrl = image_data;
+      } else if (typeof image_data === "string" && image_data.startsWith("data:")) {
+        let ext = ".png";
+        if (image_data.startsWith("data:image/jpeg") || image_data.startsWith("data:image/jpg")) ext = ".jpg";
+        else if (image_data.startsWith("data:image/webp")) ext = ".webp";
+        else if (image_data.startsWith("data:image/svg")) ext = ".svg";
+        else if (image_name && path.extname(image_name)) ext = path.extname(image_name);
+
+        const fileName = `diagram_company_${companyId}_${Date.now()}${ext}`;
+        const targetPath = path.join(DIAGRAMS_DIR, fileName);
+
+        const base64Data = image_data.replace(/^data:.*?;base64,/, "");
+        fs.writeFileSync(targetPath, Buffer.from(base64Data, "base64"));
+        diagramUrl = `/uploads/diagrams/${fileName}`;
+      }
+    }
+
+    const now = new Date().toISOString();
+    db.companies[companyIndex].network_diagram_url = diagramUrl;
+    db.companies[companyIndex].network_diagram_updated_at = now;
+    if (diagram_data !== undefined) {
+      db.companies[companyIndex].network_diagram_data = diagram_data;
+    }
+    if (notes !== undefined) {
+      db.companies[companyIndex].network_diagram_notes = notes ? String(notes).trim() : null;
+    }
+    if (updated_by) {
+      db.companies[companyIndex].network_diagram_updated_by = String(updated_by);
+    }
+
+    saveDb();
+
+    logSQL(`UPDATE companies SET network_diagram_url = '${diagramUrl || ""}' WHERE id = ${companyId};`, 1);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from("companies").update({
+          network_diagram_url: diagramUrl,
+          network_diagram_notes: notes || null,
+          network_diagram_updated_at: now
+        }).eq("id", companyId);
+      } catch (e) {
+        console.warn("Could not sync diagram to Supabase:", e);
+      }
+    }
+
+    res.json(db.companies[companyIndex]);
+  } catch (err: any) {
+    console.error("Failed to upload network diagram:", err);
+    res.status(500).json({ error: err.message || "Failed to update network diagram" });
+  }
+});
+
+// Delete network diagram for a company
+app.delete("/api/companies/:id/network-diagram", async (req, res) => {
+  try {
+    const companyId = Number(req.params.id);
+    if (isNaN(companyId)) {
+      return res.status(400).json({ error: "Invalid company ID" });
+    }
+
+    if (!db.companies) db.companies = [];
+    const companyIndex = db.companies.findIndex(c => Number(c.id) === companyId);
+    if (companyIndex === -1) {
+      return res.status(404).json({ error: "Company not found" });
+    }
+
+    const currentUrl = db.companies[companyIndex].network_diagram_url;
+    if (currentUrl && currentUrl.startsWith("/uploads/diagrams/")) {
+      const fileName = path.basename(currentUrl);
+      const filePath = path.join(DIAGRAMS_DIR, fileName);
+      if (fs.existsSync(filePath)) {
+        try {
+          fs.unlinkSync(filePath);
+        } catch (e) {}
+      }
+    }
+
+    db.companies[companyIndex].network_diagram_url = null;
+    db.companies[companyIndex].network_diagram_updated_at = new Date().toISOString();
+    db.companies[companyIndex].network_diagram_notes = null;
+    db.companies[companyIndex].network_diagram_data = null;
+    saveDb();
+
+    logSQL(`UPDATE companies SET network_diagram_url = NULL WHERE id = ${companyId};`, 1);
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from("companies").update({
+          network_diagram_url: null,
+          network_diagram_notes: null,
+          network_diagram_updated_at: new Date().toISOString()
+        }).eq("id", companyId);
+      } catch (e) {}
+    }
+
+    res.json(db.companies[companyIndex]);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to delete network diagram" });
+  }
 });
 
 // Delete full company and all its assets from records (Admin & Manager)
@@ -4665,490 +4876,528 @@ app.post("/api/sql/clear", async (req, res) => {
     res.json({ message: "All tasks, engineers, to-do tasks, and attendance records have been successfully removed from the database.", data: db });
   }
 });
-
-// Proxy IP lookup endpoint for Geolocation fallback without browser CORS/CSP errors
-app.get("/api/ip-lookup", async (req, res) => {
-  try {
-    const response = await fetch("https://ipapi.co/json/", { signal: AbortSignal.timeout(3000) });
-    if (response.ok) {
-      const data = await response.json();
-      return res.json(data);
-    }
-  } catch (e) {
-    // Fallback to secondary service
-    try {
-      const secResp = await fetch("https://ipinfo.io/json", { signal: AbortSignal.timeout(3000) });
-      if (secResp.ok) {
-        const data = await secResp.json();
-        if (data.loc) {
-          const [lat, lng] = data.loc.split(",");
-          return res.json({ latitude: Number(lat), longitude: Number(lng), city: data.city });
-        }
-      }
-    } catch (e2) {}
-  }
-  // Default Pune PATS HQ coordinates
-  res.json({
-    latitude: 18.5204,
-    longitude: 73.8567,
-    city: "Pune",
-    region: "Maharashtra",
-    country_name: "India"
-  });
-});
-
-// Proxy reverse geocoding to resolve accurate street address without CORS/rate limits
-const geoCache = new Map<string, string>();
-app.get("/api/geocode/reverse", async (req, res) => {
-  const lat = Number(req.query.lat);
-  const lng = Number(req.query.lng);
-  if (isNaN(lat) || isNaN(lng)) {
-    return res.status(400).json({ error: "Invalid latitude or longitude parameters" });
-  }
-
-  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
-  if (geoCache.has(cacheKey)) {
-    return res.json({ formatted_address: geoCache.get(cacheKey), source: "cache" });
-  }
-
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY || "AIzaSyAs8vT-YrFHu8XDuGnYccwFyOxPYRavzog";
-
-  // 1. Google Maps Geocoding API
-  try {
-    const gResp = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`, {
-      signal: AbortSignal.timeout(4000)
-    });
-    if (gResp.ok) {
-      const gData = await gResp.json();
-      if (gData.results && gData.results[0]) {
-        const address = gData.results[0].formatted_address;
-        geoCache.set(cacheKey, address);
-        return res.json({ formatted_address: address, source: "google_maps" });
-      }
-    }
-  } catch (e) {}
-
-  // 2. OpenStreetMap Nominatim fallback with proper User-Agent
-  try {
-    const osmResp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`, {
-      headers: { "User-Agent": "PATS-Computers-Tracking/1.0" },
-      signal: AbortSignal.timeout(4000)
-    });
-    if (osmResp.ok) {
-      const osmData = await osmResp.json();
-      if (osmData.display_name) {
-        const address = osmData.display_name;
-        geoCache.set(cacheKey, address);
-        return res.json({ formatted_address: address, source: "osm" });
-      }
-    }
-  } catch (e2) {}
-
-  const fallback = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-  res.json({ formatted_address: fallback, source: "coordinates" });
-});
-
 // ==========================================
-// 🛰️ REAL-TIME HIGH PRECISION ENGINEER GPS TRACKING APIS
-// Supports installed mobile PWA with high accuracy GPS sensor telemetry
+// Software Repository & Provisioning Groups APIs
 // ==========================================
 
-// 1. Ingest High-Precision Location Ping from Engineer Device
-app.post("/api/tracking/ping", (req, res) => {
+// 1. Get all softwares
+app.get("/api/softwares", (req, res) => {
+  try {
+    if (!db.softwares) db.softwares = [];
+    res.json(db.softwares);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to fetch softwares" });
+  }
+});
+
+// 2. Direct Streaming Binary Upload (Prevents base64 corruption, memory exhaustion, and payload limits)
+app.post("/api/softwares/upload-binary", (req, res) => {
+  try {
+    const rawFileName = req.query.fileName ? decodeURIComponent(String(req.query.fileName)) : "installer.exe";
+    const cleanExt = path.extname(rawFileName) || ".exe";
+    const baseName = path.basename(rawFileName, cleanExt).replace(/[^a-zA-Z0-9_-]/g, "_");
+    const uniqueFileName = `${Date.now()}_${baseName}${cleanExt}`;
+    const targetPath = path.join(UPLOADS_DIR, uniqueFileName);
+
+    const writeStream = fs.createWriteStream(targetPath);
+    req.pipe(writeStream);
+
+    writeStream.on("finish", () => {
+      try {
+        const stats = fs.statSync(targetPath);
+        const sizeInMb = (stats.size / (1024 * 1024)).toFixed(1);
+        const finalFileSize = stats.size > 1024 * 1024 ? `${sizeInMb} MB` : `${Math.round(stats.size / 1024)} KB`;
+
+        res.json({
+          file_url: `/uploads/softwares/${uniqueFileName}`,
+          file_name: uniqueFileName,
+          original_file_name: rawFileName,
+          file_size: finalFileSize,
+          bytes: stats.size
+        });
+      } catch (statErr: any) {
+        res.status(500).json({ error: "Failed to read uploaded file stats" });
+      }
+    });
+
+    writeStream.on("error", (err) => {
+      console.error("Binary upload stream write error:", err);
+      res.status(500).json({ error: "Failed to write uploaded binary file to disk" });
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Binary upload request failed" });
+  }
+});
+
+// 3. Add / Register software
+app.post("/api/softwares", (req, res) => {
   try {
     const {
-      employee_id,
-      latitude,
-      longitude,
-      accuracy,
-      altitude,
-      altitude_accuracy,
-      heading,
-      speed,
-      battery_level,
-      is_charging,
-      status,
-      device_type,
-      is_pwa_installed,
-      address,
-      current_task_id
+      name,
+      version,
+      category,
+      platform,
+      description,
+      storage_type,
+      file_url,
+      file_name,
+      original_file_name,
+      file_size,
+      file_data, // optional base64 fallback
+      license_key,
+      silent_install_command,
+      installation_notes,
+      created_by,
+      created_by_role
     } = req.body;
 
-    const empId = Number(employee_id);
-    if (!empId || typeof latitude !== "number" || typeof longitude !== "number") {
-      return res.status(400).json({ error: "Valid employee_id, latitude, and longitude are required." });
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Software name is required" });
     }
 
-    if (!db.engineer_live_locations) db.engineer_live_locations = [];
-    if (!db.engineer_location_history) db.engineer_location_history = [];
-    if (!db.nextLocationBreadcrumbId) db.nextLocationBreadcrumbId = 1;
+    if (!db.softwares) db.softwares = [];
+    if (!db.nextSoftwareId) {
+      db.nextSoftwareId = db.softwares.length > 0 ? Math.max(...db.softwares.map(s => s.id)) + 1 : 1;
+    }
 
-    const employee = (db.employees || []).find(e => e.id === empId);
-    const empName = employee ? employee.name : (req.body.employee_name || `Engineer #${empId}`);
-    const empRole = employee ? employee.role : (req.body.employee_role || "Service Engineer");
-    const empPhone = employee ? employee.phone : null;
+    const newId = db.nextSoftwareId++;
+    const now = new Date().toISOString();
+    let finalFileUrl = file_url || "";
+    let finalOriginalName = original_file_name || file_name || `${name.trim().toLowerCase().replace(/[^a-z0-9]/g, "_")}.exe`;
+    let finalFileName = file_name || finalOriginalName;
+    let finalFileSize = file_size || "Direct Link";
 
-    // Find active task if not explicitly passed
-    let taskId = current_task_id ? Number(current_task_id) : null;
-    let taskTitle: string | null = null;
-    if (!taskId) {
-      const activeTask = (db.tasks || []).find(
-        t => t.assigned_to === empId && (t.status === "In Progress" || t.status === "Pending")
-      );
-      if (activeTask) {
-        taskId = activeTask.id;
-        taskTitle = `${activeTask.customer_name} • ${activeTask.problem_reported ? activeTask.problem_reported.slice(0, 35) : "Field Service"}`;
-      }
-    } else {
-      const foundTask = (db.tasks || []).find(t => t.id === taskId);
-      if (foundTask) {
-        taskTitle = `${foundTask.customer_name} • ${foundTask.problem_reported ? foundTask.problem_reported.slice(0, 35) : "Field Service"}`;
+    // Fallback: Handle direct file upload via base64 if provided
+    if (storage_type === "file" && file_data) {
+      try {
+        const cleanExt = path.extname(file_name || "") || ".exe";
+        const baseName = path.basename(file_name || "software", cleanExt).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const uniqueFileName = `${Date.now()}_${baseName}${cleanExt}`;
+        const targetPath = path.join(UPLOADS_DIR, uniqueFileName);
+
+        const base64Data = file_data.replace(/^data:.*?;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        fs.writeFileSync(targetPath, buffer);
+
+        finalFileUrl = `/uploads/softwares/${uniqueFileName}`;
+        finalFileName = uniqueFileName;
+        finalOriginalName = file_name || `${baseName}${cleanExt}`;
+        
+        const sizeInMb = (buffer.length / (1024 * 1024)).toFixed(1);
+        finalFileSize = buffer.length > 1024 * 1024 ? `${sizeInMb} MB` : `${Math.round(buffer.length / 1024)} KB`;
+      } catch (fileErr: any) {
+        console.error("Failed to write uploaded software file:", fileErr);
+        return res.status(500).json({ error: `File storage failed: ${fileErr.message || "Unknown error"}` });
       }
     }
 
-    // Determine movement state based on speed and explicit state
-    const speedVal = typeof speed === "number" ? Math.max(0, speed) : null;
-    let calculatedStatus: "on-duty" | "in-transit" | "stationary" | "idle" | "off-duty" = status || "on-duty";
-    if (status !== "off-duty" && status !== "idle") {
-      if (speedVal !== null && speedVal > 4) {
-        calculatedStatus = "in-transit";
-      } else if (speedVal !== null && speedVal <= 2) {
-        calculatedStatus = "stationary";
+    const newSoftware: SoftwareItem = {
+      id: newId,
+      name: name.trim(),
+      version: version ? version.trim() : "1.0",
+      category: category || "Utilities & Tools",
+      platform: platform || "Windows",
+      description: description ? description.trim() : "",
+      storage_type: storage_type === "file" ? "file" : "url",
+      file_url: finalFileUrl,
+      file_name: finalFileName,
+      original_file_name: finalOriginalName,
+      file_size: finalFileSize,
+      license_key: license_key ? license_key.trim() : undefined,
+      silent_install_command: silent_install_command ? silent_install_command.trim() : undefined,
+      installation_notes: installation_notes ? installation_notes.trim() : undefined,
+      created_by: created_by || "Admin",
+      created_by_role: created_by_role || "Admin",
+      created_at: now,
+      updated_at: now
+    };
+
+    db.softwares.push(newSoftware);
+    saveDb();
+
+    res.status(201).json(newSoftware);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to create software entry" });
+  }
+});
+
+// 4. Update software
+app.put("/api/softwares/:id", (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!db.softwares) db.softwares = [];
+    const index = db.softwares.findIndex(s => s.id === id);
+    if (index === -1) {
+      return res.status(404).json({ error: "Software not found" });
+    }
+
+    const current = db.softwares[index];
+    const {
+      name,
+      version,
+      category,
+      platform,
+      description,
+      storage_type,
+      file_url,
+      file_name,
+      original_file_name,
+      file_size,
+      file_data,
+      license_key,
+      silent_install_command,
+      installation_notes
+    } = req.body;
+
+    let updatedFileUrl = file_url !== undefined ? file_url : current.file_url;
+    let updatedFileName = file_name !== undefined ? file_name : current.file_name;
+    let updatedOriginalName = original_file_name !== undefined ? original_file_name : current.original_file_name;
+    let updatedFileSize = file_size !== undefined ? file_size : current.file_size;
+
+    // Handle new file replacement if base64 provided
+    if (storage_type === "file" && file_data) {
+      try {
+        const cleanExt = path.extname(file_name || current.file_name || "") || ".exe";
+        const baseName = path.basename(file_name || current.file_name || "software", cleanExt).replace(/[^a-zA-Z0-9_-]/g, "_");
+        const uniqueFileName = `${Date.now()}_${baseName}${cleanExt}`;
+        const targetPath = path.join(UPLOADS_DIR, uniqueFileName);
+
+        const base64Data = file_data.replace(/^data:.*?;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+        fs.writeFileSync(targetPath, buffer);
+
+        updatedFileUrl = `/uploads/softwares/${uniqueFileName}`;
+        updatedFileName = uniqueFileName;
+        updatedOriginalName = file_name || `${baseName}${cleanExt}`;
+        const sizeInMb = (buffer.length / (1024 * 1024)).toFixed(1);
+        updatedFileSize = buffer.length > 1024 * 1024 ? `${sizeInMb} MB` : `${Math.round(buffer.length / 1024)} KB`;
+      } catch (fileErr: any) {
+        console.error("Failed to write updated software file:", fileErr);
+        return res.status(500).json({ error: `File update failed: ${fileErr.message || "Unknown error"}` });
+      }
+    }
+
+    db.softwares[index] = {
+      ...current,
+      name: name !== undefined ? name.trim() : current.name,
+      version: version !== undefined ? version.trim() : current.version,
+      category: category !== undefined ? category : current.category,
+      platform: platform !== undefined ? platform : current.platform,
+      description: description !== undefined ? description.trim() : current.description,
+      storage_type: storage_type !== undefined ? storage_type : current.storage_type,
+      file_url: updatedFileUrl,
+      file_name: updatedFileName,
+      original_file_name: updatedOriginalName,
+      file_size: updatedFileSize,
+      license_key: license_key !== undefined ? (license_key ? license_key.trim() : "") : current.license_key,
+      silent_install_command: silent_install_command !== undefined ? (silent_install_command ? silent_install_command.trim() : "") : current.silent_install_command,
+      installation_notes: installation_notes !== undefined ? (installation_notes ? installation_notes.trim() : "") : current.installation_notes,
+      updated_at: new Date().toISOString()
+    };
+
+    saveDb();
+    res.json(db.softwares[index]);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to update software" });
+  }
+});
+
+// 5. Delete software
+app.delete("/api/softwares/:id", (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!db.softwares) db.softwares = [];
+    const software = db.softwares.find(s => s.id === id);
+    if (!software) {
+      return res.status(404).json({ error: "Software not found" });
+    }
+
+    // Try to remove file from disk if local
+    if (software.storage_type === "file" && software.file_name) {
+      const localPath = path.join(UPLOADS_DIR, software.file_name);
+      if (fs.existsSync(localPath)) {
+        try {
+          fs.unlinkSync(localPath);
+        } catch (unlinkErr) {
+          console.warn("Could not delete local binary file:", unlinkErr);
+        }
+      }
+    }
+
+    db.softwares = db.softwares.filter(s => s.id !== id);
+
+    // Also remove from any software groups
+    if (db.software_groups) {
+      db.software_groups.forEach(group => {
+        group.items = group.items.filter(item => item.software_id !== id);
+      });
+    }
+
+    saveDb();
+    res.json({ success: true, message: `Software '${software.name}' deleted successfully` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to delete software" });
+  }
+});
+
+// 6. Download software binary with full byte integrity & RFC 5987 headers
+app.get("/api/softwares/:id/download", (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!db.softwares) db.softwares = [];
+    const software = db.softwares.find(s => s.id === id);
+    if (!software) {
+      return res.status(404).json({ error: "Software not found" });
+    }
+
+    // Determine clean human-friendly download name
+    const rawName = software.original_file_name || software.file_name || `${software.name}.exe`;
+    const cleanDownloadName = path.basename(rawName).replace(/^\d{10,}_/, "");
+
+    if (software.storage_type === "file" && software.file_name) {
+      const localPath = path.join(UPLOADS_DIR, software.file_name);
+      if (fs.existsSync(localPath)) {
+        const stat = fs.statSync(localPath);
+        const ext = path.extname(cleanDownloadName).toLowerCase();
+        
+        let contentType = "application/octet-stream";
+        if (ext === ".zip") contentType = "application/zip";
+        else if (ext === ".exe") contentType = "application/vnd.microsoft.portable-executable";
+        else if (ext === ".msi") contentType = "application/x-msi";
+        else if (ext === ".dmg") contentType = "application/x-apple-diskimage";
+        else if (ext === ".apk") contentType = "application/vnd.android.package-archive";
+        else if (ext === ".tar" || ext === ".gz") contentType = "application/gzip";
+
+        const safeAscii = cleanDownloadName.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, '\\"');
+        const encodedUtf8 = encodeURIComponent(cleanDownloadName);
+
+        res.setHeader("Content-Type", contentType);
+        res.setHeader("Content-Length", stat.size);
+        res.setHeader("Content-Disposition", `attachment; filename="${safeAscii}"; filename*=UTF-8''${encodedUtf8}`);
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+
+        const stream = fs.createReadStream(localPath);
+        return stream.pipe(res);
       } else {
-        calculatedStatus = "on-duty";
+        // Critical: Do NOT redirect to /uploads/softwares/... because Vite SPA middleware returns index.html!
+        return res.status(404).json({
+          error: `Software file '${cleanDownloadName}' is not available on server disk. Please re-upload the installer.`
+        });
       }
     }
 
-    const now = new Date().toISOString();
-
-    const liveRecord: EngineerLiveLocationRecord = {
-      employee_id: empId,
-      employee_name: empName,
-      employee_role: empRole,
-      latitude: Number(latitude.toFixed(6)),
-      longitude: Number(longitude.toFixed(6)),
-      accuracy: typeof accuracy === "number" ? Number(accuracy.toFixed(1)) : 8.0,
-      altitude: typeof altitude === "number" ? Number(altitude.toFixed(1)) : null,
-      altitude_accuracy: typeof altitude_accuracy === "number" ? Number(altitude_accuracy.toFixed(1)) : null,
-      heading: typeof heading === "number" ? Number(heading.toFixed(1)) : null,
-      speed: speedVal !== null ? Number(speedVal.toFixed(1)) : null,
-      battery_level: typeof battery_level === "number" ? Math.round(battery_level) : null,
-      is_charging: Boolean(is_charging),
-      status: calculatedStatus,
-      device_type: device_type || (is_pwa_installed ? "installed_pwa" : "mobile_browser"),
-      is_pwa_installed: Boolean(is_pwa_installed),
-      address: address || undefined,
-      current_task_id: taskId,
-      current_task_title: taskTitle,
-      updated_at: now,
-      phone: empPhone
-    };
-
-    // Upsert into live locations array
-    const existingIndex = db.engineer_live_locations.findIndex(l => l.employee_id === empId);
-    if (existingIndex >= 0) {
-      db.engineer_live_locations[existingIndex] = liveRecord;
-    } else {
-      db.engineer_live_locations.push(liveRecord);
+    if (software.file_url) {
+      // Direct redirect without Content-Disposition so browser navigates to vendor page cleanly
+      return res.redirect(software.file_url);
     }
 
-    // Append to breadcrumb trail history
-    const breadcrumb: EngineerLocationBreadcrumbRecord = {
-      id: db.nextLocationBreadcrumbId++,
-      employee_id: empId,
-      latitude: liveRecord.latitude,
-      longitude: liveRecord.longitude,
-      accuracy: liveRecord.accuracy,
-      speed: liveRecord.speed,
-      heading: liveRecord.heading,
-      timestamp: now,
-      address: address || undefined,
-      battery_level: liveRecord.battery_level
-    };
-
-    db.engineer_location_history.push(breadcrumb);
-
-    // Keep history compact: retain maximum 350 most recent points per engineer
-    const empTrail = db.engineer_location_history.filter(b => b.employee_id === empId);
-    if (empTrail.length > 350) {
-      const dropCount = empTrail.length - 350;
-      const dropIds = new Set(empTrail.slice(0, dropCount).map(b => b.id));
-      db.engineer_location_history = db.engineer_location_history.filter(b => !dropIds.has(b.id));
-    }
-
-    saveDb();
-
-    res.json({
-      success: true,
-      server_timestamp: now,
-      record: liveRecord
-    });
+    res.status(404).json({ error: "No download file or URL available for this software" });
   } catch (err: any) {
-    console.error("GPS telemetry ping failure:", err);
-    res.status(500).json({ error: err.message || "Failed to process location ping" });
+    res.status(500).json({ error: err.message || "Download request failed" });
   }
 });
 
-// 2. Fetch Live Fleet Coordinates (Admin Live Map)
-app.get("/api/tracking/live", (req, res) => {
+// 6. Get all software groups
+app.get("/api/software-groups", (req, res) => {
   try {
-    if (!db.engineer_live_locations) db.engineer_live_locations = [];
+    if (!db.software_groups) db.software_groups = [];
+    res.json(db.software_groups);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to fetch software groups" });
+  }
+});
 
-    // Filter only active field engineers
-    const activeEngineers = (db.employees || []).filter(e => {
-      const ended = e.ended_at ? new Date(e.ended_at) : null;
-      const isPast = ended && !isNaN(ended.getTime()) && ended <= new Date();
-      return !isPast && e.role.toLowerCase() !== "admin";
-    });
+// 7. Create software group
+app.post("/api/software-groups", (req, res) => {
+  try {
+    const { name, description, target_profile, items, created_by, created_by_role } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Software group name is required" });
+    }
 
-    const now = Date.now();
-    const results = activeEngineers.map(emp => {
-      const live = db.engineer_live_locations!.find(l => l.employee_id === emp.id);
+    if (!db.software_groups) db.software_groups = [];
+    if (!db.nextSoftwareGroupId) {
+      db.nextSoftwareGroupId = db.software_groups.length > 0 ? Math.max(...db.software_groups.map(g => g.id)) + 1 : 1;
+    }
 
-      // Current active task check
-      const activeTask = (db.tasks || []).find(
-        t => t.assigned_to === emp.id && (t.status === "In Progress" || t.status === "Pending")
-      );
+    const newId = db.nextSoftwareGroupId++;
+    const now = new Date().toISOString();
 
-      if (live) {
-        const pingTime = new Date(live.updated_at).getTime();
-        const diffMinutes = Math.floor((now - pingTime) / 60000);
+    const cleanItems = Array.isArray(items) 
+      ? items.map(it => ({
+          software_id: Number(it.software_id),
+          is_mandatory: Boolean(it.is_mandatory),
+          notes: it.notes ? String(it.notes).trim() : undefined
+        }))
+      : [];
 
-        let dynamicStatus = live.status;
-        if (diffMinutes > 15 && live.status !== "off-duty") {
-          dynamicStatus = "idle";
-        }
-        if (diffMinutes > 120) {
-          dynamicStatus = "off-duty";
-        }
+    const newGroup: SoftwareGroup = {
+      id: newId,
+      name: name.trim(),
+      description: description ? description.trim() : "",
+      target_profile: target_profile || "Standard Workstation",
+      items: cleanItems,
+      created_by: created_by || "Admin",
+      created_by_role: created_by_role || "Admin",
+      created_at: now,
+      updated_at: now
+    };
 
-        return {
-          ...live,
-          employee_name: emp.name,
-          employee_role: emp.role,
-          phone: emp.phone || live.phone || null,
-          status: dynamicStatus,
-          minutes_ago: diffMinutes,
-          current_task_id: activeTask ? activeTask.id : live.current_task_id,
-          current_task_title: activeTask 
-            ? `${activeTask.customer_name} • ${activeTask.problem_reported ? activeTask.problem_reported.slice(0, 35) : "Field Service"}`
-            : live.current_task_title,
-          current_task_address: activeTask?.address || null,
-          current_task_customer: activeTask?.customer_name || null,
-          current_task_status: activeTask?.status || null
-        };
+    db.software_groups.push(newGroup);
+    saveDb();
+
+    res.status(201).json(newGroup);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to create software group" });
+  }
+});
+
+// 8. Update software group
+app.put("/api/software-groups/:id", (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!db.software_groups) db.software_groups = [];
+    const index = db.software_groups.findIndex(g => g.id === id);
+    if (index === -1) {
+      return res.status(404).json({ error: "Software group not found" });
+    }
+
+    const current = db.software_groups[index];
+    const { name, description, target_profile, items } = req.body;
+
+    const cleanItems = Array.isArray(items) 
+      ? items.map(it => ({
+          software_id: Number(it.software_id),
+          is_mandatory: Boolean(it.is_mandatory),
+          notes: it.notes ? String(it.notes).trim() : undefined
+        }))
+      : current.items;
+
+    db.software_groups[index] = {
+      ...current,
+      name: name !== undefined ? name.trim() : current.name,
+      description: description !== undefined ? description.trim() : current.description,
+      target_profile: target_profile !== undefined ? target_profile : current.target_profile,
+      items: cleanItems,
+      updated_at: new Date().toISOString()
+    };
+
+    saveDb();
+    res.json(db.software_groups[index]);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to update software group" });
+  }
+});
+
+// 9. Delete software group
+app.delete("/api/software-groups/:id", (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!db.software_groups) db.software_groups = [];
+    const group = db.software_groups.find(g => g.id === id);
+    if (!group) {
+      return res.status(404).json({ error: "Software group not found" });
+    }
+
+    db.software_groups = db.software_groups.filter(g => g.id !== id);
+    saveDb();
+
+    res.json({ success: true, message: `Software group '${group.name}' deleted successfully` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || "Failed to delete software group" });
+  }
+});
+
+// 10. Direct ZIP Download for entire software group
+app.get("/api/software-groups/:id/download-zip", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!db.software_groups) db.software_groups = [];
+    const group = db.software_groups.find(g => g.id === id);
+    if (!group) {
+      return res.status(404).json({ error: "Software group not found" });
+    }
+
+    if (!db.softwares) db.softwares = [];
+    const softwareItems = group.items
+      .map(it => db.softwares!.find(s => s.id === it.software_id))
+      .filter(Boolean) as SoftwareItem[];
+
+    const safeName = group.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const zipFileName = `${safeName}_Software_Group.zip`;
+
+    const zip = new JSZip();
+
+    // 1. Generate clean Manifest / Readme with License Keys and Direct Links
+    let readme = `====================================================\r\n`;
+    readme += `PATS IT PROVISIONING KIT: ${group.name.toUpperCase()}\r\n`;
+    readme += `Generated: ${new Date().toLocaleString()}\r\n`;
+    readme += `====================================================\r\n\r\n`;
+
+    readme += `TOTAL PACKAGES IN THIS GROUP: ${softwareItems.length}\r\n`;
+    readme += `----------------------------------------------------\r\n`;
+
+    softwareItems.forEach((sw, idx) => {
+      readme += `\r\n[${idx + 1}] ${sw.name}\r\n`;
+      if (sw.version) {
+        readme += `    * VERSION: ${sw.version}\r\n`;
       }
-
-      // Default stationary point in Pune for engineers without active ping yet
-      // Seed slightly distributed around Pune central so pins don't stack 100% identically
-      const hashOffset = ((emp.id * 17) % 100) / 10000;
-      return {
-        employee_id: emp.id,
-        employee_name: emp.name,
-        employee_role: emp.role,
-        latitude: 18.5204 + hashOffset,
-        longitude: 73.8567 + hashOffset,
-        accuracy: 25.0,
-        altitude: null,
-        altitude_accuracy: null,
-        heading: null,
-        speed: 0,
-        battery_level: null,
-        is_charging: false,
-        status: "off-duty" as const,
-        device_type: "mobile_browser" as const,
-        is_pwa_installed: false,
-        address: "PATS Computer Services HQ, Pune",
-        current_task_id: activeTask ? activeTask.id : null,
-        current_task_title: activeTask ? `${activeTask.customer_name} • ${activeTask.problem_reported?.slice(0, 35)}` : null,
-        current_task_address: activeTask?.address || null,
-        current_task_customer: activeTask?.customer_name || null,
-        current_task_status: activeTask?.status || null,
-        updated_at: new Date(now - 86400000).toISOString(),
-        phone: emp.phone || null,
-        minutes_ago: 9999
-      };
+      if (sw.license_key) {
+        readme += `    * LICENSE / PRODUCT KEY: ${sw.license_key}\r\n`;
+      }
+      if (sw.file_url) {
+        readme += `    * DOWNLOAD LINK: ${sw.file_url}\r\n`;
+      }
+      if (sw.installation_notes) {
+        readme += `    * NOTES: ${sw.installation_notes}\r\n`;
+      }
+      if (sw.silent_install_command) {
+        readme += `    * SILENT INSTALL: ${sw.silent_install_command}\r\n`;
+      }
     });
 
-    res.json(results);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || "Failed to load live tracking telemetry" });
-  }
-});
+    zip.file("README_AND_LICENSE_KEYS.txt", readme);
 
-// 3. Fetch Engineer Location History / Breadcrumb Trail
-app.get("/api/tracking/history", (req, res) => {
-  try {
-    const empId = req.query.employee_id ? Number(req.query.employee_id) : null;
-    const dateParam = req.query.date as string; // Optional YYYY-MM-DD
-
-    let trail = [...(db.engineer_location_history || [])];
-
-    if (empId) {
-      trail = trail.filter(b => b.employee_id === empId);
+    // 2. Add local binary files and shortcut links
+    const installersFolder = zip.folder("installers");
+    for (const sw of softwareItems) {
+      if (sw.storage_type === "file" && sw.file_name) {
+        const localPath = path.join(UPLOADS_DIR, sw.file_name);
+        if (fs.existsSync(localPath)) {
+          const fileBuffer = fs.readFileSync(localPath);
+          const rawName = sw.original_file_name || sw.file_name;
+          const cleanName = path.basename(rawName).replace(/^\d{10,}_/, "");
+          installersFolder?.file(cleanName, fileBuffer, { binary: true });
+        }
+      } else if (sw.file_url) {
+        const safeBase = sw.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+        const shortcutName = `${safeBase}_Download_Link.url`;
+        const urlContent = `[InternetShortcut]\r\nURL=${sw.file_url}\r\n`;
+        installersFolder?.file(shortcutName, urlContent);
+      }
     }
 
-    if (dateParam) {
-      trail = trail.filter(b => b.timestamp.startsWith(dateParam));
-    }
-
-    // Sort ascending by timestamp
-    trail.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-    res.json(trail);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || "Failed to retrieve location history" });
-  }
-});
-
-// 4. Update Engineer Shift / Tracking Status (On-Duty / Off-Duty / On-Break)
-app.post("/api/tracking/status", (req, res) => {
-  try {
-    const { employee_id, status } = req.body;
-    const empId = Number(employee_id);
-    if (!empId || !status) {
-      return res.status(400).json({ error: "employee_id and status are required." });
-    }
-
-    if (!db.engineer_live_locations) db.engineer_live_locations = [];
-    const item = db.engineer_live_locations.find(l => l.employee_id === empId);
-
-    const now = new Date().toISOString();
-    if (item) {
-      item.status = status;
-      item.updated_at = now;
-      saveDb();
-      return res.json({ success: true, record: item });
-    } else {
-      const employee = (db.employees || []).find(e => e.id === empId);
-      const newRec: EngineerLiveLocationRecord = {
-        employee_id: empId,
-        employee_name: employee ? employee.name : `Engineer #${empId}`,
-        employee_role: employee ? employee.role : "Service Engineer",
-        latitude: 18.5204,
-        longitude: 73.8567,
-        accuracy: 15.0,
-        status,
-        device_type: "installed_pwa",
-        updated_at: now,
-        phone: employee?.phone || null
-      };
-      db.engineer_live_locations.push(newRec);
-      saveDb();
-      return res.json({ success: true, record: newRec });
-    }
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || "Failed to update tracking status" });
-  }
-});
-
-// 5. Simulate Field Movement for Testing & Demonstrations
-// Allows Admin to test live GPS updates & see accuracy circles on the map
-app.post("/api/tracking/simulate-engineer", (req, res) => {
-  try {
-    const { employee_id, step } = req.body;
-    const empId = Number(employee_id) || 102; // Nilesh Yadav or provided
-
-    // Realistic service route in Pune: Shivajinagar -> FC Road -> Deccan Gymkhana -> Senapati Bapat Road -> Aundh
-    const waypoints = [
-      { lat: 18.5314, lng: 73.8446, address: "Shivajinagar Bus Station, Pune", speed: 28.5, heading: 195 },
-      { lat: 18.5262, lng: 73.8415, address: "Fergusson College Road, Shivajinagar", speed: 34.0, heading: 205 },
-      { lat: 18.5173, lng: 73.8419, address: "Deccan Gymkhana Circle, Pune", speed: 18.2, heading: 270 },
-      { lat: 18.5198, lng: 73.8324, address: "Prabhat Road Lane 4, Erandwane", speed: 22.0, heading: 310 },
-      { lat: 18.5284, lng: 73.8291, address: "Law College Road Junction, Pune", speed: 30.5, heading: 350 },
-      { lat: 18.5367, lng: 73.8302, address: "Senapati Bapat Marg, Symbiosis Campus", speed: 38.0, heading: 10 },
-      { lat: 18.5471, lng: 73.8268, address: "Chaturshrungi Temple, SB Road", speed: 25.0, heading: 340 },
-      { lat: 18.5601, lng: 73.8087, address: "Bremen Chowk, Aundh, Pune", speed: 32.5, heading: 305 },
-      { lat: 18.5583, lng: 73.7925, address: "Baner Road, Balewadi High Street Exit", speed: 42.0, heading: 280 }
-    ];
-
-    const currentStep = typeof step === "number" ? Math.abs(step) % waypoints.length : Math.floor(Math.random() * waypoints.length);
-    const point = waypoints[currentStep];
-
-    // Jitter coordinates slightly to mimic continuous high-precision GPS hardware lock (±3 meters)
-    const jitterLat = (Math.random() - 0.5) * 0.00012;
-    const jitterLng = (Math.random() - 0.5) * 0.00012;
-    const finalLat = point.lat + jitterLat;
-    const finalLng = point.lng + jitterLng;
-    const highAccuracy = Number((2.8 + Math.random() * 2.5).toFixed(1)); // ±2.8m to ±5.3m
-
-    if (!db.engineer_live_locations) db.engineer_live_locations = [];
-    if (!db.engineer_location_history) db.engineer_location_history = [];
-    if (!db.nextLocationBreadcrumbId) db.nextLocationBreadcrumbId = 1;
-
-    const employee = (db.employees || []).find(e => e.id === empId);
-    const empName = employee ? employee.name : "Service Engineer";
-    const empRole = employee ? employee.role : "Field Engineer";
-
-    const now = new Date().toISOString();
-    const liveRecord: EngineerLiveLocationRecord = {
-      employee_id: empId,
-      employee_name: empName,
-      employee_role: empRole,
-      latitude: Number(finalLat.toFixed(6)),
-      longitude: Number(finalLng.toFixed(6)),
-      accuracy: highAccuracy,
-      altitude: 560 + Math.floor(Math.random() * 10),
-      altitude_accuracy: 3.5,
-      heading: point.heading,
-      speed: point.speed,
-      battery_level: 82 - (currentStep * 2),
-      is_charging: false,
-      status: point.speed > 5 ? "in-transit" : "on-duty",
-      device_type: "installed_pwa",
-      is_pwa_installed: true,
-      address: point.address,
-      updated_at: now,
-      phone: employee?.phone || "+91 98220 12345"
-    };
-
-    const idx = db.engineer_live_locations.findIndex(l => l.employee_id === empId);
-    if (idx >= 0) {
-      db.engineer_live_locations[idx] = liveRecord;
-    } else {
-      db.engineer_live_locations.push(liveRecord);
-    }
-
-    // Add to history
-    db.engineer_location_history.push({
-      id: db.nextLocationBreadcrumbId++,
-      employee_id: empId,
-      latitude: liveRecord.latitude,
-      longitude: liveRecord.longitude,
-      accuracy: highAccuracy,
-      speed: point.speed,
-      heading: point.heading,
-      timestamp: now,
-      address: point.address,
-      battery_level: liveRecord.battery_level
+    const zipBuffer = await zip.generateAsync({
+      type: "nodebuffer",
+      compression: "DEFLATE",
+      compressionOptions: { level: 6 }
     });
 
-    saveDb();
+    const safeAsciiZip = zipFileName.replace(/[^\x20-\x7E]/g, "_").replace(/"/g, '\\"');
+    const encodedUtf8Zip = encodeURIComponent(zipFileName);
 
-    res.json({
-      success: true,
-      message: `Simulated realistic GPS ping for ${empName} (Step ${currentStep + 1}/${waypoints.length})`,
-      next_step: (currentStep + 1) % waypoints.length,
-      record: liveRecord
-    });
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${safeAsciiZip}"; filename*=UTF-8''${encodedUtf8Zip}`);
+    res.setHeader("Content-Length", zipBuffer.length);
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.end(zipBuffer);
   } catch (err: any) {
-    res.status(500).json({ error: err.message || "Simulation failed" });
-  }
-});
-
-// 6. Clear Location History / Audit Reset
-app.delete("/api/tracking/history", (req, res) => {
-  try {
-    const empId = req.query.employee_id ? Number(req.query.employee_id) : null;
-    if (empId) {
-      db.engineer_location_history = (db.engineer_location_history || []).filter(b => b.employee_id !== empId);
-    } else {
-      db.engineer_location_history = [];
+    console.error("ZIP download failed:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.message || "Failed to download ZIP" });
     }
-    saveDb();
-    res.json({ success: true, message: "Location history cleared successfully" });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message || "Failed to clear history" });
   }
 });
 

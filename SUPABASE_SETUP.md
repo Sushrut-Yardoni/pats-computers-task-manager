@@ -66,6 +66,8 @@ Copy and run the following queries in your Supabase SQL Editor. This SQL block c
 
 ```sql
 -- =========== DATABASE CLEANUP / IDEMPOTENCY ===========
+DROP TABLE IF EXISTS software_groups CASCADE;
+DROP TABLE IF EXISTS softwares CASCADE;
 DROP TABLE IF EXISTS todos_history CASCADE;
 DROP TABLE IF EXISTS todos CASCADE;
 DROP TABLE IF EXISTS offline_travels CASCADE;
@@ -167,7 +169,37 @@ CREATE TABLE todos_history (
   changes JSONB NOT NULL DEFAULT '[]'::jsonb
 );
 
--- =========== 8. SET TIMESTAMP FUNCTION & TRIGGERS ===========
+-- =========== 8. CREATE SOFTWARES TABLE ===========
+CREATE TABLE softwares (
+  id INT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  version VARCHAR(100) DEFAULT 'latest',
+  category VARCHAR(100) DEFAULT 'Utilities & Tools',
+  platform VARCHAR(50) DEFAULT 'Windows',
+  storage_type VARCHAR(50) NOT NULL DEFAULT 'url', -- 'file' or 'url'
+  file_url TEXT,
+  file_name VARCHAR(255),
+  file_size VARCHAR(50),
+  license_key VARCHAR(255),
+  installation_notes TEXT,
+  created_by VARCHAR(100),
+  created_by_role VARCHAR(100),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========== 9. CREATE SOFTWARE GROUPS TABLE ===========
+CREATE TABLE software_groups (
+  id INT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  target_profile VARCHAR(100) DEFAULT 'Standard Workstation',
+  items JSONB NOT NULL DEFAULT '[]'::jsonb, -- Array of { "software_id": 1, "is_mandatory": true }
+  created_by VARCHAR(100),
+  created_by_role VARCHAR(100),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========== 10. SET TIMESTAMP FUNCTION & TRIGGERS ===========
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -205,6 +237,16 @@ INSERT INTO offline_travels (employee_id, task_id, km_travelled, remarks, create
 -- Seed Settings Configurations
 INSERT INTO settings (key, value) VALUES
   ('petrol_price', '100');
+
+-- Seed Standard Softwares
+INSERT INTO softwares (id, name, version, category, platform, storage_type, file_url, file_name, file_size, license_key, installation_notes, created_by, created_by_role) VALUES
+  (1, 'Google Chrome Enterprise', 'latest', 'Utilities & Tools', 'Windows', 'url', 'https://dl.google.com/chrome/install/latest/chrome_installer.exe', 'ChromeSetup.exe', '104 MB', NULL, 'Standard enterprise silent install: chrome_installer.exe /silent /install', 'Admin Desk', 'admin'),
+  (2, 'AnyDesk Remote Support', '8.1.0', 'Remote Desktop & Support', 'Windows', 'url', 'https://download.anydesk.com/AnyDesk.exe', 'AnyDesk.exe', '5.2 MB', NULL, 'Fast remote access tool for desktop diagnosis.', 'Admin Desk', 'admin'),
+  (3, 'Quick Heal Total Security', '24.0', 'Antivirus & Security', 'Windows', 'url', 'https://files.quickheal.com/builds/qhts64.exe', 'qhts64.exe', '340 MB', 'QH-2026-9981-PATS', 'Enter license key after installation completes.', 'Admin Desk', 'admin');
+
+-- Seed Software Groups
+INSERT INTO software_groups (id, name, description, target_profile, items, created_by, created_by_role) VALUES
+  (1, 'Standard Workstation Kit', 'Essential browser, remote support, and security tools for clients', 'Standard Workstation', '[{"software_id": 1, "is_mandatory": true}, {"software_id": 2, "is_mandatory": true}, {"software_id": 3, "is_mandatory": true}]'::jsonb, 'Admin Desk', 'admin');
 ```
 
 Press **Run** inside Supabase's interface. It will report **"Success. No rows returned."** (as standard for table creations and insertions).

@@ -4,9 +4,11 @@ import {
   Building, Plus, Search, User, CalendarRange, Edit3, Eye, FileSpreadsheet, 
   X, Check, Laptop, Shield, Network, RefreshCw, Cpu, Layers, 
   HardDrive, Key, AlertCircle, Tag, ArrowRight, UserCheck, Users, Printer, Monitor,
-  Trash2, FileText, Lock, Upload, FileUp, CheckCircle, CheckCircle2, Sparkles
+  Trash2, FileText, Lock, Upload, FileUp, CheckCircle, CheckCircle2, Sparkles,
+  ZoomIn, ZoomOut, RotateCcw, Download, Image as ImageIcon, Info, FileImage
 } from "lucide-react";
-import { Company, CompanyAsset, Employee } from "../types";
+import { Company, CompanyAsset, Employee, NetworkDiagramData } from "../types";
+import NetworkDiagramBuilder from "./NetworkDiagramBuilder";
 
 interface CompanySectionProps {
   key?: React.Key;
@@ -48,6 +50,50 @@ export default function CompanySection({
   const canAccessCompanyAssets = (_company?: Company | null) => true;
   const canViewCompanyAssets = (_company?: Company | null) => true;
 
+  // Helper to format asset validity date or handle Excel serial numbers / timestamps
+  const formatAssetValidity = (val: any): string => {
+    if (!val) return "-";
+    const str = String(val).trim();
+    if (!str || str === "-") return "-";
+
+    const num = Number(str);
+    if (!isNaN(num) && str.length > 0) {
+      // Excel serial dates typically fall between 10000 and 60000 (~1927 to ~2064)
+      if (num > 10000 && num < 60000) {
+        try {
+          const utcDays = Math.floor(num - 25569);
+          const utcValue = utcDays * 86400;
+          const dateInfo = new Date(utcValue * 1000);
+          if (!isNaN(dateInfo.getTime())) {
+            return dateInfo.toISOString().slice(0, 10);
+          }
+        } catch (e) {}
+      }
+      // Unix millisecond timestamp
+      if (num > 100000000000) {
+        try {
+          const d = new Date(num);
+          if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+        } catch (e) {}
+      }
+      // Unix second timestamp
+      if (num > 1000000000 && num <= 100000000000) {
+        try {
+          const d = new Date(num * 1000);
+          if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+        } catch (e) {}
+      }
+    }
+
+    // If it's a date string
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime()) && (str.includes("-") || str.includes("/"))) {
+      return parsed.toISOString().slice(0, 10);
+    }
+
+    return str;
+  };
+
   // Local optimistic state for instant UI response
   const [localExtraCompanies, setLocalExtraCompanies] = useState<Company[]>([]);
   const [localAssetOverrides, setLocalAssetOverrides] = useState<Map<number, CompanyAsset>>(new Map());
@@ -81,17 +127,20 @@ export default function CompanySection({
     return list;
   }, [assets, localAssetOverrides, localCreatedAssets, localDeletedAssetIds]);
 
+  // Local company overrides for instant optimistic UI updates (e.g. network diagrams)
+  const [localCompanyOverrides, setLocalCompanyOverrides] = useState<Map<number, Company>>(new Map());
+
   // Combined all companies
   const allCompanies = useMemo(() => {
     const existingIds = new Set(companies.map(c => Number(c.id)));
-    const combined = [...companies];
+    const combined = companies.map(c => localCompanyOverrides.get(Number(c.id)) || c);
     localExtraCompanies.forEach(lc => {
       if (!existingIds.has(Number(lc.id))) {
-        combined.push(lc);
+        combined.push(localCompanyOverrides.get(Number(lc.id)) || lc);
       }
     });
     return combined;
-  }, [companies, localExtraCompanies]);
+  }, [companies, localExtraCompanies, localCompanyOverrides]);
 
   // Filter companies visible to this user
   // Default to "my" (My Allocated Companies) for engineers, and "all" for administrators/managers
@@ -555,6 +604,224 @@ export default function CompanySection({
     }
   };
 
+  // ----------------------------------------------------
+  // 🌐 NETWORK DIAGRAM MANAGEMENT STATE & HANDLERS
+  // ----------------------------------------------------
+  const [diagramModalCompany, setDiagramModalCompany] = useState<Company | null>(null);
+  const [diagramActiveTab, setDiagramActiveTab] = useState<"builder" | "view" | "upload">("builder");
+  const [diagramSelectedFile, setDiagramSelectedFile] = useState<File | null>(null);
+  const [diagramPreviewUrl, setDiagramPreviewUrl] = useState<string | null>(null);
+  const [diagramNotesInput, setDiagramNotesInput] = useState("");
+  const [isUploadingDiagram, setIsUploadingDiagram] = useState(false);
+  const [diagramUploadError, setDiagramUploadError] = useState<string | null>(null);
+  const [diagramZoom, setDiagramZoom] = useState(1);
+  const [isDraggingOverDropzone, setIsDraggingOverDropzone] = useState(false);
+  const [showDeleteDiagramConfirm, setShowDeleteDiagramConfirm] = useState(false);
+  const [isDeletingDiagram, setIsDeletingDiagram] = useState(false);
+
+  const openNetworkDiagramModal = (company: Company) => {
+    const latest = localCompanyOverrides.get(Number(company.id)) || company;
+    setDiagramModalCompany(latest);
+    setDiagramNotesInput(latest.network_diagram_notes || "");
+    setDiagramSelectedFile(null);
+    setDiagramPreviewUrl(null);
+    setDiagramUploadError(null);
+    setDiagramZoom(1);
+    setShowDeleteDiagramConfirm(false);
+    // If interactive diagram data exists or no photo exists, open builder; if only photo exists, open view
+    if (latest.network_diagram_data || !latest.network_diagram_url) {
+      setDiagramActiveTab("builder");
+    } else {
+      setDiagramActiveTab("view");
+    }
+  };
+
+  const handleSaveInteractiveDiagram = async (data: { diagram_data: NetworkDiagramData; image_data?: string; notes?: string }) => {
+    if (!diagramModalCompany) return;
+    const uploaderName = currentUser?.name || currentUser?.email_id || (isAdmin ? "Administrator" : "Service Engineer");
+    const userRoleLabel = isAdminOrManager ? "Admin/Manager" : (currentUser?.role || "Engineer");
+    
+    const payload: any = {
+      diagram_data: data.diagram_data,
+      notes: data.notes !== undefined ? data.notes : (diagramModalCompany.network_diagram_notes || null),
+      updated_by: `${uploaderName} (${userRoleLabel})`
+    };
+
+    if (data.image_data) {
+      payload.image_data = data.image_data;
+      payload.image_name = `${diagramModalCompany.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_topology.png`;
+    }
+
+    const resp = await fetch(`/api/companies/${diagramModalCompany.id}/network-diagram`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!resp.ok) {
+      const errData = await resp.json().catch(() => ({}));
+      throw new Error(errData.error || "Failed to save network diagram");
+    }
+
+    const updatedComp: Company = await resp.json();
+
+    setLocalCompanyOverrides(prev => {
+      const next = new Map(prev);
+      next.set(Number(updatedComp.id), updatedComp);
+      return next;
+    });
+
+    setDiagramModalCompany(updatedComp);
+    if (viewingCompanyForExcel && Number(viewingCompanyForExcel.id) === Number(updatedComp.id)) {
+      setViewingCompanyForExcel(updatedComp);
+    }
+    showToast(`Network diagram for "${updatedComp.name}" saved successfully!`);
+    await onRefresh();
+  };
+
+  const closeNetworkDiagramModal = () => {
+    setDiagramModalCompany(null);
+    setDiagramSelectedFile(null);
+    setDiagramPreviewUrl(null);
+    setDiagramUploadError(null);
+    setShowDeleteDiagramConfirm(false);
+  };
+
+  const handleDiagramFileSelect = (file: File) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/") && !file.name.toLowerCase().endsWith(".svg")) {
+      setDiagramUploadError("Please select a valid image file (PNG, JPG, JPEG, SVG, WebP)");
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      setDiagramUploadError("Image size exceeds 50MB. Please choose a smaller file.");
+      return;
+    }
+    setDiagramUploadError(null);
+    setDiagramSelectedFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setDiagramPreviewUrl(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveNetworkDiagram = async () => {
+    if (!diagramModalCompany) return;
+    if (!diagramPreviewUrl && !diagramModalCompany.network_diagram_url && !diagramNotesInput.trim()) {
+      setDiagramUploadError("Please select an image file to upload as the network diagram.");
+      return;
+    }
+
+    setIsUploadingDiagram(true);
+    setDiagramUploadError(null);
+
+    try {
+      const uploaderName = currentUser?.name || currentUser?.email_id || (isAdmin ? "Administrator" : "Service Engineer");
+      const userRoleLabel = isAdminOrManager ? "Admin/Manager" : (currentUser?.role || "Engineer");
+      
+      const payload: any = {
+        notes: diagramNotesInput.trim(),
+        updated_by: `${uploaderName} (${userRoleLabel})`
+      };
+
+      if (diagramPreviewUrl) {
+        payload.image_data = diagramPreviewUrl;
+        payload.image_name = diagramSelectedFile?.name || "network_diagram.png";
+      }
+
+      const resp = await fetch(`/api/companies/${diagramModalCompany.id}/network-diagram`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to upload network diagram");
+      }
+
+      const updatedComp: Company = await resp.json();
+
+      // Update local state immediately for instant feedback
+      setLocalCompanyOverrides(prev => {
+        const next = new Map(prev);
+        next.set(Number(updatedComp.id), updatedComp);
+        return next;
+      });
+
+      setDiagramModalCompany(updatedComp);
+      if (viewingCompanyForExcel && Number(viewingCompanyForExcel.id) === Number(updatedComp.id)) {
+        setViewingCompanyForExcel(updatedComp);
+      }
+
+      setDiagramActiveTab("view");
+      setDiagramSelectedFile(null);
+      setDiagramPreviewUrl(null);
+      showToast(`Network diagram for "${updatedComp.name}" saved successfully!`);
+
+      await onRefresh();
+    } catch (err: any) {
+      setDiagramUploadError(err.message || "Failed to save network diagram");
+    } finally {
+      setIsUploadingDiagram(false);
+    }
+  };
+
+  const handleDeleteNetworkDiagram = async () => {
+    if (!diagramModalCompany) return;
+
+    setIsDeletingDiagram(true);
+    try {
+      const resp = await fetch(`/api/companies/${diagramModalCompany.id}/network-diagram`, {
+        method: "DELETE"
+      });
+
+      if (!resp.ok) {
+        const errData = await resp.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to delete network diagram");
+      }
+
+      const updatedComp: Company = await resp.json();
+
+      setLocalCompanyOverrides(prev => {
+        const next = new Map(prev);
+        next.set(Number(updatedComp.id), updatedComp);
+        return next;
+      });
+
+      setDiagramModalCompany(updatedComp);
+      if (viewingCompanyForExcel && Number(viewingCompanyForExcel.id) === Number(updatedComp.id)) {
+        setViewingCompanyForExcel(updatedComp);
+      }
+
+      setShowDeleteDiagramConfirm(false);
+      setDiagramActiveTab("upload");
+      setDiagramSelectedFile(null);
+      setDiagramPreviewUrl(null);
+      setDiagramNotesInput("");
+      showToast(`Network diagram for "${updatedComp.name}" removed.`);
+
+      await onRefresh();
+    } catch (err: any) {
+      showToast("Error deleting diagram: " + (err.message || err), true);
+    } finally {
+      setIsDeletingDiagram(false);
+    }
+  };
+
+  const handleDownloadDiagram = () => {
+    if (!diagramModalCompany?.network_diagram_url) return;
+    const link = document.createElement("a");
+    link.href = diagramModalCompany.network_diagram_url;
+    const cleanName = diagramModalCompany.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+    link.download = `${cleanName}_Network_Diagram.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // Assets belonging to viewing company (In AMC first, In Use assets arranged ascending as per asset id)
   const companyAssets = useMemo(() => {
     if (!viewingCompanyForExcel) return [];
@@ -901,7 +1168,7 @@ export default function CompanySection({
             ip_address: normalized["ipaddress"] || normalized["ip"] || "",
             antivirus: normalized["antivirus"] || normalized["av"] || "",
             antivirus_key: normalized["avlicensekey"] || normalized["key"] || normalized["antiviruskey"] || "",
-            validity: normalized["avvalidity"] || normalized["validity"] || "",
+            validity: formatAssetValidity(normalized["avvalidity"] || normalized["validity"] || ""),
             status: normalized["status"] || normalized["assetstatus"] || "In Use",
             amc_status: amc_status
           });
@@ -1336,6 +1603,28 @@ export default function CompanySection({
                               </label>
                             </>
                           )}
+
+                          {/* Network Diagram Option: Available for all companies */}
+                          <button
+                            type="button"
+                            onClick={() => openNetworkDiagramModal(company)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs active:scale-95 border ${
+                              company.network_diagram_url
+                                ? "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                                : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+                            }`}
+                            title={company.network_diagram_url ? "View or update company network diagram" : "Upload company network diagram"}
+                          >
+                            <Network className={`h-3.5 w-3.5 ${company.network_diagram_url ? "text-blue-600" : "text-slate-500"}`} />
+                            <span>Network Diagram</span>
+                            {company.network_diagram_url ? (
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-200 animate-pulse" title="Diagram attached" />
+                            ) : (
+                              <span className="hidden xl:inline text-[10px] text-slate-400 font-normal">
+                                (Add)
+                              </span>
+                            )}
+                          </button>
 
                           {/* View Asset Table Option: AVAILABLE FOR ALL COMPANIES */}
                           <button
@@ -2083,6 +2372,20 @@ export default function CompanySection({
                   </label>
                 )}
 
+                {/* Network Diagram Button: Quick access from Excel view */}
+                <button
+                  type="button"
+                  onClick={() => openNetworkDiagramModal(viewingCompanyForExcel)}
+                  className="bg-white text-[#107c41] hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm border border-emerald-200"
+                  title="View or upload network diagram for this company"
+                >
+                  <Network className="h-3.5 w-3.5 text-[#107c41]" />
+                  <span>Network Diagram</span>
+                  {viewingCompanyForExcel.network_diagram_url && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" title="Diagram attached" />
+                  )}
+                </button>
+
                 {/* Admin Only: Permanently Delete Company */}
                 {isAdminOrManager && (
                   <button
@@ -2504,7 +2807,7 @@ export default function CompanySection({
                             {asset.antivirus_key || "-"}
                           </td>
                           <td className="border-r border-slate-200 px-3 py-2 whitespace-nowrap text-slate-600">
-                            {asset.validity || "-"}
+                            {formatAssetValidity(asset.validity)}
                           </td>
                           <td className="px-3 py-2 whitespace-nowrap">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-sans font-bold ${
@@ -3033,6 +3336,491 @@ export default function CompanySection({
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🌐 NETWORK DIAGRAM MODAL */}
+      {diagramModalCompany && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 z-50 animate-fade-in text-slate-800">
+          <div className="bg-white border border-slate-200 w-full max-w-7xl h-[92vh] rounded-2xl overflow-hidden shadow-2xl flex flex-col relative">
+            
+            {/* Modal Header */}
+            <div className="bg-slate-900 text-white px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 shadow-md border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-600/30 border border-blue-500/40 p-2 rounded-xl text-blue-400">
+                  <Network className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-base sm:text-lg text-white tracking-tight flex items-center gap-2">
+                      <span>{diagramModalCompany.name}</span>
+                    </h3>
+                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider border ${
+                      diagramModalCompany.type === "AMC"
+                        ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                        : "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                    }`}>
+                      {diagramModalCompany.type}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-400 mt-0.5 flex flex-wrap items-center gap-2">
+                    <span>Allocated Engineer: <strong className="text-slate-200">{diagramModalCompany.allocated_engineer_name || "Unassigned"}</strong></span>
+                    <span className="text-slate-600">•</span>
+                    {diagramModalCompany.network_diagram_data?.nodes?.length ? (
+                      <span className="inline-flex items-center gap-1 text-blue-400 font-semibold text-[11px]">
+                        <CheckCircle2 className="h-3 w-3" />
+                        <span>Interactive Topology ({diagramModalCompany.network_diagram_data.nodes.length} Components)</span>
+                      </span>
+                    ) : diagramModalCompany.network_diagram_url ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold text-[11px]">
+                        <CheckCircle2 className="h-3 w-3" />
+                        <span>Diagram Image Active</span>
+                      </span>
+                    ) : (
+                      <span className="text-amber-400 font-medium text-[11px]">
+                        No diagram saved yet
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={closeNetworkDiagramModal}
+                className="bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white p-2 rounded-xl transition-all cursor-pointer"
+                title="Close modal"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Tab Navigation */}
+            <div className="bg-slate-100 px-5 py-2 flex flex-wrap items-center justify-between border-b border-slate-200 shrink-0 gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDiagramActiveTab("builder")}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    diagramActiveTab === "builder"
+                      ? "bg-white text-blue-700 shadow-xs border border-slate-200 font-extrabold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <Network className="h-3.5 w-3.5 text-blue-600" />
+                  <span>Interactive Topology Builder</span>
+                  {diagramModalCompany.network_diagram_data?.nodes?.length ? (
+                    <span className="text-[10px] px-1.5 py-0.2 bg-blue-100 text-blue-800 rounded-full font-bold">
+                      {diagramModalCompany.network_diagram_data.nodes.length} nodes
+                    </span>
+                  ) : null}
+                </button>
+
+                {diagramModalCompany.network_diagram_url && (
+                  <button
+                    type="button"
+                    onClick={() => setDiagramActiveTab("view")}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      diagramActiveTab === "view"
+                        ? "bg-white text-blue-700 shadow-xs border border-slate-200 font-extrabold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    <span>Snapshot / Photo View</span>
+                  </button>
+                )}
+
+                {canManageCompanyAssets(diagramModalCompany) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDiagramActiveTab("upload");
+                      setDiagramNotesInput(diagramModalCompany.network_diagram_notes || "");
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      diagramActiveTab === "upload"
+                        ? "bg-white text-blue-700 shadow-xs border border-slate-200 font-extrabold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    <span>Upload Image Fallback</span>
+                  </button>
+                )}
+              </div>
+
+              {!canManageCompanyAssets(diagramModalCompany) && (
+                <span className="text-[11px] text-slate-500 italic flex items-center gap-1">
+                  <Lock className="h-3 w-3" />
+                  <span>Read-Only View</span>
+                </span>
+              )}
+            </div>
+
+            {/* Tab Body */}
+            <div className={`flex-1 flex flex-col min-h-0 ${diagramActiveTab === "builder" ? "p-0 bg-slate-900 overflow-hidden" : "overflow-y-auto p-4 sm:p-6 bg-slate-50"}`}>
+              {diagramActiveTab === "builder" ? (
+                /* 🛠️ INTERACTIVE DIAGRAM BUILDER */
+                <NetworkDiagramBuilder
+                  company={diagramModalCompany}
+                  currentUser={currentUser}
+                  onSaveDiagram={handleSaveInteractiveDiagram}
+                  onClose={closeNetworkDiagramModal}
+                  readOnly={!canManageCompanyAssets(diagramModalCompany)}
+                />
+              ) : diagramActiveTab === "view" && diagramModalCompany.network_diagram_url ? (
+                /* VIEW TOPOLOGY MODE */
+                <div className="flex flex-col flex-1 gap-4">
+                  {/* Toolbar */}
+                  <div className="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                    {/* Zoom & View Controls */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mr-1">Zoom:</span>
+                      <button
+                        type="button"
+                        onClick={() => setDiagramZoom(prev => Math.max(0.4, Number((prev - 0.2).toFixed(1))))}
+                        className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition-colors cursor-pointer"
+                        title="Zoom Out"
+                      >
+                        <ZoomOut className="h-4 w-4" />
+                      </button>
+                      <span className="font-mono text-xs font-bold px-2 py-0.5 bg-slate-100 rounded text-slate-700 min-w-[50px] text-center">
+                        {Math.round(diagramZoom * 100)}%
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setDiagramZoom(prev => Math.min(3.5, Number((prev + 0.2).toFixed(1))))}
+                        className="p-1.5 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-700 transition-colors cursor-pointer"
+                        title="Zoom In"
+                      >
+                        <ZoomIn className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDiagramZoom(1)}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors cursor-pointer ml-1"
+                        title="Reset Zoom to 100%"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        <span>Reset</span>
+                      </button>
+                    </div>
+
+                    {/* Actions: Builder Switcher / Download / Edit / Delete */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDiagramActiveTab("builder")}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                      >
+                        <Network className="h-3.5 w-3.5" />
+                        <span>Open in Topology Builder</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDownloadDiagram}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-all cursor-pointer border border-slate-200 shadow-2xs"
+                        title="Download full resolution image"
+                      >
+                        <Download className="h-3.5 w-3.5 text-slate-700" />
+                        <span>Download Image</span>
+                      </button>
+
+                      {canManageCompanyAssets(diagramModalCompany) && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDiagramActiveTab("upload");
+                              setDiagramNotesInput(diagramModalCompany.network_diagram_notes || "");
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-xs font-bold transition-all cursor-pointer border border-blue-200 shadow-2xs"
+                          >
+                            <Edit3 className="h-3.5 w-3.5" />
+                            <span>Edit Notes / Replace</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setShowDeleteDiagramConfirm(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition-all cursor-pointer border border-rose-200 shadow-2xs"
+                            title="Delete this network diagram"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Delete</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* High-Resolution Diagram Viewport */}
+                  <div className="bg-slate-950 border border-slate-800 rounded-2xl min-h-[380px] max-h-[52vh] overflow-auto p-4 flex items-center justify-center shadow-inner relative group">
+                    <img
+                      src={diagramModalCompany.network_diagram_url}
+                      alt={`${diagramModalCompany.name} Network Diagram`}
+                      style={{
+                        transform: `scale(${diagramZoom})`,
+                        transformOrigin: "center center",
+                        transition: "transform 0.15s ease-out"
+                      }}
+                      className="max-w-full max-h-full object-contain rounded-lg shadow-2xl transition-all"
+                    />
+                  </div>
+
+                  {/* Metadata & Architecture Notes Card */}
+                  <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <Info className="h-4 w-4 text-blue-600" />
+                        <h4 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
+                          Network Architecture & Infrastructure Details
+                        </h4>
+                      </div>
+                      <div className="text-[11px] text-slate-500 flex items-center gap-3">
+                        {diagramModalCompany.network_diagram_updated_by && (
+                          <span>Uploaded by: <strong className="text-slate-700">{diagramModalCompany.network_diagram_updated_by}</strong></span>
+                        )}
+                        {diagramModalCompany.network_diagram_updated_at && (
+                          <span>Updated: <strong className="text-slate-700">{new Date(diagramModalCompany.network_diagram_updated_at).toLocaleString()}</strong></span>
+                        )}
+                      </div>
+                    </div>
+
+                    {diagramModalCompany.network_diagram_notes ? (
+                      <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-3 text-xs font-mono text-slate-800 whitespace-pre-wrap leading-relaxed">
+                        {diagramModalCompany.network_diagram_notes}
+                      </div>
+                    ) : (
+                      <div className="py-2 text-xs text-slate-400 italic flex items-center justify-between">
+                        <span>No specific IP range, switch, or firewall notes entered for this diagram.</span>
+                        {canManageCompanyAssets(diagramModalCompany) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDiagramActiveTab("upload");
+                              setDiagramNotesInput("");
+                            }}
+                            className="text-blue-600 hover:text-blue-800 text-xs font-bold underline cursor-pointer"
+                          >
+                            + Add Infrastructure Notes
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* UPLOAD / EDIT MODE */
+                <div className="max-w-3xl mx-auto w-full flex flex-col gap-5 py-2">
+                  {/* Status Banner */}
+                  {diagramModalCompany.network_diagram_url ? (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3.5 flex items-start gap-3 text-blue-900 text-xs">
+                      <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="font-bold">Updating Existing Diagram:</strong> You are editing the network diagram and topology notes for <strong>{diagramModalCompany.name}</strong>. Uploading a new image will replace the current file.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-start gap-3 text-amber-900 text-xs">
+                      <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="font-bold">No Diagram Attached:</strong> Field engineers can upload network topology maps, rack layouts, IP addressing plans, and firewall topologies for quick on-site diagnostics.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Error Notification */}
+                  {diagramUploadError && (
+                    <div className="bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 rounded-xl text-xs flex items-center gap-2">
+                      <AlertCircle className="h-4 w-4 text-rose-600 shrink-0" />
+                      <span className="font-semibold">{diagramUploadError}</span>
+                    </div>
+                  )}
+
+                  {/* Dropzone / File Picker */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Network Diagram Image File {diagramModalCompany.network_diagram_url ? "(Select to Replace)" : "(Required)"}
+                    </label>
+
+                    {diagramPreviewUrl ? (
+                      /* Selected File Preview */
+                      <div className="bg-white border-2 border-blue-400 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-20 h-20 bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center border border-slate-700 shrink-0 shadow-inner">
+                            <img src={diagramPreviewUrl} alt="Preview" className="max-w-full max-h-full object-contain" />
+                          </div>
+                          <div>
+                            <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                              <span>{diagramSelectedFile?.name || "Selected Network Diagram"}</span>
+                            </div>
+                            <div className="text-xs text-slate-500 mt-0.5">
+                              {diagramSelectedFile ? `${(diagramSelectedFile.size / (1024 * 1024)).toFixed(2)} MB • ${diagramSelectedFile.type || "Image"}` : "Diagram ready to upload"}
+                            </div>
+                            <span className="inline-block mt-1 text-[11px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                              Ready to save
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDiagramSelectedFile(null);
+                            setDiagramPreviewUrl(null);
+                          }}
+                          className="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          <span>Remove</span>
+                        </button>
+                      </div>
+                    ) : (
+                      /* Drag & Drop Zone */
+                      <label
+                        onDragOver={(e) => { e.preventDefault(); setIsDraggingOverDropzone(true); }}
+                        onDragLeave={() => setIsDraggingOverDropzone(false)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setIsDraggingOverDropzone(false);
+                          if (e.dataTransfer.files?.[0]) {
+                            handleDiagramFileSelect(e.dataTransfer.files[0]);
+                          }
+                        }}
+                        className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center text-center cursor-pointer transition-all ${
+                          isDraggingOverDropzone
+                            ? "border-blue-500 bg-blue-50/80 scale-[1.01]"
+                            : "border-slate-300 hover:border-blue-400 bg-white hover:bg-slate-50/50"
+                        }`}
+                      >
+                        <div className="w-14 h-14 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 mb-3 shadow-2xs">
+                          <FileImage className="h-7 w-7" />
+                        </div>
+                        <span className="font-extrabold text-sm text-slate-800">
+                          Click to select network diagram or drag & drop image here
+                        </span>
+                        <span className="text-xs text-slate-400 mt-1">
+                          Supports PNG, JPG, JPEG, SVG, WebP (Max: 50MB)
+                        </span>
+
+                        <input
+                          type="file"
+                          accept="image/*,.svg"
+                          onChange={(e) => {
+                            if (e.target.files?.[0]) {
+                              handleDiagramFileSelect(e.target.files[0]);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+
+                  {/* Network Infrastructure Notes Input */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                      <span>Network Topology & Infrastructure Notes (Optional)</span>
+                      <span className="text-[11px] text-slate-400 font-normal">IPs, Gateways, VLANs, Credentials info</span>
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={diagramNotesInput}
+                      onChange={(e) => setDiagramNotesInput(e.target.value)}
+                      placeholder={"e.g.\n• Core Gateway: 192.168.1.1 (Fortinet FortiGate 60F)\n• Subnet: 255.255.255.0 | DHCP Pool: 192.168.1.100 - 192.168.1.200\n• Switch 1: Cisco CBS350-24P (Server Room Rack A, Port 1-24)\n• VLAN 10 (Office LAN), VLAN 20 (Guest Wi-Fi), VLAN 30 (Servers)\n• Primary ISP: Tata Leased Line 200 Mbps (WAN1)\n• Backup ISP: Airtel Fiber 100 Mbps (WAN2)"}
+                      className="w-full bg-white border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 rounded-xl p-3 text-xs font-mono text-slate-800 placeholder:text-slate-400 focus:outline-none transition-all leading-relaxed"
+                    />
+                  </div>
+
+                  {/* Form Actions */}
+                  <div className="flex items-center justify-end gap-3 pt-2">
+                    {diagramModalCompany.network_diagram_url && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDiagramActiveTab("view");
+                          setDiagramSelectedFile(null);
+                          setDiagramPreviewUrl(null);
+                        }}
+                        className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleSaveNetworkDiagram}
+                      disabled={isUploadingDiagram || (!diagramPreviewUrl && !diagramModalCompany.network_diagram_url && !diagramNotesInput.trim())}
+                      className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl text-xs font-extrabold uppercase tracking-wider cursor-pointer shadow-md disabled:opacity-50 flex items-center gap-2 transition-all"
+                    >
+                      {isUploadingDiagram ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <span>Saving Diagram...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4 stroke-[2.5]" />
+                          <span>{diagramModalCompany.network_diagram_url ? "Update Network Diagram" : "Upload & Save Diagram"}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* In-Modal Delete Confirmation Dialog (Safe, zero window.confirm) */}
+            {showDeleteDiagramConfirm && (
+              <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fade-in">
+                <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 text-center animate-scale-in">
+                  <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-4">
+                    <Trash2 className="h-6 w-6" />
+                  </div>
+                  <h3 className="text-base font-extrabold text-slate-900 mb-1">
+                    Delete Network Diagram?
+                  </h3>
+                  <p className="text-xs text-slate-600 mb-5 leading-relaxed">
+                    Are you sure you want to permanently remove the network diagram and topology notes for <strong>{diagramModalCompany.name}</strong>? This action cannot be undone.
+                  </p>
+                  <div className="flex items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowDeleteDiagramConfirm(false)}
+                      disabled={isDeletingDiagram}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeleteNetworkDiagram}
+                      disabled={isDeletingDiagram}
+                      className="px-5 py-2 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white rounded-xl text-xs font-extrabold transition-all cursor-pointer shadow-sm flex items-center gap-1.5"
+                    >
+                      {isDeletingDiagram ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <span>Deleting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Yes, Delete Diagram</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

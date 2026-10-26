@@ -405,3 +405,53 @@ Ankush Sir Final approval Amt :- 9800
 Payment che updated dhile ahe sir ankush siranshi  call zhala 
 ki te sangnar ahet 
 Bob Suman madam tyanchi copy dhili pn pymt che tyana final sgyche ahe ""]');
+
+-- =============================================
+-- 3. CREATE TABLES FOR 'softwares' & 'software_groups'
+-- =============================================
+
+CREATE TABLE IF NOT EXISTS softwares (
+  id INT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  version VARCHAR(100) DEFAULT 'latest',
+  category VARCHAR(100) DEFAULT 'Utilities & Tools',
+  platform VARCHAR(50) DEFAULT 'Windows',
+  storage_type VARCHAR(50) NOT NULL DEFAULT 'url',
+  file_url TEXT,
+  file_name VARCHAR(255),
+  file_size VARCHAR(50),
+  license_key VARCHAR(255),
+  installation_notes TEXT,
+  created_by VARCHAR(100),
+  created_by_role VARCHAR(100),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS software_groups (
+  id INT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  target_profile VARCHAR(100) DEFAULT 'Standard Workstation',
+  items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_by VARCHAR(100),
+  created_by_role VARCHAR(100),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Seed standard initial software rows
+INSERT INTO softwares (id, name, version, category, platform, storage_type, file_url, file_name, file_size, license_key, installation_notes, created_by, created_by_role) VALUES
+  (1, 'Google Chrome Enterprise', 'latest', 'Utilities & Tools', 'Windows', 'url', 'https://dl.google.com/chrome/install/latest/chrome_installer.exe', 'ChromeSetup.exe', '104 MB', NULL, 'Standard enterprise silent install: chrome_installer.exe /silent /install', 'Admin Desk', 'admin')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO softwares (id, name, version, category, platform, storage_type, file_url, file_name, file_size, license_key, installation_notes, created_by, created_by_role) VALUES
+  (2, 'AnyDesk Remote Support', '8.1.0', 'Remote Desktop & Support', 'Windows', 'url', 'https://download.anydesk.com/AnyDesk.exe', 'AnyDesk.exe', '5.2 MB', NULL, 'Fast remote access tool for desktop diagnosis.', 'Admin Desk', 'admin')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO softwares (id, name, version, category, platform, storage_type, file_url, file_name, file_size, license_key, installation_notes, created_by, created_by_role) VALUES
+  (3, 'Quick Heal Total Security', '24.0', 'Antivirus & Security', 'Windows', 'url', 'https://files.quickheal.com/builds/qhts64.exe', 'qhts64.exe', '340 MB', 'QH-2026-9981-PATS', 'Enter license key after installation completes.', 'Admin Desk', 'admin')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO software_groups (id, name, description, target_profile, items, created_by, created_by_role) VALUES
+  (1, 'Standard Workstation Kit', 'Essential browser, remote support, and security tools for clients', 'Standard Workstation', '[{"software_id": 1, "is_mandatory": true}, {"software_id": 2, "is_mandatory": true}, {"software_id": 3, "is_mandatory": true}]'::jsonb, 'Admin Desk', 'admin')
+ON CONFLICT (id) DO NOTHING;
+
