@@ -78,7 +78,6 @@ export default function Header({ currentUser, onLogout, openSqlConsole, sqlConso
                 PATS <span className="text-blue-600">COMPUTERS</span>
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 font-sans tracking-wide">Enterprise Service Desk</p>
           </div>
         </div>
 

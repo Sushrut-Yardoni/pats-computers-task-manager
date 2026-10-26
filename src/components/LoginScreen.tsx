@@ -55,28 +55,10 @@ export default function LoginScreen({ employees, onLogin }: LoginScreenProps) {
         <h2 className="text-3xl font-display font-extrabold text-slate-900 tracking-tight">
           PATS COMPUTERS
         </h2>
-        <p className="text-xs text-indigo-600 font-extrabold tracking-widest uppercase mt-1">
-          Service Portal
-        </p>
-        <p className="text-xs text-slate-500 mt-2 font-semibold tracking-wide">
-          Relational Task Dispatch Desk & Engineer Servicing Hub
-        </p>
       </div>
 
       {/* Portal Login Card */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-md relative overflow-hidden">
-        
-        <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mb-5">
-          <Users className="h-5 w-5 text-blue-600" />
-          <div>
-            <h3 className="font-display font-bold text-slate-900 text-base">
-              System Access
-            </h3>
-            <p className="text-xs text-slate-500 font-sans font-medium">
-              Credentials verified against relational user tables
-            </p>
-          </div>
-        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs font-sans">
           <div>
@@ -142,7 +124,7 @@ export default function LoginScreen({ employees, onLogin }: LoginScreenProps) {
               </span>
             ) : (
               <>
-                <span>Sign In & Authorize Session</span>
+                <span>Sign In</span>
                 <ArrowRight className="h-4 w-4 animate-pulse" />
               </>
             )}
