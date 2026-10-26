@@ -951,107 +951,88 @@ export default function NetworkDiagramBuilder({
             )}
           </div>
 
-          {/* Tool Switcher: Select & Move vs Pan Map */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setActiveTool("select")}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTool === "select"
-                  ? "bg-blue-600 text-white shadow-xs font-extrabold"
-                  : "text-slate-400 hover:text-white"
-              }`}
-              title="Select & Move Devices (Press 'V')"
-            >
-              <Move className="h-3.5 w-3.5" />
-              <span>Select & Move</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTool("pan")}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeTool === "pan"
-                  ? "bg-blue-600 text-white shadow-xs font-extrabold"
-                  : "text-slate-400 hover:text-white"
-              }`}
-              title="Pan Map Canvas (Press 'H' or hold Space)"
-            >
-              <Hand className="h-3.5 w-3.5" />
-              <span>Pan Map</span>
-            </button>
+          {/* Simplified Tool & Viewport Controls */}
+          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl">
+            {/* Tool Switcher */}
+            <div className="flex items-center bg-slate-950 p-0.5 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setActiveTool("select")}
+                className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  activeTool === "select"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Select & Move (V)"
+              >
+                <Move className="h-3.5 w-3.5" />
+                <span>Move</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTool("pan")}
+                className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  activeTool === "pan"
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Pan Map (H or Space)"
+              >
+                <Hand className="h-3.5 w-3.5" />
+                <span>Pan</span>
+              </button>
+            </div>
+
+            {/* Palette Toggle */}
+            {isEditMode && (
+              <button
+                type="button"
+                onClick={() => setIsPaletteOpen(!isPaletteOpen)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  isPaletteOpen
+                    ? "bg-blue-600 text-white shadow-xs"
+                    : "bg-slate-950 text-slate-400 hover:text-white"
+                }`}
+                title="Toggle Component Palette"
+              >
+                <Box className="h-3.5 w-3.5" />
+                <span className="hidden lg:inline">Palette</span>
+              </button>
+            )}
+
+            <div className="h-4 w-px bg-slate-800" />
+
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-0.5 px-1">
+              <button
+                type="button"
+                onClick={() => setZoom(z => Math.max(0.3, Number((z - 0.15).toFixed(2))))}
+                className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
+                title="Zoom Out"
+              >
+                <ZoomOut className="h-3.5 w-3.5" />
+              </button>
+              <span className="font-mono text-xs px-1.5 font-bold text-slate-300 min-w-[42px] text-center">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => setZoom(z => Math.min(2.2, Number((z + 0.15).toFixed(2))))}
+                className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
+                title="Zoom In"
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleFitToContent}
+                className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors ml-1"
+                title="Fit to Screen"
+              >
+                <Maximize2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
-
-          {/* Palette Toggle */}
-          {isEditMode && (
-            <button
-              type="button"
-              onClick={() => setIsPaletteOpen(!isPaletteOpen)}
-              className={`px-2.5 py-1 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                isPaletteOpen
-                  ? "bg-blue-950/40 text-blue-300 border-blue-500/40"
-                  : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white"
-              }`}
-              title={isPaletteOpen ? "Hide Component Palette" : "Show Component Palette"}
-            >
-              <Box className="h-3.5 w-3.5" />
-              <span className="hidden lg:inline">{isPaletteOpen ? "Hide Palette" : "Components"}</span>
-            </button>
-          )}
-
-          {/* Zoom & Viewport controls */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setZoom(z => Math.max(0.3, Number((z - 0.15).toFixed(2))))}
-              className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
-              title="Zoom Out"
-            >
-              <ZoomOut className="h-4 w-4" />
-            </button>
-            <span className="font-mono text-xs px-2 font-bold text-slate-300 min-w-[48px] text-center">
-              {Math.round(zoom * 100)}%
-            </span>
-            <button
-              type="button"
-              onClick={() => setZoom(z => Math.min(2.2, Number((z + 0.15).toFixed(2))))}
-              className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors"
-              title="Zoom In"
-            >
-              <ZoomIn className="h-4 w-4" />
-            </button>
-            <button
-              type="button"
-              onClick={handleFitToContent}
-              className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors ml-0.5"
-              title="Fit to Content (Auto-frame all devices)"
-            >
-              <Maximize2 className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => { setZoom(1); setPan({ x: 40, y: 40 }); }}
-              className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 transition-colors ml-0.5"
-              title="Reset View (100%)"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-            </button>
-          </div>
-
-          {/* Snap to grid toggle */}
-          {isEditMode && (
-            <button
-              type="button"
-              onClick={() => setSnapToGrid(!snapToGrid)}
-              className={`p-1.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                snapToGrid 
-                  ? "bg-blue-600/20 text-blue-300 border-blue-500/40" 
-                  : "bg-slate-900 text-slate-400 border-slate-800 hover:text-white"
-              }`}
-              title={snapToGrid ? "Snap to Grid Active (20px)" : "Freeform Placement"}
-            >
-              <Grid className="h-4 w-4" />
-            </button>
-          )}
         </div>
 
         {/* Right: Actions (Templates, Export, Save, Close) */}
